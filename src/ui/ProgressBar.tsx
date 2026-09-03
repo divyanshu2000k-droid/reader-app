@@ -10,9 +10,10 @@
  */
 
 import { useEffect } from 'react'
-import { AccessibilityInfo, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, {
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated'
@@ -30,20 +31,21 @@ interface Props {
 export function ProgressBar({ fraction, active = false, style }: Props) {
   const c = useColors()
   const width = useSharedValue(0)
+  /**
+   * `useReducedMotion` reads the OS setting once and subscribes, rather than making an
+   * async bridge call. The previous version awaited `AccessibilityInfo` on every change
+   * of `fraction` — in a FlashList of 2000 books that is one native round-trip per
+   * visible row per scroll, which is exactly the kind of thing that costs the 60fps
+   * budget in docs/06-CONVENTIONS.md.
+   */
+  const reduced = useReducedMotion()
 
   useEffect(() => {
-    let cancelled = false
     const target = Math.max(0, Math.min(fraction ?? 0, 1)) * 100
-    AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
-      if (cancelled) return
-      width.value = withTiming(target, {
-        duration: reduced ? motion.reducedMotionDuration : motion.progressBar.duration,
-      })
+    width.value = withTiming(target, {
+      duration: reduced ? motion.reducedMotionDuration : motion.progressBar.duration,
     })
-    return () => {
-      cancelled = true
-    }
-  }, [fraction, width])
+  }, [fraction, reduced, width])
 
   const fill = useAnimatedStyle(() => ({ width: `${width.value}%` }))
 

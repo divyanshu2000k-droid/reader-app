@@ -155,6 +155,121 @@ and `eas.json` already carries a `development` profile.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-03 · THE WRITE PATH WAS NEVER ATOMIC. Caught by the real atomicity test.
+**The bug:** `writeRow`, `softDelete` and `restoreRow` all used
+`getDb().transaction(async (tx) => …)`. Drizzle's expo-sqlite driver is a **synchronous**
+dialect, so `transaction()` is typed to take a sync callback. An `async` callback
+typechecks — the return type is just `Promise<T>` — but the transaction **commits the
+instant the callback returns its promise**, before any awaited statement has executed.
+Every statement then ran outside the transaction and nothing rolled back.
+**Impact:** the single most important guarantee in the data layer was false for the whole
+of Slice 0. A failing enqueue left the table row behind: a row that exists locally and
+never reaches the server. Silent, invisible, and only discovered on a new phone months
+later — the exact failure `write.ts` exists to prevent.
+**Why nothing else caught it:** it typechecks, it lints, it never throws, and both the
+source guard and the FK-violation check pass. The FK check proves the transaction *aborts*
+correctly when the first statement fails, which is a different and much weaker claim than
+the second statement failing and rolling the first back.
+**Fix:** `runInTransaction()` in `client.ts` wraps expo-sqlite's `withTransactionSync`,
+and all three write functions now run their two statements synchronously inside it. The
+public API stays async, so no caller changed.
+**Guard added:** a source test fails on any `.transaction(async` anywhere in `src/`.
+**The lesson, and it is the important one:** the substitute test the assistant wrote
+instead of the specified one passed, and the specified one failed. "Close enough" test
+coverage is how a false guarantee survives. When a test is specified in a particular
+direction, write that direction.
+
+## 2026-09-03 · Device pass counts are reported runtime and compile-time separately
+**Chose:** `RUNTIME n/n · COMPILE-TIME n/n`, never a single combined figure.
+**Because:** one check ("local-only tables are not writable") asserts a property the type
+system guarantees and executes nothing. Counting it as a runtime pass inflated the number
+to 13/13 when only 12 things actually ran. These counts have to stay trustworthy for
+eleven more slices, and an inflated number is worse than a smaller honest one.
+**Current:** RUNTIME 13/13 · COMPILE-TIME 1/1.
+
+## 2026-09-03 · Known deferrals from the Slice 0 device pass
+Recorded so they are not rediscovered as surprises later. None is a defect; each is work
+that belongs to a slice that has the right context for it.
+
+**1 · 2000-book scale is Slice 2's job, with FlashList.**
+Nothing so far exercises a large library. Three separate requirements depend on it and all
+land together in Slice 2: the 60fps scroll budget in `06-CONVENTIONS.md`, the
+"migrations tested against a 2000 book seeded database" rule in `03-DATA-MODEL.md`, and
+FlashList tuning. Testing scale before the list exists would measure nothing useful.
+**Do in Slice 2:** extend the seed to generate 2000 books with realistic session counts,
+and re-run both the migration and the device pass against it.
+
+**2 · Real-device and OEM testing is Slice 6's job.**
+Everything to date ran on an x86_64 emulator. The emulator cannot reproduce the thing that
+actually matters — Xiaomi and Samsung killing background work — which is the single
+highest-risk item in Phase 1 and the reason the timer has a two-week hard limit. An
+arm64-v8a build has also never been compiled; only x86_64 has.
+**Do in Slice 6:** first build to a physical phone, and the foreground-service testing that
+`05-BUILD-PLAN.md` already requires.
+
+**3 · `closeDatabase()` has no concurrency protection, and that is fine for now.**
+`restoreNewestBackup` closes the connection while any in-flight `writeRow` still holds the
+old handle. There is no lock. It is safe today only because the sole caller is
+`migrate.ts` at startup, before any feature code runs.
+**Revisit if** a restore ever becomes reachable from the UI — a "restore from backup"
+button in Settings would make this a real race. At that point the answer is a module-level
+mutex around the write path, not a retry.
+
+**Also outstanding from Slice 0 itself:** Sentry, which needs a DSN, and verifying the
+dev-only device-check trigger is absent from the release bundle (already a Slice 11
+checklist item).
+
+## 2026-09-03 · Device pass: 13/13, after one real bug it caught
+Run on the Pixel 7 emulator via a `__DEV__`-only button. Full log in the session; summary
+below.
+
+**THE BUG IT CAUGHT — `restoreNewestBackup` silently did nothing while reporting success.**
+Check 6 failed on the first run: after a restore, a row written *after* the backup was
+still visible. On Android, deleting an open file does not affect the already-open file
+descriptor — SQLite stays attached to the now-unlinked inode, so copying a backup into
+that path has no effect on the running app, and subsequent writes go to the orphaned inode
+and are lost at exit. `migrate.ts` calls this on a failed migration and then tells the
+reader "Your library was restored from a backup taken moments ago", which would have been
+a **lie**, in the one code path whose entire job is not losing data.
+**Fix:** `client.ts` gained `closeDatabase()`, and `restoreNewestBackup` closes the
+connection before swapping files. The next `getDb()` reopens from disk. Check 6 passes.
+**This is the single most valuable thing the device pass produced.** It typechecked, it
+lint-passed, it did not throw, and it was wrong. "Does not throw" is not "works".
+
+**Assumptions in `backup.ts` verified against reality rather than assumed:**
+- `Paths.availableDiskSpace` exists and returns a real number (4.5 GB). It is not null or
+  undefined, so the 3x free-space guard actually guards something.
+- The database really is at `.../files/SQLite/reader.db`, the path the code assumed.
+- `File.copy` on the `-wal` and `-shm` sidecars works; the backup carries them.
+- `checkpointWal()` genuinely drains the log: **wal 263712B -> 0B**, main unchanged. This
+  is the WAL fix demonstrated, not argued: a bare copy of `reader.db` would have missed
+  263 KB of committed data.
+- `pruneBackups` keeps exactly three and leaves no orphaned sidecars (8 -> 3).
+
+**Also verified:** every write leaves exactly one queue row; soft delete keeps the row and
+enqueues a `delete`; restore clears `deleted_at`; a foreign-key violation rolls back both
+the row and the queue entry, which is the atomicity proof; the seed leaves `started_at`
+NULL and every `local_day` consistent with its `occurred_at`, with mixed pages/minutes on
+one read.
+
+**The dev trigger cannot ship.** `src/db/devchecks.ts` is reached only via `require()`
+inside `if (__DEV__)`, which Metro drops from a production bundle. Not trusted — a Slice 11
+checklist item verifies it by grepping the real release bundle for `DEVICE PASS START`.
+
+## 2026-09-03 · Two Metro behaviours that cost an hour, worth knowing
+**Metro's file watcher does not work on this machine.** Every source edit required a full
+`expo start --clear` restart; without it Metro serves a stale bundle indefinitely and the
+app shows old code with no error. Verify a change is actually live by grepping the served
+bundle, e.g.
+`curl -s "http://127.0.0.1:8081/.expo/.virtual-metro-entry.bundle?platform=android&dev=true" | grep -c "some new string"`.
+**Metro does not resolve `@/` path aliases inside `require()`,** only inside static
+`import`. An aliased `require` typechecks cleanly and fails at runtime with
+`Cannot find module`. Use a relative path in a dynamic require.
+**Metro excludes `__tests__/` directories from module resolution.** The device checks
+originally lived in `src/db/__tests__/deviceChecks.ts` and simply were not bundled — the
+module silently did not exist. Moved to `src/db/devchecks.ts`. The no-bypass source guard
+still passes on it, because it only uses `writeRow`/`softDelete` and `select`.
+
 ## 2026-09-03 · Slice 0 code review, findings 1 to 7 fixed
 Self-review of the Slice 0 foundations before the device pass. Findings 8 and 9
 (ProgressBar reduce-motion call, `useTheme` cast) deferred. Fixed with the context still

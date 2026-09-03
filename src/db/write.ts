@@ -20,7 +20,7 @@
 import { eq, sql } from 'drizzle-orm'
 import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 
-import { getDb } from './client'
+import { getDb, runInTransaction } from './client'
 import { bookShelves, books, goals, notes, reads, sessions, shelves, syncQueue } from './schema'
 import { now } from '@/lib/dates'
 import { appError, attempt, type Result } from '@/lib/result'
@@ -109,19 +109,23 @@ export async function writeRow<K extends SyncableTable>(
       // One timestamp for the row and the queue entry. Reading the clock twice can
       // produce two values and makes the pair look like two separate edits.
       const row = { ...values, updatedAt: ts }
+      const db = getDb()
 
-      await getDb().transaction(async (tx) => {
-        await tx
-          .insert(t)
-          .values(row)
-          .onConflictDoUpdate({ target: t.id, set: row })
-        await tx.insert(syncQueue).values({
-          tableName: table,
-          rowId: values.id,
-          operation: 'upsert',
-          queuedAt: ts,
-          attempts: 0,
-        })
+      // Synchronous, inside a real transaction. See runInTransaction in client.ts for
+      // why drizzle's own transaction helper with an async callback silently fails to
+      // roll back here.
+      runInTransaction(() => {
+        db.insert(t).values(row).onConflictDoUpdate({ target: t.id, set: row }).run()
+        db
+          .insert(syncQueue)
+          .values({
+            tableName: table,
+            rowId: values.id,
+            operation: 'upsert',
+            queuedAt: ts,
+            attempts: 0,
+          })
+          .run()
       })
     },
     (cause) =>
@@ -142,16 +146,20 @@ export async function softDelete(table: SyncableTable, id: string): Promise<Resu
     async () => {
       const t = tableFor(table)
       const ts = now()
+      const db = getDb()
 
-      await getDb().transaction(async (tx) => {
-        await tx.update(t).set({ deletedAt: ts, updatedAt: ts }).where(eq(t.id, id))
-        await tx.insert(syncQueue).values({
-          tableName: table,
-          rowId: id,
-          operation: 'delete',
-          queuedAt: ts,
-          attempts: 0,
-        })
+      runInTransaction(() => {
+        db.update(t).set({ deletedAt: ts, updatedAt: ts }).where(eq(t.id, id)).run()
+        db
+          .insert(syncQueue)
+          .values({
+            tableName: table,
+            rowId: id,
+            operation: 'delete',
+            queuedAt: ts,
+            attempts: 0,
+          })
+          .run()
       })
     },
     (cause) =>
@@ -168,16 +176,20 @@ export async function restoreRow(table: SyncableTable, id: string): Promise<Resu
     async () => {
       const t = tableFor(table)
       const ts = now()
+      const db = getDb()
 
-      await getDb().transaction(async (tx) => {
-        await tx.update(t).set({ deletedAt: null, updatedAt: ts }).where(eq(t.id, id))
-        await tx.insert(syncQueue).values({
-          tableName: table,
-          rowId: id,
-          operation: 'upsert',
-          queuedAt: ts,
-          attempts: 0,
-        })
+      runInTransaction(() => {
+        db.update(t).set({ deletedAt: null, updatedAt: ts }).where(eq(t.id, id)).run()
+        db
+          .insert(syncQueue)
+          .values({
+            tableName: table,
+            rowId: id,
+            operation: 'upsert',
+            queuedAt: ts,
+            attempts: 0,
+          })
+          .run()
       })
     },
     (cause) => appError('recoverable', 'Could not restore that', { cause }),

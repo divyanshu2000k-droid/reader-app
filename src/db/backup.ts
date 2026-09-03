@@ -15,7 +15,7 @@
 
 import { Directory, File, Paths } from 'expo-file-system'
 
-import { checkpointWal, DATABASE_NAME } from './client'
+import { checkpointWal, closeDatabase, DATABASE_NAME } from './client'
 import { appError, attempt, err, ok, type Result } from '@/lib/result'
 
 const BACKUP_DIR = 'backups'
@@ -165,6 +165,12 @@ export function restoreNewestBackup(): Result<void> {
   }
 
   try {
+    // Close first. Deleting an open file on Android leaves the connection attached to
+    // the unlinked inode, so without this the copy lands on disk and the running app
+    // never sees it — the restore silently does nothing while reporting success. The
+    // device pass caught exactly that. The next getDb() reopens from the restored file.
+    closeDatabase()
+
     const target = databaseFile()
     if (target.exists) target.delete()
     for (const suffix of WAL_SUFFIXES) {

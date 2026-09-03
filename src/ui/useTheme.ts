@@ -10,10 +10,13 @@ import { useColorScheme } from 'react-native'
 
 import { dark, light, type ColorScheme } from './theme'
 
+/**
+ * No cast. Both palettes `satisfies Palette` at their declaration in theme.ts, so a
+ * token present in one scheme and missing from the other is a compile error there
+ * rather than something a cast silently swallows here.
+ */
 export function useColors(): ColorScheme {
-  const scheme = useColorScheme()
-  // `light` is structurally identical to `dark`, so the ColorScheme type covers both.
-  return scheme === 'light' ? (light as unknown as ColorScheme) : dark
+  return useColorScheme() === 'light' ? light : dark
 }
 
 export function useIsDark(): boolean {

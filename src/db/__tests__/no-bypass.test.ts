@@ -103,6 +103,34 @@ test('no source file touches the raw expo-sqlite handle outside src/db/client.ts
   )
 })
 
+/**
+ * The device pass caught this the hard way: drizzle's expo-sqlite driver is a
+ * SYNCHRONOUS dialect, so `db.transaction(cb)` expects a sync callback. An `async`
+ * callback typechecks — the result is just a Promise — but the transaction commits the
+ * moment the callback returns that promise, before any awaited statement has run. Every
+ * statement then executes outside the transaction and nothing rolls back.
+ *
+ * The failure is invisible: writes appear to work, and only a deliberately broken
+ * `sync_queue` reveals that the pair is not atomic. Use `runInTransaction` instead.
+ */
+test('no async callback is passed to drizzle transaction()', () => {
+  const offenders: string[] = []
+
+  for (const file of walk(SRC)) {
+    const source = readFileSync(file, 'utf8')
+    if (/\.transaction\s*\(\s*async/.test(source)) {
+      offenders.push(relative(process.cwd(), file).replace(/\\/g, '/'))
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'drizzle expo-sqlite is a sync dialect: an async transaction callback commits before ' +
+      'its statements run, so nothing rolls back. Use runInTransaction from db/client.ts.',
+  )
+})
+
 test('client.ts does not export the raw SQLite handle', () => {
   const source = readFileSync(join(SRC, 'db', 'client.ts'), 'utf8')
   assert.ok(

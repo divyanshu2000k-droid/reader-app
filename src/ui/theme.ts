@@ -10,6 +10,40 @@
 
 // ─── COLOUR ──────────────────────────────────────────────────────────────────
 
+/**
+ * The contract both schemes must satisfy.
+ *
+ * Declaring this explicitly, rather than deriving `ColorScheme` from `typeof dark`, is
+ * what lets `useColors()` return either palette without a cast. A cast there would hide
+ * exactly the mistake this type exists to catch: a token added to one scheme and
+ * forgotten in the other.
+ */
+export interface Palette {
+  readonly ground: string
+  readonly surface: string
+  readonly surfaceRaised: string
+  readonly border: string
+  readonly borderStrong: string
+  readonly text: string
+  readonly textSecondary: string
+  readonly textMuted: string
+  readonly textFaint: string
+  readonly textGhost: string
+  readonly accent: string
+  readonly accentLight: string
+  /** Light mode splits the accent: fills use `accent`, text and hairlines use this. */
+  readonly accentInk: string
+  readonly onAccent: string
+  readonly accentSurface: string
+  readonly accentBorder: string
+  readonly danger: string
+  readonly dangerSurface: string
+  readonly dangerBorder: string
+  readonly success: string
+  readonly successSurface: string
+  readonly glow: { readonly color: string; readonly peakAlpha: number }
+}
+
 export const dark = {
   ground: '#0B0A08',
   surface: 'rgba(255,255,255,0.03)',
@@ -43,7 +77,7 @@ export const dark = {
    * to render this.
    */
   glow: { color: '249,190,61', peakAlpha: 0.13 },
-} as const
+} as const satisfies Palette
 
 export const light = {
   ground: '#FAF6EE',
@@ -78,7 +112,7 @@ export const light = {
   successSurface: 'rgba(122,180,120,0.12)',
 
   glow: { color: '249,190,61', peakAlpha: 0.22 },
-} as const
+} as const satisfies Palette
 
 // ─── TYPE ────────────────────────────────────────────────────────────────────
 // Plus Jakarta Sans throughout. Load 400/500/600/700/800 via expo-font.
@@ -224,15 +258,12 @@ export const rules = {
 
 // ─── THEME OBJECT ────────────────────────────────────────────────────────────
 
-export type ColorScheme = typeof dark
-
 /**
- * Structural check that light and dark carry exactly the same tokens. Without this, a
- * token added to one and forgotten in the other is only caught by a cast at the call
- * site, which is to say not caught at all.
+ * Both schemes satisfy `Palette`, so `useColors()` can return either without a cast.
+ * `satisfies` on each declaration above is what enforces it: a token missing from one
+ * scheme is a compile error at the palette, not a surprise at a call site.
  */
-const _lightMatchesDark: Record<keyof ColorScheme, unknown> = light
-void _lightMatchesDark
+export type ColorScheme = Palette
 
 export const theme = {
   dark,

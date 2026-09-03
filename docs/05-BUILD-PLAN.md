@@ -292,6 +292,12 @@ demoralising in a way that compounds.
 - [ ] Migration tested from a seeded old schema
 - [ ] Crash free above 99.5% across a week of your own use
 - [ ] Every string checked for a stray em dash
+- [ ] **The dev-only device-check trigger is absent from the release bundle.** `src/db/devchecks.ts`
+      is reached only through a `require()` inside an `if (__DEV__)` block in
+      `src/app/index.tsx`, which Metro should drop from a production build. Verify it,
+      do not assume it: `npx expo export --platform android` then
+      `grep -r "DEVICE PASS START" dist/` must return nothing. If it does not, the seed
+      script and a database-restore path shipped to users
 
 ---
 
