@@ -73,6 +73,16 @@ Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
-Slice 0, not started. See `docs/05-BUILD-PLAN.md`.
+Slice 0 substantially complete and **verified running on a device**. The app launches on
+the Pixel 7 emulator, renders from theme tokens, opens the database and reports
+`schema v1`. Schema, migrations, the single write path with `sync_queue`, theme, the ten
+shared components, path aliases, lint and the `lib/` + `domain/` modules are all in place.
+Typecheck and lint clean, 30 tests passing across IST, US Central and UTC.
+
+Outstanding before Slice 1: the device pass (the four behavioural checks in
+`src/db/__tests__/sync-queue.device.md`, the seed script, and `backup.ts`, which has the
+most logic and the least execution in the codebase), plus Sentry once a DSN exists.
+
+See `docs/05-BUILD-PLAN.md`.
 
 Update this line at the end of every slice.

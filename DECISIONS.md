@@ -67,6 +67,92 @@ structurally impossible.
 
 ## Log
 
+
+## 2026-09-03 · Slice 0 runs on a device. Two more missing dependencies found.
+**Verified on the Pixel 7 emulator:** the app launches, renders from theme tokens
+including the radial glow, opens the database and reports `schema v1`, which is Slice 0's
+acceptance criterion. `libexpo-sqlite.so` loads, and `reader.db`, `reader.db-wal` and
+`reader.db-shm` all exist in the app's private storage.
+**`babel-preset-expo` was missing.** `babel.config.js` named it but it was never a direct
+dependency, so Metro's transformer failed to construct and every bundle returned HTTP 500
+with a misleading `Cannot read properties of undefined (reading 'transformFile')`. The
+real error only surfaced via `npx expo export`, which prints the underlying
+`Cannot find module`. Installed as a devDependency.
+**Why both this and the MMKV miss happened:** `npm install --legacy-peer-deps` was needed
+throughout because of the `expo-router`/`vaul` peer conflict, and it does not enforce peer
+dependencies. Anything a config file names must be installed explicitly. **When a bundle
+fails with a confusing Metro internal error, run `npx expo export` — it reports the real
+cause.**
+**Confirms the WAL backup fix was necessary, not theoretical:** `reader.db` is 4 KB while
+`reader.db-wal` is 148 KB. A plain file copy of `reader.db` alone would have captured
+almost nothing. See the WAL-safe backup entry.
+
+## 2026-09-03 · MMKV deferred to the slice that first needs it
+**Chose:** removed `react-native-mmkv` from dependencies. It will be added back, together
+with its required peer `react-native-nitro-modules`, in the slice that first stores
+something in it — Slice 8 for `last_sync_at`, or Settings, whichever lands first.
+**Over:** installing `react-native-nitro-modules` now to satisfy the peer.
+**Because:** MMKV v4 requires the Nitro Modules native framework, and the build failed on
+exactly that: `Project with path ':react-native-nitro-modules' could not be found`. Nothing
+in `src/` imports MMKV yet, so installing it now adds native build surface and a new
+failure mode to every build in Slices 0 through 7 in exchange for nothing.
+**ADR 006 is unchanged.** MMKV is still the choice for small key-value settings; this only
+defers *installing* it until first use.
+**Lesson:** the dependency was added in Slice 0 because the architecture doc names it, not
+because anything needed it. Install a native dependency in the slice that uses it, not in
+the slice that anticipates it.
+**Revisit if:** Nitro Modules proves troublesome at Slice 8, in which case
+`expo-secure-store` or a small SQLite settings table is the fallback, and `last_sync_at`
+deliberately living outside SQLite is the only constraint to preserve.
+
+## 2026-09-03 · CORRECTION to the entry below: AF_UNIX was never broken
+**What was actually wrong:** AF_UNIX connect fails **only** when the socket path is the
+8.3 short-name form of the temp directory (`C:\Users\DIVYAN~1\AppData\Local\Temp`). Tested
+against `C:\afx` and the project directory, connect succeeds. The assistant's shell has
+`TEMP` set to the short-name form; a normal user terminal has the long form, where Gradle
+starts fine and builds run normally.
+**So the machine was healthy the whole time.** The `netsh winsock reset` and reboot were
+not needed, and the entry below over-diagnosed a tooling-environment quirk as a
+Windows-level fault. `scripts/CheckJavaLoopback.java` inherits the same short `TEMP`, so it
+reports FAIL even on a healthy machine — run it with
+`java -Djava.io.tmpdir=C:\Temp scripts/CheckJavaLoopback.java` to get a true answer.
+**Lesson worth keeping:** a failure reproduced only inside the assistant's own shell is a
+claim about that shell until it is reproduced in the user's.
+
+## 2026-09-03 · BLOCKED: Windows AF_UNIX is broken, so no Gradle build can run
+**SUPERSEDED — see the correction directly above. The diagnosis in this entry is wrong.**
+**Symptom:** every Gradle invocation dies with
+`java.io.IOException: Unable to establish loopback connection`, before compiling anything.
+**Root cause, traced rather than guessed:** JDK 17+ on Windows builds the NIO Selector's
+wakeup pipe on an **AF_UNIX socket pair** (`WEPollSelectorImpl` → `PipeImpl` →
+`UnixDomainSockets.connect0`). On this machine AF_UNIX **bind succeeds and connect fails**
+with `SocketException: Invalid argument`. Gradle's daemon cannot start without a Selector,
+so no build can start.
+**What it is NOT,** each ruled out by test rather than assumption: not Gradle, not Expo,
+not the project, not the sandbox (fails outside it too), not path length (TEMP is 36
+chars, and overriding `java.io.tmpdir` / `jdk.nio.channels.unixdomain.tmpdir` to three
+other directories changes nothing), not TCP loopback (plain sockets and NIO-over-TCP both
+pass), not a third-party LSP (Winsock catalog is all Microsoft), not antivirus (Defender
+only, no java firewall rules), not the JDK version (JBR 21 fails identically), and not
+the selector provider (forcing the legacy `WindowsSelectorProvider` fails the same way,
+because `PipeImpl` reaches AF_UNIX regardless). The `afunix` kernel driver is RUNNING and
+its file is present.
+**Diagnostic kept:** `scripts/CheckJavaLoopback.java`, runnable with
+`java scripts/CheckJavaLoopback.java`. Prints PASS/FAIL for the five layers in the order
+Gradle depends on them. Re-run it to verify any fix.
+**Correction to an earlier claim in this session:** the first failure was called a
+"first-run transient" on the strength of `gradlew -version` succeeding. That test was
+invalid — `-version` never forks a daemon, so it proved nothing. The failure is
+deterministic.
+**Fix is the human's and needs admin plus a reboot,** so it is not done here:
+`netsh winsock reset`, restart, then re-run the diagnostic.
+**Fallback if it cannot be fixed:** EAS Build, which compiles in the cloud and does not
+touch this machine's Winsock. This is exactly the contingency the build-strategy entry
+reserved when it kept "one dev build as a fallback if the local toolchain gives trouble",
+and `eas.json` already carries a `development` profile.
+**Revisit:** as soon as the diagnostic prints ALL CHECKS PASSED, retry
+`npx expo run:android`. Everything else in the toolchain is verified working.
+
 <!-- Add entries below, newest first -->
 
 ## 2026-09-03 · Slice 0 code review, findings 1 to 7 fixed

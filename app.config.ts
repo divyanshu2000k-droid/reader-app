@@ -30,7 +30,9 @@ const config: ExpoConfig = {
     },
     predictiveBackGestureEnabled: false,
   },
-  plugins: ['expo-router', 'expo-sqlite'],
+  // Kept in sync with what `npx expo install` reports as needing a config plugin.
+  // There is deliberately no app.json: this file is the single source of app config.
+  plugins: ['expo-router', 'expo-status-bar', 'expo-sqlite'],
   experiments: { typedRoutes: true },
   extra: {
     // Public keys only. Real secrets live in EAS Secrets. See docs/06-CONVENTIONS.md.
