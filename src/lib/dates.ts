@@ -12,6 +12,7 @@
  */
 
 import {
+  addDays as fnsAddDays,
   differenceInCalendarDays,
   format as fnsFormat,
   isValid,
@@ -85,11 +86,16 @@ export function daysBetween(a: LocalDay, b: LocalDay): number {
   )
 }
 
-/** The local day `n` days after `day`. Negative `n` goes backwards. */
+/**
+ * The local day `n` days after `day`. Negative `n` goes backwards.
+ *
+ * Uses date-fns rather than `setDate`, which is not DST-safe: in zones where the clock
+ * jumps at midnight, a manually incremented Date can land on the wrong calendar day.
+ * The streak calculation walks backwards with this function, so an off-by-one here
+ * silently breaks streaks twice a year.
+ */
 export function addDays(day: LocalDay, n: number): LocalDay {
-  const d = fnsParse(day, LOCAL_DAY_FORMAT, new Date())
-  d.setDate(d.getDate() + n)
-  return fnsFormat(d, LOCAL_DAY_FORMAT)
+  return fnsFormat(fnsAddDays(fnsParse(day, LOCAL_DAY_FORMAT, new Date()), n), LOCAL_DAY_FORMAT)
 }
 
 // ─── RENDERING ───────────────────────────────────────────────────────────────

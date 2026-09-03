@@ -1,12 +1,19 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "21d28291-746c-40ec-9cfb-8c788d5a0924",
+  "id": "44fed63d-53e9-4d5f-9aab-3ead34874b13",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "book_shelves": {
       "name": "book_shelves",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
         "book_id": {
           "name": "book_id",
           "type": "text",
@@ -27,9 +34,48 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_book_shelves_pair": {
+          "name": "idx_book_shelves_pair",
+          "columns": [
+            "book_id",
+            "shelf_id"
+          ],
+          "isUnique": true,
+          "where": "deleted_at IS NULL"
+        },
+        "idx_book_shelves_book": {
+          "name": "idx_book_shelves_book",
+          "columns": [
+            "book_id"
+          ],
+          "isUnique": false,
+          "where": "deleted_at IS NULL"
+        }
+      },
       "foreignKeys": {
         "book_shelves_book_id_books_id_fk": {
           "name": "book_shelves_book_id_books_id_fk",
@@ -58,15 +104,7 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "book_shelves_book_id_shelf_id_pk": {
-          "columns": [
-            "book_id",
-            "shelf_id"
-          ],
-          "name": "book_shelves_book_id_shelf_id_pk"
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     },

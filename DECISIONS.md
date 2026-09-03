@@ -69,6 +69,114 @@ structurally impossible.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-03 · Slice 0 code review, findings 1 to 7 fixed
+Self-review of the Slice 0 foundations before the device pass. Findings 8 and 9
+(ProgressBar reduce-motion call, `useTheme` cast) deferred. Fixed with the context still
+loaded, because 2 and 3 were a runtime crash and silent data loss rather than things
+worth seeing fail.
+
+**1 · The write path is typed by a registry, not by casts.**
+**Chose:** `writeRow('sessions', row)` — tables addressed by SQL name through a
+`SYNCABLE` registry, with `RowFor<K>` giving the exact insert shape per table.
+**Over:** a generic `writeRow(table, meta, values)` that needed four `as never` casts to
+compile.
+**Because:** those casts were `any` wearing a hat, in the one function the whole sync
+design rests on, in a project whose conventions forbid `any`. They are also what let
+finding 2 compile. Passing the table by name removes a further error class: the queue's
+`table_name` and the row's `id` now come from the same call and cannot disagree.
+**One cast remains**, in `tableFor()`, because Drizzle's builder generics do not survive
+indexing into a heterogeneous registry — a known query-builder limitation. It is
+contained to one helper and the guarantee it erases is restored by `_shapeCheck`, which
+fails to compile if any registered table lacks `id`, `updatedAt` or `deletedAt`.
+
+**2 · `book_shelves` gets a UUID id and the full sync columns.**
+**Chose:** drop the composite primary key; add `id`, `created_at`, `updated_at`,
+`deleted_at`, plus a partial unique index on `(book_id, shelf_id) WHERE deleted_at IS
+NULL`.
+**Over:** keeping the composite key and excluding the table from the write path.
+**Because:** it was registered as syncable while having neither an `id` nor
+`deleted_at`, so `writeRow` would have emitted `onConflictDoUpdate` against a
+nonexistent column and `softDelete` would have set a column that does not exist. Both
+crash on the first shelf assignment in Slice 2. More importantly, a composite key would
+have made a shelf assignment the only row in the app that cannot be soft-deleted, and so
+the only destructive action with no undo. The partial index buys back exactly what the
+composite key was for: one live assignment per pair, re-addable after a soft delete.
+Migration regenerated.
+
+**3 · The backup is WAL-safe. Belt and braces.**
+**Chose:** `PRAGMA wal_checkpoint(TRUNCATE)` before the copy, **and** copy the `-wal` and
+`-shm` sidecars. Prune deletes sidecars with their database; restore clears the live
+sidecars before copying and restores the saved ones.
+**Because:** `client.ts` sets `journal_mode = WAL`, where committed transactions live in
+`reader.db-wal` until a checkpoint. Copying `reader.db` alone yields a backup missing the
+reader's most recent sessions — and it looks like success, which is worse than no backup.
+This is the one code path whose entire job is never losing data, so it failed at exactly
+the moment it mattered. A checkpoint can still be partial if another connection holds a
+read lock, hence the sidecars as well. An orphaned `-wal` beside a restored database
+would be replayed on next open and could reintroduce the half-migrated state being rolled
+back, which is why restore clears them first.
+
+**4 · The colour lint rule now covers `src/ui/**`.**
+**Chose:** extend the rule to the shared primitives, add an `rgba()` pattern beside the
+hex one, and make `theme.ts` the sole exception. Moved `BookCover`'s six fallback hues to
+`theme.coverFallbacks` and `Sheet`'s scrim to `theme.scrim`.
+**Because:** the original rule covered only features and routes, leaving the shared
+components — the files most likely to define a colour — unchecked. The hole sat exactly
+where the violations were. Verified non-vacuous: a probe file with a hex and an rgba
+literal in `src/ui/` fails the lint.
+
+**5 · Migrations memoise the promise, not the result.**
+**Because:** two components mounting in the same tick both saw `pending`, both called
+through, and the app would take two backups and run two concurrent `migrate()` calls
+against one database.
+
+**6 · The source guard also covers the raw SQLite handle.**
+**Chose:** `client.ts` no longer exports the expo-sqlite handle; the guard fails on
+`openDatabaseSync`, `execSync` or `runSync` outside it, and asserts the export has not
+returned.
+**Because:** `sqliteDb.execSync('INSERT …')` bypasses Drizzle entirely and so slipped
+past a guard that only looked for `db.insert(`. Also added a schema-level test asserting
+every syncable table has an `id` and `...syncColumns` — the check that would have caught
+finding 2 where the mistake is actually made. Verified non-vacuous by removing
+`syncColumns` from `goals` and watching it fail.
+
+**7 · The database opens lazily.**
+**Chose:** `getDb()` opens on first use rather than at module import.
+**Because:** opening at import is synchronous native work on the startup path against a
+sub-2-second cold-start budget, and a failure there is an unrecoverable module-load crash
+no error boundary can catch.
+
+**Also · `Sheet` honours the motion tokens it claimed to.** It now animates with
+`motion.sheetUp.duration` and `motion.scrimFade.duration` via Reanimated, with
+`animationType="none"` so the Modal does not run competing timing, and `useReducedMotion`
+zeroing both. Previously the comment cited the tokens and the code used the Modal's
+default slide. A comment describing behaviour the code lacks is worse than no comment.
+**Also · `theme.ts` gained `_lightMatchesDark`,** a structural check that light and dark
+carry the same tokens, so a token added to one and forgotten in the other is a compile
+error rather than something a cast hides at the call site.
+
+## 2026-09-03 · When exactly a streak breaks
+**Chose:** with D as the most recent day having a session, the streak is alive on D and
+D+1 and zero from D+2. It breaks at **local midnight beginning D+2**, that is after one
+full calendar day with no session. Exactly one grace day, never two. No session yesterday
+and none today is broken.
+**Over:** breaking at the midnight after D, which is stricter, and over a rolling 48-hour
+window, which is fuzzier.
+**Because:** breaking at the midnight after D punishes a reader for the hour they open
+the app; two grace days stops meaning "consecutive". One grace day is the smallest rule
+that is both honest and not a nag.
+**Every boundary is a `LocalDay`,** so the midnight is the reader's, derived from
+`sessions.local_day`. Never UTC: a reader in IST finishing at 23:00 would otherwise be
+credited under the next UTC day, and one in Chicago reading at 19:00 would lose the day
+they did read.
+**Also fixed:** `lib/dates.addDays` used `Date.setDate`, which is not DST-safe. The
+streak walks backwards with it, so an off-by-one there would break streaks twice a year.
+Now uses date-fns. Covered by `src/domain/__tests__/streaks.test.ts`, which builds every
+day from a real timestamp via `toLocalDay` so the tests fail if the bucketing ever
+regresses to UTC.
+**Revisit if:** readers report the grace day feels like cheating, which would be a
+surprise.
+
 ## 2026-09-03 · Slice 0 spec gaps found and resolved
 Small decisions made while building, each of which the specs left open. Recorded
 together because none needs its own entry.

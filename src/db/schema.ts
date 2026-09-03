@@ -17,7 +17,15 @@
  */
 
 import { sql } from 'drizzle-orm'
-import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import {
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core'
 
 /** Columns every syncable table carries. Spread into each table definition. */
 const syncColumns = {
@@ -159,9 +167,21 @@ export const shelves = sqliteTable('shelves', {
   ...syncColumns,
 })
 
+/**
+ * Carries a UUID primary key and the full sync columns rather than a composite key.
+ *
+ * A composite key would be the tidier relational answer, but it would make a shelf
+ * assignment the only row in the app that cannot be soft-deleted, and therefore the only
+ * destructive action with no undo. That breaks a non-negotiable rule for the sake of one
+ * saved column.
+ *
+ * The partial unique index is what a composite key was buying: one live assignment per
+ * book-and-shelf pair, while still allowing the pair to be re-added after a soft delete.
+ */
 export const bookShelves = sqliteTable(
   'book_shelves',
   {
+    id: text('id').primaryKey(),
     bookId: text('book_id')
       .notNull()
       .references(() => books.id),
@@ -169,8 +189,14 @@ export const bookShelves = sqliteTable(
       .notNull()
       .references(() => shelves.id),
     addedAt: integer('added_at').notNull(),
+    ...syncColumns,
   },
-  (t) => [primaryKey({ columns: [t.bookId, t.shelfId] })],
+  (t) => [
+    uniqueIndex('idx_book_shelves_pair')
+      .on(t.bookId, t.shelfId)
+      .where(sql`deleted_at IS NULL`),
+    index('idx_book_shelves_book').on(t.bookId).where(sql`deleted_at IS NULL`),
+  ],
 )
 
 // ─── NOTES ───────────────────────────────────────────────────────────────────
@@ -253,6 +279,8 @@ export type Shelf = typeof shelves.$inferSelect
 export type NewShelf = typeof shelves.$inferInsert
 export type Note = typeof notes.$inferSelect
 export type NewNote = typeof notes.$inferInsert
+export type BookShelf = typeof bookShelves.$inferSelect
+export type NewBookShelf = typeof bookShelves.$inferInsert
 export type Goal = typeof goals.$inferSelect
 export type NewGoal = typeof goals.$inferInsert
 

@@ -159,6 +159,28 @@ export const size = {
  *
  * expo-linear-gradient is NOT a substitute: it does linear only.
  */
+// ─── COVER FALLBACKS AND SCRIM ───────────────────────────────────────────────
+
+/**
+ * Cover fallback hues. No cover is the common case, not the edge case, so these are a
+ * real part of the palette rather than an afterthought.
+ *
+ * Deliberately muted and deliberately NOT the accent: a wall of gold covers would fight
+ * the one colour the design uses to mean "active". Picked deterministically from the
+ * title so a book never changes colour between the list and the detail screen.
+ */
+export const coverFallbacks = [
+  '#2E2E38',
+  '#33303A',
+  '#2B3330',
+  '#3A3129',
+  '#2C3138',
+  '#382E31',
+] as const
+
+/** Behind every sheet and modal. Same in both themes: it darkens whatever is beneath. */
+export const scrim = 'rgba(0,0,0,0.55)'
+
 export const glowSpec = {
   top:    { cy: '-8%', rx: '130%', ry: '55%' },   // Library, Stats, most screens
   centre: { cy: '40%', rx: '95%',  ry: '42%' },   // Reading timer
@@ -203,5 +225,26 @@ export const rules = {
 // ─── THEME OBJECT ────────────────────────────────────────────────────────────
 
 export type ColorScheme = typeof dark
-export const theme = { dark, light, font, space, radius, size, motion, rules, glowSpec } as const
+
+/**
+ * Structural check that light and dark carry exactly the same tokens. Without this, a
+ * token added to one and forgotten in the other is only caught by a cast at the call
+ * site, which is to say not caught at all.
+ */
+const _lightMatchesDark: Record<keyof ColorScheme, unknown> = light
+void _lightMatchesDark
+
+export const theme = {
+  dark,
+  light,
+  font,
+  space,
+  radius,
+  size,
+  motion,
+  rules,
+  glowSpec,
+  coverFallbacks,
+  scrim,
+} as const
 export type Theme = typeof theme

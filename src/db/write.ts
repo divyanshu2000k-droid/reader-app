@@ -6,10 +6,11 @@
  * Every write to a syncable table goes through here, and the table write plus the
  * `sync_queue` append happen in one transaction. Both or neither.
  *
- * `queries.ts` files call these functions and never call `db.insert`, `db.update` or
- * `db.delete` directly. A test in `src/db/__tests__/no-bypass.test.ts` greps the source
- * and fails if anything does, because "remember to enqueue" is not a strategy that
- * survives twelve slices.
+ * `queries.ts` files call these functions and never call `getDb().insert`, `.update` or
+ * `.delete` directly, and never touch the raw expo-sqlite handle, which `client.ts` does
+ * not export for exactly that reason. A test in `__tests__/no-bypass.test.ts` greps the
+ * source and fails if anything does, because "remember to enqueue" is not a strategy
+ * that survives twelve slices.
  *
  * The drain is a no-op until Slice 8. That is deliberate: retrofitting the enqueue into
  * a dozen working query functions in week fourteen means the ones you miss are
@@ -17,67 +18,108 @@
  */
 
 import { eq, sql } from 'drizzle-orm'
-import type { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 
-import { db } from './client'
-import { syncQueue } from './schema'
+import { getDb } from './client'
+import { bookShelves, books, goals, notes, reads, sessions, shelves, syncQueue } from './schema'
 import { now } from '@/lib/dates'
 import { appError, attempt, type Result } from '@/lib/result'
 
 /**
- * Tables that sync. `sync_queue` and `metadata_cache` are deliberately absent: both are
- * local-only and must never enqueue.
+ * The registry of syncable tables, keyed by SQL table name.
+ *
+ * `sync_queue` and `metadata_cache` are deliberately absent: both are local-only and
+ * must never enqueue. Their absence here is what makes writing to them through this
+ * module a compile error rather than a convention.
+ *
+ * Passing the table by name rather than by object is what removes a whole error class:
+ * the queue's `table_name` and the row's `id` are derived from the same call, so they
+ * cannot disagree.
  */
-export const SYNCABLE_TABLES = [
-  'books',
-  'reads',
-  'sessions',
-  'shelves',
-  'book_shelves',
-  'notes',
-  'goals',
-] as const
+const SYNCABLE = {
+  books,
+  reads,
+  sessions,
+  shelves,
+  book_shelves: bookShelves,
+  notes,
+  goals,
+} as const
 
-export type SyncableTable = (typeof SYNCABLE_TABLES)[number]
+export type SyncableTable = keyof typeof SYNCABLE
+
+/** The insert shape for one syncable table, e.g. `RowFor<'sessions'>`. */
+export type RowFor<K extends SyncableTable> = (typeof SYNCABLE)[K]['$inferInsert']
+
+export const SYNCABLE_TABLES = Object.keys(SYNCABLE) as SyncableTable[]
 
 export function isSyncable(name: string): name is SyncableTable {
-  return (SYNCABLE_TABLES as readonly string[]).includes(name)
-}
-
-interface WriteOptions {
-  /** The table's SQL name, used for the queue row. */
-  readonly table: SyncableTable
-  /** The row's UUID primary key. */
-  readonly id: string
+  return name in SYNCABLE
 }
 
 /**
- * Insert or replace a row, and enqueue it for sync, atomically.
+ * The shape every syncable table is required to have.
+ *
+ * Enforcing it here is what would have caught `book_shelves` shipping with a composite
+ * key and no `deleted_at`: that table was listed as syncable but had neither an `id` nor
+ * the sync columns, so `softDelete` on it would have failed at runtime on the first
+ * shelf removal in Slice 2.
+ */
+interface SyncableShape extends SQLiteTable {
+  id: SQLiteColumn
+  updatedAt: SQLiteColumn
+  deletedAt: SQLiteColumn
+}
+
+/** Compile-time proof that every registered table satisfies the shape above. */
+const _shapeCheck: Record<SyncableTable, SyncableShape> = SYNCABLE
+void _shapeCheck
+
+/**
+ * The single cast in the module, and the reason it is here.
+ *
+ * Drizzle's builder types do not survive indexing into a heterogeneous registry: the
+ * value type becomes a union of nine table types and `.values()` / `.set()` resolve to
+ * an intersection that nothing satisfies. This is a known limitation of the query
+ * builder's generics, not a modelling problem.
+ *
+ * It is contained to this one helper, and the guarantee it erases is restored by
+ * `_shapeCheck` above, which fails to compile if any registered table lacks `id`,
+ * `updatedAt` or `deletedAt`. The public API of this module is fully typed.
+ */
+function tableFor(name: SyncableTable): SyncableShape {
+  return SYNCABLE[name] as unknown as SyncableShape
+}
+
+/**
+ * Insert or update a row, and enqueue it for sync, atomically.
  *
  * `updatedAt` is stamped locally as an optimistic placeholder only. The authoritative
  * value is stamped by Postgres on push and written back. A device clock never decides
  * which side of a conflict wins. See DECISIONS.md, 2026-09-03.
  */
-export async function writeRow<T extends SQLiteTable>(
-  table: T,
-  meta: WriteOptions,
-  values: T['$inferInsert'],
+export async function writeRow<K extends SyncableTable>(
+  table: K,
+  values: RowFor<K> & { id: string },
 ): Promise<Result<void>> {
   return attempt(
     async () => {
-      await db.transaction(async (tx) => {
+      const t = tableFor(table)
+      const ts = now()
+      // One timestamp for the row and the queue entry. Reading the clock twice can
+      // produce two values and makes the pair look like two separate edits.
+      const row = { ...values, updatedAt: ts }
+
+      await getDb().transaction(async (tx) => {
         await tx
-          .insert(table)
-          .values({ ...values, updatedAt: now() } as T['$inferInsert'])
-          .onConflictDoUpdate({
-            target: (table as unknown as { id: never }).id,
-            set: { ...values, updatedAt: now() } as never,
-          })
+          .insert(t)
+          .values(row)
+          .onConflictDoUpdate({ target: t.id, set: row })
         await tx.insert(syncQueue).values({
-          tableName: meta.table,
-          rowId: meta.id,
+          tableName: table,
+          rowId: values.id,
           operation: 'upsert',
-          queuedAt: now(),
+          queuedAt: ts,
           attempts: 0,
         })
       })
@@ -95,21 +137,17 @@ export async function writeRow<T extends SQLiteTable>(
  * syncs, and a purge job removes rows older than 30 days. This is also what powers
  * Recently Deleted and every undo toast.
  */
-export async function softDelete(
-  table: SQLiteTable,
-  meta: WriteOptions,
-): Promise<Result<void>> {
+export async function softDelete(table: SyncableTable, id: string): Promise<Result<void>> {
   return attempt(
     async () => {
-      await db.transaction(async (tx) => {
-        const ts = now()
-        await tx
-          .update(table)
-          .set({ deletedAt: ts, updatedAt: ts } as never)
-          .where(eq((table as unknown as { id: never }).id, meta.id as never))
+      const t = tableFor(table)
+      const ts = now()
+
+      await getDb().transaction(async (tx) => {
+        await tx.update(t).set({ deletedAt: ts, updatedAt: ts }).where(eq(t.id, id))
         await tx.insert(syncQueue).values({
-          tableName: meta.table,
-          rowId: meta.id,
+          tableName: table,
+          rowId: id,
           operation: 'delete',
           queuedAt: ts,
           attempts: 0,
@@ -125,21 +163,17 @@ export async function softDelete(
 }
 
 /** Undo a soft delete. Enqueues an upsert, because to the server this is a resurrection. */
-export async function restoreRow(
-  table: SQLiteTable,
-  meta: WriteOptions,
-): Promise<Result<void>> {
+export async function restoreRow(table: SyncableTable, id: string): Promise<Result<void>> {
   return attempt(
     async () => {
-      await db.transaction(async (tx) => {
-        const ts = now()
-        await tx
-          .update(table)
-          .set({ deletedAt: null, updatedAt: ts } as never)
-          .where(eq((table as unknown as { id: never }).id, meta.id as never))
+      const t = tableFor(table)
+      const ts = now()
+
+      await getDb().transaction(async (tx) => {
+        await tx.update(t).set({ deletedAt: null, updatedAt: ts }).where(eq(t.id, id))
         await tx.insert(syncQueue).values({
-          tableName: meta.table,
-          rowId: meta.id,
+          tableName: table,
+          rowId: id,
           operation: 'upsert',
           queuedAt: ts,
           attempts: 0,
@@ -170,6 +204,6 @@ export async function drainSyncQueue(): Promise<Result<{ drained: number }>> {
 
 /** How many writes are waiting. Powers the quiet sync indicator, never a blocking spinner. */
 export async function pendingSyncCount(): Promise<number> {
-  const rows = await db.select({ n: sql<number>`count(*)` }).from(syncQueue)
+  const rows = await getDb().select({ n: sql<number>`count(*)` }).from(syncQueue)
   return rows[0]?.n ?? 0
 }

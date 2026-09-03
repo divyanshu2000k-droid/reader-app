@@ -9,7 +9,6 @@
  * Runs on a device only. Call it from a dev-only button, never in production.
  */
 
-import { books, reads, sessions } from './schema'
 import { writeRow } from './write'
 import { now, toLocalDay } from '@/lib/dates'
 import { newId } from '@/lib/ids'
@@ -22,7 +21,7 @@ export async function seedSampleLibrary(): Promise<Result<{ bookId: string }>> {
   const bookId = newId()
   const readId = newId()
 
-  const book = await writeRow(books, { table: 'books', id: bookId }, {
+  const book = await writeRow('books', {
     id: bookId,
     title: 'The Overstory',
     author: 'Richard Powers',
@@ -33,7 +32,7 @@ export async function seedSampleLibrary(): Promise<Result<{ bookId: string }>> {
   })
   if (!book.ok) return book
 
-  const read = await writeRow(reads, { table: 'reads', id: readId }, {
+  const read = await writeRow('reads', {
     id: readId,
     bookId,
     status: 'reading',
@@ -58,9 +57,8 @@ export async function seedSampleLibrary(): Promise<Result<{ bookId: string }>> {
 
   for (const p of plan) {
     const occurredAt = ts - p.daysAgo * DAY_MS
-    const id = newId()
-    const result = await writeRow(sessions, { table: 'sessions', id }, {
-      id,
+    const result = await writeRow('sessions', {
+      id: newId(),
       readId,
       occurredAt,
       // Written together with occurredAt, always. See DECISIONS.md.

@@ -13,9 +13,27 @@ import { addDays, daysBetween, todayLocalDay, type LocalDay } from '@/lib/dates'
 /**
  * Consecutive days ending today or yesterday, counting back.
  *
- * Yesterday still counts: a reader who has not read yet today has not broken anything.
- * Ending the streak at midnight would be punishing them for the time of day they opened
- * the app, and this app never nags.
+ * WHEN EXACTLY A STREAK BREAKS
+ *
+ * Let D be the reader's most recent day with a session. The streak is alive when today
+ * is D or D+1, and is zero from D+2 onward. So it breaks at **local midnight beginning
+ * D+2** — that is, at the end of one full calendar day with no session.
+ *
+ *   last session Tue, today Tue   → alive  (read today)
+ *   last session Tue, today Wed   → alive  (grace day: not read YET)
+ *   last session Tue, today Thu   → BROKEN (Wednesday passed with nothing)
+ *
+ * No session yesterday and none today is broken, not alive. There is exactly one grace
+ * day, never two.
+ *
+ * Every boundary here is a `LocalDay`, so the midnight in question is the reader's local
+ * midnight, derived from `sessions.local_day`. It is never UTC midnight: a reader in IST
+ * finishing at 23:00 would otherwise have that session filed under the next UTC day and
+ * be credited for a day they did not read, and a reader in Chicago reading at 19:00
+ * would lose the day they did.
+ *
+ * The grace day exists because ending the streak at the midnight after the last session
+ * punishes a reader for the hour they happen to open the app, and this app never nags.
  */
 export function currentStreak(
   days: readonly LocalDay[],

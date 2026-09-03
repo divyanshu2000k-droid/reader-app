@@ -1,26 +1,29 @@
 /**
  * src/ui/Sheet.tsx
  *
- * Bottom sheet, r22 on the top corners, scrim behind. Sheets slide up over 280ms and
- * the scrim fades over 200ms, per the Motion section.
+ * Bottom sheet, r22 on the top corners, scrim behind.
+ *
+ * Motion comes from the tokens and is actually applied: the sheet slides over
+ * `motion.sheetUp.duration` and the scrim fades over `motion.scrimFade.duration`. The
+ * Modal's own `animationType` is off, because it would run its own timing alongside
+ * ours. Reduce-motion drops both to zero rather than switching to a second animation.
  *
  * Back always works and never loses unsaved input: `onRequestClose` fires for the
  * hardware back button, and the caller decides whether to warn before discarding.
  */
 
-import type { ReactNode } from 'react'
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native'
+import { useEffect, useState, type ReactNode } from 'react'
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { font, radius, space } from './theme'
+import { font, motion, radius, scrim, space } from './theme'
 import { useColors } from './useTheme'
 
 interface Props {
@@ -36,23 +39,64 @@ export function Sheet({ visible, onClose, title, children, dismissable = true }:
   const c = useColors()
   const insets = useSafeAreaInsets()
   const { height } = useWindowDimensions()
+  const reduced = useReducedMotion()
+
+  // The Modal must stay mounted through the exit animation, so `mounted` lags `visible`
+  // on the way out. Adjusting it during render rather than in an effect is React's
+  // documented pattern for deriving state from changed props, and avoids the cascading
+  // render that a setState-in-effect would cause.
+  const [prevVisible, setPrevVisible] = useState(visible)
+  const [mounted, setMounted] = useState(visible)
+  if (prevVisible !== visible) {
+    setPrevVisible(visible)
+    if (visible) setMounted(true)
+  }
+
+  const progress = useSharedValue(visible ? 1 : 0)
+
+  useEffect(() => {
+    const duration = reduced ? motion.reducedMotionDuration : motion.sheetUp.duration
+    if (visible) {
+      progress.value = withTiming(1, { duration })
+      return
+    }
+    progress.value = withTiming(0, { duration }, (finished) => {
+      if (finished) runOnJS(setMounted)(false)
+    })
+  }, [visible, reduced, progress])
+
+  const scrimStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(progress.value, {
+      duration: reduced ? motion.reducedMotionDuration : motion.scrimFade.duration,
+    }),
+  }))
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - progress.value) * height }],
+  }))
+
+  if (!mounted) return null
 
   return (
     <Modal
-      visible={visible}
+      visible
       transparent
-      animationType="slide"
+      animationType="none"
       statusBarTranslucent
       onRequestClose={dismissable ? onClose : undefined}
     >
-      <Pressable
-        accessibilityLabel={dismissable ? 'Close' : undefined}
-        style={styles.scrim}
-        onPress={dismissable ? onClose : undefined}
-      />
-      <View
+      <Animated.View style={[styles.scrim, scrimStyle]}>
+        <Pressable
+          accessibilityLabel={dismissable ? 'Close' : undefined}
+          style={StyleSheet.absoluteFill}
+          onPress={dismissable ? onClose : undefined}
+        />
+      </Animated.View>
+
+      <Animated.View
         style={[
           styles.sheet,
+          sheetStyle,
           {
             backgroundColor: c.ground,
             borderColor: c.border,
@@ -82,7 +126,7 @@ export function Sheet({ visible, onClose, title, children, dismissable = true }:
         >
           {children}
         </ScrollView>
-      </View>
+      </Animated.View>
     </Modal>
   )
 }
@@ -94,7 +138,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: scrim,
   },
   sheet: {
     position: 'absolute',

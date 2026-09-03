@@ -12,7 +12,7 @@
 
 import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 
-import { font, radius, size } from './theme'
+import { coverFallbacks, font, radius, size } from './theme'
 import { useColors } from './useTheme'
 
 type CoverSize = 'list' | 'header' | 'dock' | 'hero'
@@ -35,26 +35,14 @@ const DIMENSIONS: Record<CoverSize, { w: number; h: number }> = {
   hero: size.coverHero,
 }
 
-/**
- * Muted, bookish hues. Deliberately not the accent: a wall of gold covers would fight
- * the one accent colour the design uses to mean "active".
- */
-const FALLBACK_HUES = [
-  '#2E2E38',
-  '#33303A',
-  '#2B3330',
-  '#3A3129',
-  '#2C3138',
-  '#382E31',
-] as const
-
+/** Deterministic, so a book never changes colour between the list and the detail screen. */
 export function coverColorFor(title: string): string {
   let hash = 0
   for (let i = 0; i < title.length; i += 1) {
     hash = (hash * 31 + title.charCodeAt(i)) | 0
   }
-  const index = Math.abs(hash) % FALLBACK_HUES.length
-  return FALLBACK_HUES[index] ?? FALLBACK_HUES[0]
+  const index = Math.abs(hash) % coverFallbacks.length
+  return coverFallbacks[index] ?? coverFallbacks[0]
 }
 
 export function BookCover({

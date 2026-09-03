@@ -1,12 +1,17 @@
 CREATE TABLE `book_shelves` (
+	`id` text PRIMARY KEY NOT NULL,
 	`book_id` text NOT NULL,
 	`shelf_id` text NOT NULL,
 	`added_at` integer NOT NULL,
-	PRIMARY KEY(`book_id`, `shelf_id`),
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	`deleted_at` integer,
 	FOREIGN KEY (`book_id`) REFERENCES `books`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`shelf_id`) REFERENCES `shelves`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `idx_book_shelves_pair` ON `book_shelves` (`book_id`,`shelf_id`) WHERE deleted_at IS NULL;--> statement-breakpoint
+CREATE INDEX `idx_book_shelves_book` ON `book_shelves` (`book_id`) WHERE deleted_at IS NULL;--> statement-breakpoint
 CREATE TABLE `books` (
 	`id` text PRIMARY KEY NOT NULL,
 	`title` text NOT NULL,
