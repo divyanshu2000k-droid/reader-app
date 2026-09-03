@@ -69,6 +69,107 @@ structurally impossible.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-03 · Slice 0 spec gaps found and resolved
+Small decisions made while building, each of which the specs left open. Recorded
+together because none needs its own entry.
+
+- **Percent complete returns `null`, not `0`, when the page count is unknown.** Missing
+  page counts are the median case. A zeroed progress bar reads as "you have read
+  nothing", which is a lie; `null` lets the UI show a raw page number instead.
+- **Percent complete clamps to 1.** API page counts are frequently wrong, and a reader
+  past the supposed last page should see a full bar, not 108%.
+- **A session beyond the book's length is not an error.** `exceedsKnownLength` flags it
+  so the UI can offer to correct the *book*. Never block a save on it: the page count is
+  usually the thing that is wrong. Resolves an open question in `04-SCREENS.md`.
+- **A streak survives today being unread.** It counts back from today *or* yesterday.
+  Breaking it at midnight punishes a reader for the hour they opened the app, and this
+  app never nags.
+- **Lowering a goal below current progress reads as met**, with a `targetBelowProgress`
+  flag, not as an error. Resolves an open question in `04-SCREENS.md`.
+- **An "open" timer session is `is_timed = 1 AND duration_seconds IS NULL`.** Needed a
+  definition now because launch gate 3 queries for it from Slice 1, before the timer
+  exists.
+- **Cover fallback colours are derived deterministically from the title**, from a muted
+  palette that deliberately excludes the accent. A wall of gold covers would fight the
+  one colour the design uses to mean "active".
+- **`Button` debounces every press at 600ms.** "Double taps are idempotent" is a global
+  rule in `04-SCREENS.md`; a double-tapped Save is a duplicate session, so the rule is
+  enforced in the component rather than remembered per screen.
+- **`SkeletonGate` enforces the 400ms rule structurally.** Anything faster shows no
+  loading state at all. Easy to state, easy to forget, so it is a component.
+
+## 2026-09-03 · Slice 0 toolchain deviations from the spec
+Three places where reality differed from `02-ARCHITECTURE.md`. None is a product change.
+
+- **ESLint pinned to 9.x.** `eslint-config-expo` is not yet compatible with ESLint 10:
+  its bundled `eslint-plugin-react` crashes on the new rule context API. Pinned rather
+  than dropping the Expo config, which carries the RN-specific rules.
+- **`npm install` needs `--legacy-peer-deps`.** `expo-router` 57 pulls a Radix/`vaul`
+  tree with peer ranges that npm 11 refuses. Expo's own installer papers over this;
+  plain `npm install` of anything else does not.
+- **Reanimated's Babel plugin is now `react-native-worklets/plugin`**, not
+  `react-native-reanimated/plugin`. Framework mechanics, so the current toolchain wins
+  over the spec, per the skill-precedence rule in `CLAUDE.md`.
+- **Sentry is deferred to the end of Slice 0**, because it adds a config plugin and
+  therefore needs a prebuild, which needs the Android toolchain. Nothing else depends on
+  it. `app.config.ts` already reads the DSN from the environment.
+
+## 2026-09-03 · Agent skills installed
+**Chose:** `expo@claude-plugins-official` (25 skills), `building-react-native-apps@callstack-agent-skills`
+(carries `react-native-best-practices`), and `supabase@supabase-agent-skills`, which is
+first party from the Supabase org and covers RLS and Postgres performance for Slice 8.
+**Over:** any Drizzle ORM skill. Everything available is single author third party
+(`bobmatnyc`, `giuseppe-trisciuoglio`, `mindrally`, `jezweb`, `lobehub`), none first party,
+and none address Drizzle's **Expo SQLite** driver, which is the rough edge
+`02-ARCHITECTURE.md` actually warns about. A generic Postgres-flavoured Drizzle skill would
+mislead more than help there.
+**Note:** the Callstack skill is bundled inside the `building-react-native-apps` plugin, not
+published as a plugin of its own. The widely quoted
+`install react-native-best-practices@callstack-agent-skills` fails.
+**Revisit if:** the Drizzle team publishes a first party skill, or the Expo SQLite driver
+gets its own.
+
+## 2026-09-03 · Local builds are primary, EAS is for releases
+**Chose:** `npx expo run:android` is the day to day build, free and unlimited. EAS is for
+release builds, plus **one development build kept as a fallback** if the local Android
+toolchain gives trouble.
+**Over:** "Development build via EAS on day one", as Slice 0 in `05-BUILD-PLAN.md` said.
+**Because:** this resolves a real contradiction between `CLAUDE.md` and the build plan, in
+favour of `CLAUDE.md`. Local builds cost nothing and iterate faster, which matters most in
+the slices with the most rebuilds. The EAS fallback exists because the local toolchain is
+the one part of this stack that can fail for environmental reasons rather than code
+reasons, and being blocked on day one with no escape hatch is the worst version of that.
+Both paths produce a **development build**; neither is Expo Go, which cannot load the
+native modules this app needs.
+**Revisit if:** local builds prove flaky enough that the EAS fallback becomes the habit, at
+which point make it the default rather than running two paths.
+
+## 2026-09-03 · Continuous native generation, `android/` is never hand edited
+**Chose:** `android/` and `ios/` are generated by `expo prebuild` and are gitignored, which
+they already were. Every native change goes through an Expo **config plugin**. No file under
+`android/` is ever edited by hand, and none is ever committed.
+**Over:** checking in the native folders and patching them directly, which is the path of
+least resistance the first time something needs a manifest entry.
+**Because:** a hand patched `AndroidManifest.xml` is silently destroyed by the next
+`prebuild`, and the failure is invisible until a feature stops working on a fresh clone or
+in CI. **This is precisely why the Slice 6 foreground service must be a config plugin**, and
+why that slice is the hardest technical item in Phase 1: the difficulty is not the service,
+it is expressing it as a plugin. `02-ARCHITECTURE.md` already predicted this.
+**Consequence:** if a native change cannot be expressed as a config plugin, that is a signal
+to reconsider the feature, not to reach for the manifest.
+**Revisit if:** never, while the timer and any future widget are the only native surface.
+
+## 2026-09-03 · Version control is the human's, not the assistant's
+**Chose:** the assistant runs no git commands. Not `init`, `add`, `commit`, `branch`, `push`
+or `checkout`. The `.git` folder in the working tree was created by the human and is left
+alone. When something is worth committing, the assistant says so and stops.
+**Over:** the assistant managing branches per slice, as `06-CONVENTIONS.md` describes.
+**Because:** standing instruction from the human, who handles version control in a separate
+terminal. `06-CONVENTIONS.md`'s git section still describes the intended *shape* of the
+history, one slice per branch and why-not-what commit messages. It is now a description of
+what the human does, not an instruction to the assistant.
+**Revisit if:** the human says otherwise, explicitly.
+
 ## 2026-09-03 · `local_day` stored on sessions, the one exception to never storing derivations
 **Chose:** a `local_day TEXT NOT NULL` column on `sessions`, `YYYY-MM-DD`, computed from
 `occurred_at` in the device timezone at write time, indexed. Every day-bucketed aggregate
