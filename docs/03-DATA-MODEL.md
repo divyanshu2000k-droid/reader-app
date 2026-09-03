@@ -93,6 +93,7 @@ The atom of the whole system. Append only in practice, always editable in princi
 | `id` | TEXT PK | UUID |
 | `read_id` | TEXT FK | → reads.id |
 | `occurred_at` | INTEGER NOT NULL | **The single most important column in the schema** |
+| `local_day` | TEXT NOT NULL | `YYYY-MM-DD`. The calendar day in the device's timezone at write time. Indexed. See below |
 | `format` | TEXT NOT NULL | `pages` or `minutes`. Lives here, not on the book |
 | `from_position` | INTEGER | Page or minute started at |
 | `to_position` | INTEGER | Page or minute ended at |
@@ -107,6 +108,26 @@ saving, and on imported rows. This one column is the fix for four competitor bug
 **`format` on the session, not the book,** is what lets one book hold both print and audio
 without double counting. It is the top voted unshipped request on StoryGraph's public
 roadmap.
+
+**`local_day` is a deliberate stored derivation, and the one exception to the rule below.**
+`occurred_at` is UTC, so `date(occurred_at)` in SQL yields a **UTC** day. In IST that files
+every session before 05:30 into the previous day; in US timezones it files every evening
+session into the next one. Streaks, the daily pace chart and yearly totals would all be
+quietly wrong at the boundary, which is the exact failure the product thesis rests on not
+having. So the calendar day is computed once, at write time, from the device timezone.
+
+Three rules, and they are the whole contract:
+
+1. **`local_day` is written whenever `occurred_at` is written, and never otherwise.** Insert
+   and any edit of the date recompute it from the new `occurred_at` in the *current* device
+   timezone. Editing a note or a page count does not touch it.
+2. **Every day-bucketed aggregate reads `local_day`.** Streaks, daily pace, "today",
+   grouping by month or year for charts. Never `date(occurred_at)`, anywhere.
+3. **A timezone change does not rewrite existing rows.** The session happened on that day
+   for that reader. See `DECISIONS.md`.
+
+`occurred_at` remains the sort key and the source of truth for the instant. `local_day` is
+the bucket. They are written together and must never disagree.
 
 ### `shelves` and `book_shelves`
 
@@ -177,11 +198,14 @@ Compute these with SQL. Storing them means they drift.
 |---|---|
 | Current page | `MAX(to_position)` over sessions where format is pages |
 | Percent complete | current page ÷ `books.page_count` |
-| Pages read this year | `SUM(to_position - from_position)` where format is pages, grouped by year of `occurred_at` |
+| Pages read this year | `SUM(to_position - from_position)` where format is pages, grouped by `substr(local_day, 1, 4)` |
 | Hours listened | Same over minutes, kept in a **separate column of the UI**, never summed with pages |
-| Daily pace | Group sessions by `date(occurred_at)`. This only works because sessions carry real dates |
-| Streak | Consecutive days having at least one session |
+| Daily pace | Group sessions by `local_day`. This only works because sessions carry real dates |
+| Streak | Consecutive `local_day` values having at least one session |
 | Books finished | Count of reads with status finished in the year of `finished_at` |
+
+Every row above that buckets by day or year uses `local_day`, never `date(occurred_at)`.
+`local_day` is the one stored derivation in the schema and the reasoning is directly above.
 
 **Pages and hours are never added together.** Three numbers on the Stats screen, always
 separate. Audiobooks inflating page counts is the category's largest unmet complaint.
@@ -196,23 +220,34 @@ Add these from the first migration, not when it gets slow.
 CREATE INDEX idx_reads_book       ON reads(book_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_sessions_read    ON sessions(read_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_sessions_date    ON sessions(occurred_at) WHERE deleted_at IS NULL;
+CREATE INDEX idx_sessions_day     ON sessions(local_day)   WHERE deleted_at IS NULL;
 CREATE INDEX idx_books_title      ON books(title);
 CREATE INDEX idx_books_isbn       ON books(isbn13);
 CREATE INDEX idx_sync_queue       ON sync_queue(queued_at);
 ```
 
-The `occurred_at` index carries every statistics query. It matters most.
+The `local_day` index carries every statistics query, because every day-bucketed aggregate
+groups on it. It matters most. The `occurred_at` index carries ordering within a day and
+the session list on book detail.
 
 ---
 
 ## Sync rules
 
-1. Local write commits to SQLite, returns immediately, appends to `sync_queue`
+1. Local write commits to SQLite, returns immediately, appends to `sync_queue`. **The write
+   and the enqueue are one transaction. Both or neither.** There is no other write path
 2. A background task drains the queue when there is network
-3. Pull uses `updated_at > last_sync_at`, newer wins per row
-4. Deletes propagate as `deleted_at` being set, never as row removal
-5. A purge job removes rows with `deleted_at` older than 30 days, on both ends
-6. `last_sync_at` lives in MMKV, not SQLite, so a database reset forces a full resync
+3. **`updated_at` is stamped by Postgres on push, never by the client.** The server value is
+   written back to the local row when the push succeeds. The client's own `updated_at` is an
+   optimistic placeholder and is never the conflict arbiter, because a phone with a wrong
+   clock would otherwise win or lose every conflict forever. See `DECISIONS.md`
+4. Pull uses `updated_at > last_sync_at`, newer wins per row, **except** that a row with a
+   pending entry in `sync_queue` is skipped. The un-pushed local edit is the newer one and
+   will become authoritative on the next drain
+5. Deletes propagate as `deleted_at` being set, never as row removal
+6. A purge job removes rows with `deleted_at` older than 30 days, on both ends
+7. `last_sync_at` lives in MMKV, not SQLite, so a database reset forces a full resync.
+   It stores a **server** timestamp, taken from the pull response, never a local clock read
 
 Row Level Security on Postgres: every table gets a `user_id` and a policy restricting all
 operations to `auth.uid() = user_id`. Four lines of SQL replaces an entire API layer.
@@ -285,8 +320,12 @@ If any of these can happen, the model is wrong:
 
 - A session without a date
 - A date that cannot be edited
+- A session without a `local_day`, or a `local_day` that disagrees with its `occurred_at`
+- A day bucket computed from `date(occurred_at)` rather than `local_day`
 - Pages and minutes summed into one number
 - A re-read overwriting a previous read
 - A hard delete
 - Two devices generating the same ID
+- A local write that reaches SQLite without reaching `sync_queue`
+- A device clock deciding which side of a conflict wins
 - Statistics that require a network call

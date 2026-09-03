@@ -87,11 +87,16 @@ the app must launch and do something useful.
 | `05-BUILD-PLAN.md` | The order to build in |
 | `06-CONVENTIONS.md` | Code structure and standards |
 | `08-MONETISATION.md` | What is free, what is paid, and why Plus is thin at launch |
+| `../PREMORTEM.md` | What kills projects like this. Written for the human |
 | `DECISIONS.md` | Running log. You write this. |
 
-There is also `PREMORTEM.md` at the repo root. It is written for the human, not for you,
-but two things in it bind your work: the **decision gate after Slice 3** and the rule that
-the app gets dogfooded from Slice 2. Both also appear in `05-BUILD-PLAN.md`.
+**There is no `07-`.** It was the premortem, which now lives as `PREMORTEM.md` at the repo
+root. The number is left vacant rather than renumbering, so existing cross references stay
+valid. Nothing is missing.
+
+`PREMORTEM.md` is written for the human, not for you, but two things in it bind your work:
+the **decision gate after Slice 3** and the rule that the app gets dogfooded from Slice 2.
+Both also appear in `05-BUILD-PLAN.md`.
 
 There is also a visual design canvas with 34 artboards, including two system sheets
 carrying exact colour, type, spacing, state and motion values. Those sheets are the source

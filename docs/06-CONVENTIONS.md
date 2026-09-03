@@ -93,12 +93,15 @@ mix conventions within a layer.
 - **All SQL lives in `queries.ts` files.** Never inline a query in a component
 - Every query function is named for what it returns, and does one thing
 - Components read data through hooks, never touch the database directly
-- Every write goes through a function that also enqueues sync. There is no other path
+- **Every write goes through `src/db/write.ts`, which enqueues sync in the same
+  transaction. There is no other path**, and a test enforces it. `queries.ts` files never
+  call `db.insert`, `db.update` or `db.delete` directly. `sync_queue` and `metadata_cache`
+  are local only and never enqueue
 
 ```ts
 // features/session/queries.ts
 export async function createSession(input: NewSession): Promise<Result<Session>> {
-  // insert, enqueue sync, return. Both or neither.
+  // writeRow('sessions', row) — insert and enqueue in one transaction. Both or neither.
 }
 ```
 
@@ -158,6 +161,10 @@ The most bug prone area in this app, and the one the whole product thesis rests 
 - **Store UTC unix milliseconds. Always.**
 - Format at render time in the device timezone
 - All date logic lives in `lib/dates.ts`. Nowhere else imports date-fns
+- **Group by `sessions.local_day`, never by `date(occurred_at)`.** The latter buckets in UTC
+  and misfiles early morning or late evening sessions depending on the timezone. This is the
+  one stored derivation in the schema and the reasoning is in `03-DATA-MODEL.md`
+- `local_day` is written whenever `occurred_at` is written, and never otherwise
 - `occurred_at` is user editable everywhere it appears
 - Test explicitly: a session logged at 11pm on the 31st in IST must belong to the correct
   day, month and year. Bookly gets this wrong and travellers notice
@@ -195,7 +202,13 @@ Not optional, and Android font scaling will break these layouts if ignored.
 Not comprehensive. Targeted at the things that silently corrupt data.
 
 **Must have tests:**
-- Date boundary handling across timezones
+- Date boundary handling across timezones, and `local_day` matching `occurred_at` under
+  IST, a US timezone and a DST transition
+- Every day-bucketed aggregate grouping on `local_day`, never `date(occurred_at)`
+- **No write path bypasses `sync_queue`.** Two parts: a source guard that fails on any
+  `db.insert(` / `db.update(` / `db.delete(` outside `src/db/write.ts`, and a behavioural
+  test per syncable table asserting one matching queue row and that a failing enqueue rolls
+  the table write back
 - Statistics aggregation, especially pages and hours staying separate
 - Import parsing against real Goodreads exports, including malformed ones
 - Sync queue replay idempotency

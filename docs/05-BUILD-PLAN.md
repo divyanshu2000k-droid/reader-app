@@ -1,7 +1,8 @@
 # BUILD PLAN
 
-Eleven slices. Each one ends with an app that launches and does something useful. Do not
-start a slice before the previous one runs on a real phone.
+Twelve numbered slices, 0 through 11, plus Slice 5b, which is thirteen work items in
+total. Each one ends with an app that launches and does something useful. Do not start a
+slice before the previous one runs on a real phone.
 
 Estimates assume roughly 15 hours a week and an AI writing the code. They are ranges
 because the native pieces are genuinely unpredictable.
@@ -15,6 +16,9 @@ because the native pieces are genuinely unpredictable.
 - **Development build via EAS on day one.** Not Expo Go. Expo Go cannot load the native
   modules this app needs and discovering that in week six is demoralising
 - Drizzle plus `expo-sqlite`, full schema from `03-DATA-MODEL.md`, first migration
+- **`src/db/write.ts` and `sync_queue` from the first write, with a no-op drain.** Every
+  write in the app enqueues from Slice 0 onward, so Slice 8 only replaces the drain body.
+  Ships with the two tests that prove no write path bypasses it. See `DECISIONS.md`
 - Theme file mirroring the design system sheet exactly. Every colour, every radius, every
   type size as a named token. **No component may ever hardcode a colour**
 - Shared components built from the system sheet: Button, Card, Field, Chip, Segmented,
@@ -29,7 +33,8 @@ because the native pieces are genuinely unpredictable.
 - Sentry, and a `DECISIONS.md` with your first entries, dated
 
 **Done when:** a blank screen renders using theme tokens, the database opens, migrations
-run, and a seed script can insert a book with a read and three sessions.
+run, and a seed script can insert a book with a read and three sessions. Each of those
+sessions has a correct `local_day`, and each left a row in `sync_queue`.
 
 > Resist the urge to skip the component library and "just build screens". This slice is
 > what stops screen 30 looking different to screen 1.
@@ -76,7 +81,9 @@ restore it.
 - Streak and goal calculation
 
 **Done when:** you can log a session for last Tuesday, edit its date afterwards, and see a
-correct daily pace chart. **Test this specific case, it is the whole thesis.**
+correct daily pace chart. **Test this specific case, it is the whole thesis.** Test it with
+the device clock at 11pm and at 4am, in IST and in a US timezone: the session must land on
+the day the reader thinks it did, which is what `local_day` exists for.
 
 ---
 
@@ -161,6 +168,11 @@ Android and this is where the feature will break.
 > four weeks is a realistic worst case for a first custom config plugin, and never is
 > possible. Write this limit into `DECISIONS.md` now, while you are calm, because you will
 > not want to honour it in week three.
+>
+> **The full shape of that cut is already written**, dated 2026-09-03 in `DECISIONS.md`:
+> what launch gate 3 does, what replaces the Reading screen, that v1 then requests no
+> notification permission at all, and what comes off the store listing. Executing the
+> deadline is a decision that has already been made, not one to make in week fifteen.
 
 ---
 
