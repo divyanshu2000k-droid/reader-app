@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; background: #0B0A08; }
+    * { box-sizing: border-box; }
+    a { color: #F9BE3D; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; background: #0B0A08; color: #F5F0E8; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden;">
+
+  <div style="padding: 26px 22px 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: #6F6759;">EMPTY STATES · ALWAYS FORGOTTEN, ALWAYS NOTICED</div>
+
+  <!-- EMPTY LIBRARY -->
+  <div style="margin: 0 22px 12px; padding: 28px 22px; border-radius: 20px; background: radial-gradient(110% 70% at 50% 0%, rgba(249,190,61,0.10), transparent 70%), rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.055); text-align: center;">
+    <div style="display: flex; justify-content: center; gap: -8px; margin-bottom: 18px;">
+      <div style="width: 34px; height: 50px; border-radius: 5px; background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.14); transform: rotate(-9deg);"></div>
+      <div style="width: 34px; height: 50px; border-radius: 5px; background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.14); margin: 0 7px;"></div>
+      <div style="width: 34px; height: 50px; border-radius: 5px; background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.14); transform: rotate(9deg);"></div>
+    </div>
+    <div style="font-size: 16px; font-weight: 700; margin-bottom: 7px;">Nothing on this shelf yet</div>
+    <div style="font-size: 12.5px; color: #8A8172; line-height: 1.55; margin-bottom: 18px; max-width: 250px; margin-left: auto; margin-right: auto;">Add the book on your bedside table. It takes about ten seconds.</div>
+    <div style="display: inline-flex; height: 44px; padding: 0 22px; border-radius: 14px; background: linear-gradient(160deg, #FFD173, #F9BE3D); color: #22190A; align-items: center; font-size: 13.5px; font-weight: 700; box-shadow: 0 6px 22px rgba(249,190,61,0.30);">Add your first book</div>
+  </div>
+
+  <!-- NO SEARCH RESULTS -->
+  <div style="margin: 0 22px 12px; padding: 22px; border-radius: 20px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.055);">
+    <div style="display: flex; gap: 14px; align-items: flex-start;">
+      <div style="width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#8A8172" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 14.5px; font-weight: 700; margin-bottom: 5px;">We couldn't find that one</div>
+        <div style="font-size: 12px; color: #8A8172; line-height: 1.55; margin-bottom: 14px;">Book databases miss self-published titles, older editions, and most poetry. Add it yourself. It behaves identically everywhere else in the app.</div>
+        <div style="display: inline-flex; height: 40px; padding: 0 18px; border-radius: 13px; background: rgba(249,190,61,0.13); border: 1px solid rgba(249,190,61,0.30); color: #F9BE3D; align-items: center; font-size: 12.5px; font-weight: 700;">Add it manually</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NO SESSIONS YET -->
+  <div style="margin: 0 22px 12px; padding: 22px; border-radius: 20px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.055);">
+    <div style="display: flex; gap: 14px; align-items: flex-start;">
+      <div style="width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#8A8172" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 14.5px; font-weight: 700; margin-bottom: 5px;">No sessions logged yet</div>
+        <div style="font-size: 12px; color: #8A8172; line-height: 1.55; margin-bottom: 14px;">Already read some of this? Log it for whichever night it actually happened. Backdating is normal here.</div>
+        <div style="display: flex; gap: 7px;">
+          <div style="height: 40px; padding: 0 16px; border-radius: 13px; background: rgba(249,190,61,0.13); border: 1px solid rgba(249,190,61,0.30); color: #F9BE3D; display: flex; align-items: center; font-size: 12.5px; font-weight: 700;">Log past reading</div>
+          <div style="height: 40px; padding: 0 16px; border-radius: 13px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); display: flex; align-items: center; font-size: 12.5px; font-weight: 500;">Start timer</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATS TOO EARLY -->
+  <div style="margin: 0 22px 12px; padding: 22px; border-radius: 20px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.055);">
+    <div style="display: flex; gap: 14px; align-items: flex-start;">
+      <div style="width: 40px; height: 40px; border-radius: 12px; background: rgba(255,255,255,0.05); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#8A8172" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 14.5px; font-weight: 700; margin-bottom: 5px;">Charts need a few nights</div>
+        <div style="font-size: 12px; color: #8A8172; line-height: 1.55;">Log three or four sessions and your pace, genres and streak start showing up here. Nothing to unlock, it just needs data.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULE -->
+  <div style="margin-top: auto; padding: 0 22px 26px;">
+    <div style="padding: 15px 18px; border-radius: 16px; background: rgba(249,190,61,0.08); border-left: 2px solid #F9BE3D;">
+      <div style="font-size: 12px; color: #C8C0B2; line-height: 1.6;"><b style="color:#F9BE3D;">The rule:</b> every empty state names one specific next action and never blames the user. No shrugging illustrations, no "Oops!", no dead ends.</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

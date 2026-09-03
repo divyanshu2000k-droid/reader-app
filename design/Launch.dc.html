@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #0B0A08; }
+    * { box-sizing: border-box; }
+    a { color: #F9BE3D; }
+    .cap { font-size: 12.5px; font-weight: 700; margin-bottom: 4px; }
+    .sub { font-size: 11.5px; color: #6F6759; margin-bottom: 13px; line-height: 1.5; }
+    .ph { width: 268px; height: 500px; border-radius: 22px; border: 1px solid rgba(255,255,255,0.08); overflow: hidden; display: flex; flex-direction: column; }
+  </style>
+</helmet>
+
+<div style="width: 1240px; background: #0B0A08; color: #F5F0E8; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; padding: 36px 40px 44px;">
+
+  <div style="margin-bottom: 30px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: #F9BE3D; margin-bottom: 8px;">JOURNEY A</div>
+    <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.025em;">Cold start</div>
+    <div style="font-size: 13.5px; color: #8A8172; margin-top: 7px; max-width: 700px; line-height: 1.6;">Four things can happen when the app opens. Users see these more often than any other screen in the product, and I had drawn none of them.</div>
+  </div>
+
+  <div style="display: flex; gap: 24px; align-items: flex-start;">
+
+    <!-- SPLASH -->
+    <div style="width: 268px;">
+      <div class="cap">1 · Splash</div>
+      <div class="sub">Under 800ms. Doubles as the Android 12+ system splash icon.</div>
+      <div class="ph" style="background: radial-gradient(90% 44% at 50% 44%, rgba(249,190,61,0.20), rgba(249,190,61,0.03) 46%, transparent 72%), #0B0A08; align-items: center; justify-content: center;">
+        <div style="width: 76px; height: 76px; border-radius: 24px; background: linear-gradient(150deg, #FFD173, #F9BE3D); display: flex; align-items: center; justify-content: center; box-shadow: 0 12px 40px rgba(249,190,61,0.34); margin-bottom: 22px;">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#22190A" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 016.5 3H19v16H6.5A2.5 2.5 0 004 21.5z"/><path d="M9 7.5h6"/></svg>
+        </div>
+        <div style="font-size: 19px; font-weight: 800; letter-spacing: -0.025em;">Reader</div>
+        <div style="position: absolute; bottom: 34px; font-size: 10.5px; color: #45454E;"></div>
+      </div>
+      <div style="font-size: 11.5px; color: #6F6759; margin-top: 12px; line-height: 1.55;">No spinner, no tagline, no version number. If the library takes longer than this to open, show the Library with skeleton rows rather than holding here.</div>
+    </div>
+
+    <!-- RESTORE -->
+    <div style="width: 268px;">
+      <div class="cap">2 · Restoring on a new phone</div>
+      <div class="sub">Signed in, empty local database. The moment the backup promise gets tested.</div>
+      <div class="ph" style="background: radial-gradient(95% 44% at 50% 26%, rgba(249,190,61,0.16), rgba(249,190,61,0.03) 46%, transparent 72%), #0B0A08; padding: 34px 24px; align-items: center;">
+        <div style="width: 62px; height: 62px; border-radius: 20px; background: linear-gradient(150deg, rgba(249,190,61,0.22), rgba(249,190,61,0.07)); border: 1px solid rgba(249,190,61,0.28); display: flex; align-items: center; justify-content: center; margin: 30px 0 24px;">
+          <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#F9BE3D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a6 6 0 00-11.3-2A4.5 4.5 0 007 17h11a4 4 0 000-7z"/><path d="M12 17v-5"/><path d="M9.5 14.5L12 17l2.5-2.5"/></svg>
+        </div>
+        <div style="font-size: 18px; font-weight: 700; text-align: center; letter-spacing: -0.02em; margin-bottom: 9px;">Getting your books back</div>
+        <div style="font-size: 12px; color: #8A8172; text-align: center; line-height: 1.6; margin-bottom: 26px;">247 books and 1,412 sessions. This runs once and then never again on this phone.</div>
+        <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; margin-bottom: 12px;">
+          <div style="height: 100%; width: 64%; background: linear-gradient(90deg, #FFD173, #F9BE3D); border-radius: 3px;"></div>
+        </div>
+        <div style="font-size: 11px; color: #6F6759;">158 of 247</div>
+      </div>
+      <div style="font-size: 11.5px; color: #6F6759; margin-top: 12px; line-height: 1.55;">Bookmory loses everything at this exact moment and gets one star reviews for it. Getting this right is a feature.</div>
+    </div>
+
+    <!-- TIMER RECOVERY -->
+    <div style="width: 268px;">
+      <div class="cap">3 · A session was still running</div>
+      <div class="sub">App was killed mid session. Never silently discard the time.</div>
+      <div class="ph" style="background: #0B0A08; padding: 0; justify-content: flex-end;">
+        <div style="padding: 22px 22px 0; opacity: 0.25;">
+          <div style="font-size: 22px; font-weight: 700; letter-spacing: -0.025em; margin-bottom: 16px;">The library</div>
+          <div style="display: flex; gap: 12px; padding: 11px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055); border-radius: 16px;">
+            <div style="width: 42px; height: 62px; border-radius: 5px; background: linear-gradient(160deg, #24503C, #14301F);"></div>
+            <div style="flex: 1;"><div style="font-size: 13px; font-weight: 600;">The Overstory</div><div style="font-size: 11px; color: #8A8172; margin-top: 3px;">Richard Powers</div></div>
+          </div>
+        </div>
+        <div style="margin-top: auto; background: #14110D; border-top-left-radius: 24px; border-top-right-radius: 24px; border-top: 1px solid rgba(249,190,61,0.20); padding: 12px 20px 24px; box-shadow: 0 -14px 40px rgba(0,0,0,0.7);">
+          <div style="width: 34px; height: 4px; border-radius: 3px; background: rgba(255,255,255,0.16); margin: 0 auto 18px;"></div>
+          <div style="font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 7px;">You were reading for 41 minutes</div>
+          <div style="font-size: 12px; color: #8A8172; line-height: 1.6; margin-bottom: 18px;">The app closed before you finished. Keep the time and tell us where you got to, or throw it away.</div>
+          <div style="height: 46px; border-radius: 15px; background: linear-gradient(160deg, #FFD173, #F9BE3D); color: #22190A; display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 700; margin-bottom: 8px;">Save this session</div>
+          <div style="height: 42px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 500; color: #8A8172;">Discard it</div>
+        </div>
+      </div>
+      <div style="font-size: 11.5px; color: #6F6759; margin-top: 12px; line-height: 1.55;">Bookly silently zeroes days and users lose streaks over it. Asking costs one sheet and buys a lot of trust.</div>
+    </div>
+
+    <!-- FORCE UPDATE -->
+    <div style="width: 268px;">
+      <div class="cap">4 · This build must update</div>
+      <div class="sub">Your kill switch. You will need it, probably for a sync bug.</div>
+      <div class="ph" style="background: radial-gradient(95% 44% at 50% 24%, rgba(249,190,61,0.14), rgba(249,190,61,0.02) 46%, transparent 72%), #0B0A08; padding: 34px 24px; align-items: center;">
+        <div style="width: 62px; height: 62px; border-radius: 20px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); display: flex; align-items: center; justify-content: center; margin: 26px 0 22px;">
+          <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#F9BE3D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 21h16"/></svg>
+        </div>
+        <div style="font-size: 18px; font-weight: 700; text-align: center; letter-spacing: -0.02em; margin-bottom: 9px;">Time for an update</div>
+        <div style="font-size: 12px; color: #8A8172; text-align: center; line-height: 1.6; margin-bottom: 22px;">This version has a problem that could affect your reading history, so we have retired it. Your books are safe and waiting.</div>
+        <div style="width: 100%; height: 48px; border-radius: 16px; background: linear-gradient(160deg, #FFD173, #F9BE3D); color: #22190A; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700;">Update now</div>
+        <div style="margin-top: auto; font-size: 10.5px; color: #45454E; text-align: center;">Version 1.0.0</div>
+      </div>
+      <div style="font-size: 11.5px; color: #6F6759; margin-top: 12px; line-height: 1.55;">A remote flag drives this. Build it in v1 even though you hope never to flip it. Retrofitting a kill switch during an incident is not fun.</div>
+    </div>
+
+  </div>
+
+  <div style="margin-top: 30px; padding: 17px 20px; background: rgba(249,190,61,0.09); border-left: 2px solid #F9BE3D; border-radius: 0 6px 6px 0;">
+    <div style="font-size: 13px; color: #C8C0B2; line-height: 1.65;"><b style="color:#F9BE3D;">Decision order at launch:</b> force update check first, then a running session, then restore, then the Library. Each gate either passes straight through or takes over the screen. Nothing else may appear before the Library, and in the ordinary case a returning user sees only the splash for well under a second.</div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

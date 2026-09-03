@@ -1,0 +1,191 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #0B0A08; }
+    * { box-sizing: border-box; }
+    a { color: #F9BE3D; }
+  </style>
+</helmet>
+
+<div style="width: 1040px; background: #0B0A08; color: #F5F0E8; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; padding: 36px 40px 44px;">
+
+  <div style="margin-bottom: 34px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: #F9BE3D; margin-bottom: 8px;">DESIGN SYSTEM · v1.0</div>
+    <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.025em;">Component reference</div>
+    <div style="font-size: 13.5px; color: #8A8172; margin-top: 7px; max-width: 620px; line-height: 1.6;">Every value here is literal. Paste this sheet into the build context before any screen. It is what keeps screen 9 looking like screen 1.</div>
+  </div>
+
+  <!-- COLOR -->
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: #6F6759; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">01 · COLOR TOKENS</div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 40px;">
+    <div>
+      <div style="font-size: 12px; font-weight: 700; margin-bottom: 12px; color: #C8C0B2;">DARK (default)</div>
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #0B0A08; border: 1px solid rgba(255,255,255,0.14);"></div><div><div style="font-size: 11.5px; font-weight: 600;">ground</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#0B0A08</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #16130F; border: 1px solid rgba(255,255,255,0.10);"></div><div><div style="font-size: 11.5px; font-weight: 600;">surface</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">rgba(255,255,255,.04)</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #F5F0E8;"></div><div><div style="font-size: 11.5px; font-weight: 600;">text</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#F5F0E8</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #8A8172;"></div><div><div style="font-size: 11.5px; font-weight: 600;">muted</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#8A8172</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #6F6759;"></div><div><div style="font-size: 11.5px; font-weight: 600;">faint</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#6F6759</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: linear-gradient(160deg, #FFD173, #F9BE3D);"></div><div><div style="font-size: 11.5px; font-weight: 600;">accent fill</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#FFD173 → #F9BE3D</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #22190A; border: 1px solid rgba(255,255,255,0.12);"></div><div><div style="font-size: 11.5px; font-weight: 600;">on-accent</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#22190A</div></div></div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size: 12px; font-weight: 700; margin-bottom: 12px; color: #C8C0B2;">LIGHT</div>
+      <div style="display: flex; flex-direction: column; gap: 7px;">
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #FAF6EE;"></div><div><div style="font-size: 11.5px; font-weight: 600;">ground</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#FAF6EE</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #FFFFFF;"></div><div><div style="font-size: 11.5px; font-weight: 600;">surface</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#FFFFFF</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #1F1B13;"></div><div><div style="font-size: 11.5px; font-weight: 600;">text</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#1F1B13</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #7D7462;"></div><div><div style="font-size: 11.5px; font-weight: 600;">muted</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#7D7462</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #A8A08E;"></div><div><div style="font-size: 11.5px; font-weight: 600;">faint</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#A8A08E</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: linear-gradient(160deg, #FFD173, #F9BE3D);"></div><div><div style="font-size: 11.5px; font-weight: 600;">accent fill</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">same as dark</div></div></div>
+        <div style="display: flex; align-items: center; gap: 11px;"><div style="width: 42px; height: 30px; border-radius: 5px; background: #A4681A;"></div><div><div style="font-size: 11.5px; font-weight: 600;">accent ink</div><div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #8A8172;">#A4681A · text &amp; lines only</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div style="background: rgba(249,190,61,0.09); border-left: 2px solid #F9BE3D; border-radius: 0 5px 5px 0; padding: 12px 16px; margin-bottom: 40px; font-size: 12.5px; color: #C8C0B2; line-height: 1.6;"><b style="color:#F9BE3D;">The one rule that matters:</b> in light mode the accent splits. Bright <span style="font-family:'JetBrains Mono',monospace;">#F9BE3D</span> for fills only; <span style="font-family:'JetBrains Mono',monospace;">#A4681A</span> for any text, icon, or hairline. Bright gold on white fails contrast and is the most common way this palette gets broken.</div>
+
+  <!-- TYPE -->
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: #6F6759; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">02 · TYPE SCALE · Plus Jakarta Sans</div>
+  <div style="display: flex; flex-direction: column; gap: 13px; margin-bottom: 40px;">
+    <div style="display: flex; align-items: baseline; gap: 20px;"><div style="width: 150px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6F6759; flex-shrink: 0;">92 / 800 / -.05em</div><div style="font-size: 44px; font-weight: 800; letter-spacing: -0.05em; line-height: 1;">28</div><div style="font-size: 11.5px; color: #8A8172;">hero readout (shown at 44, use 92)</div></div>
+    <div style="display: flex; align-items: baseline; gap: 20px;"><div style="width: 150px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6F6759; flex-shrink: 0;">25 / 700 / -.025em</div><div style="font-size: 25px; font-weight: 700; letter-spacing: -0.025em;">The library</div><div style="font-size: 11.5px; color: #8A8172;">screen title</div></div>
+    <div style="display: flex; align-items: baseline; gap: 20px;"><div style="width: 150px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6F6759; flex-shrink: 0;">17 / 600</div><div style="font-size: 17px; font-weight: 600;">The Overstory</div><div style="font-size: 11.5px; color: #8A8172;">section heading</div></div>
+    <div style="display: flex; align-items: baseline; gap: 20px;"><div style="width: 150px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6F6759; flex-shrink: 0;">14.5 / 600</div><div style="font-size: 14.5px; font-weight: 600;">Book title in a row</div><div style="font-size: 11.5px; color: #8A8172;">list primary</div></div>
+    <div style="display: flex; align-items: baseline; gap: 20px;"><div style="width: 150px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6F6759; flex-shrink: 0;">13 / 500</div><div style="font-size: 13px; font-weight: 500;">Body copy and button labels</div><div style="font-size: 11.5px; color: #8A8172;">body</div></div>
+    <div style="display: flex; align-items: baseline; gap: 20px;"><div style="width: 150px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6F6759; flex-shrink: 0;">11.5 / 500 · muted</div><div style="font-size: 11.5px; font-weight: 500; color: #8A8172;">Richard Powers · secondary line</div><div style="font-size: 11.5px; color: #8A8172;">list secondary</div></div>
+    <div style="display: flex; align-items: baseline; gap: 20px;"><div style="width: 150px; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6F6759; flex-shrink: 0;">11 / 500 · muted</div><div style="font-size: 11px; font-weight: 500; color: #8A8172;">Field label</div><div style="font-size: 11.5px; color: #8A8172;">form label</div></div>
+  </div>
+
+  <!-- BUTTONS -->
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: #6F6759; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">03 · BUTTONS · min hit target 44px</div>
+  <div style="display: flex; gap: 30px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 14px;">
+    <div>
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Primary · h56 r18</div>
+      <div style="width: 210px; height: 56px; border-radius: 18px; background: linear-gradient(160deg, #FFD173, #F9BE3D); color: #22190A; display: flex; align-items: center; justify-content: center; font-size: 15.5px; font-weight: 700; box-shadow: 0 8px 30px rgba(249,190,61,0.32);">Save session</div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Secondary · h46 r14</div>
+      <div style="width: 160px; height: 46px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09); display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 500;">Start timer</div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Pill · h34 r999</div>
+      <div style="display: flex; gap: 8px;">
+        <div style="padding: 8px 14px; border-radius: 999px; background: rgba(249,190,61,0.13); border: 1px solid rgba(249,190,61,0.28); color: #F9BE3D; font-size: 11.5px; font-weight: 600;">Continue</div>
+        <div style="padding: 8px 14px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.09); color: #C8C0B2; font-size: 11.5px; font-weight: 600;">Listen</div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Icon · 38 / 44 / 68</div>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B5AC9B" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></div>
+        <div style="width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(160deg, #FFD173, #F9BE3D); display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 20px rgba(249,190,61,0.45);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22190A" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></div>
+        <div style="width: 68px; height: 68px; border-radius: 50%; background: linear-gradient(160deg, #FFD173, #F9BE3D); display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 30px rgba(249,190,61,0.5);"><svg width="24" height="24" viewBox="0 0 24 24" fill="#22190A"><rect x="7" y="5" width="3.6" height="14" rx="1.3"/><rect x="13.4" y="5" width="3.6" height="14" rx="1.3"/></svg></div>
+      </div>
+    </div>
+  </div>
+  <div style="font-size: 12px; color: #6F6759; margin-bottom: 40px;">Disabled = 40% opacity, no shadow. Pressed = scale(0.97), 120ms ease-out.</div>
+
+  <!-- INPUTS -->
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: #6F6759; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">04 · INPUTS &amp; CONTROLS</div>
+  <div style="display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 40px;">
+    <div>
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Field · rest / focused</div>
+      <div style="display: flex; flex-direction: column; gap: 9px;">
+        <div style="width: 180px; height: 54px; border-radius: 16px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; padding: 0 17px; font-size: 18px; font-weight: 600; color: #6F6759;">184</div>
+        <div style="width: 180px; height: 54px; border-radius: 16px; background: rgba(249,190,61,0.09); border: 1px solid rgba(249,190,61,0.38); display: flex; align-items: center; padding: 0 17px; font-size: 18px; font-weight: 700; box-shadow: 0 0 22px rgba(249,190,61,0.14);">212</div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Segmented · h48 r15</div>
+      <div style="width: 230px; padding: 4px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 15px; display: flex; gap: 4px;">
+        <div style="flex: 1; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: rgba(255,255,255,0.09); font-size: 13px; font-weight: 600;">Pages</div>
+        <div style="flex: 1; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 12px; font-size: 13px; font-weight: 500; color: #8A8172;">Minutes</div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Filter chips</div>
+      <div style="display: flex; gap: 7px;">
+        <div style="padding: 8px 16px; border-radius: 999px; background: #F5F0E8; color: #16130F; font-size: 12.5px; font-weight: 600;">Reading</div>
+        <div style="padding: 8px 16px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); color: #8A8172; font-size: 12.5px; font-weight: 500;">Want</div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Progress bar · h3 r3</div>
+      <div style="width: 190px;">
+        <div style="height: 3px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; margin-bottom: 11px;"><div style="height: 100%; width: 42%; background: linear-gradient(90deg, #FFD173, #F9BE3D); border-radius: 3px;"></div></div>
+        <div style="height: 3px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;"><div style="height: 100%; width: 53%; background: #55555F; border-radius: 3px;"></div></div>
+        <div style="font-size: 11px; color: #6F6759; margin-top: 8px;">accent = active book · grey = other</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SURFACES -->
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: #6F6759; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">05 · SURFACES &amp; THE BOOK ROW</div>
+  <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 16px;">
+    <div style="width: 300px;">
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Card · active (r18)</div>
+      <div style="display: flex; gap: 14px; align-items: center; padding: 12px; background: linear-gradient(140deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.07); border-radius: 18px; box-shadow: 0 6px 22px rgba(0,0,0,0.34);">
+        <div style="width: 50px; height: 74px; border-radius: 6px; background: linear-gradient(160deg, #2E2E38, #16161A); flex-shrink: 0; box-shadow: 0 4px 14px rgba(0,0,0,0.5);"></div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14.5px; font-weight: 600; margin-bottom: 2px;">Book title</div>
+          <div style="font-size: 11.5px; color: #8A8172; margin-bottom: 10px;">Author name</div>
+          <div style="height: 3px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;"><div style="height: 100%; width: 42%; background: linear-gradient(90deg, #FFD173, #F9BE3D);"></div></div>
+        </div>
+      </div>
+    </div>
+    <div style="width: 300px;">
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Card · resting (r18)</div>
+      <div style="display: flex; gap: 14px; align-items: center; padding: 12px; background: rgba(255,255,255,0.028); border: 1px solid rgba(255,255,255,0.055); border-radius: 18px;">
+        <div style="width: 50px; height: 74px; border-radius: 6px; background: linear-gradient(160deg, #262630, #16161A); flex-shrink: 0;"></div>
+        <div style="flex: 1; min-width: 0;">
+          <div style="font-size: 14.5px; font-weight: 600; margin-bottom: 2px;">Book title</div>
+          <div style="font-size: 11.5px; color: #8A8172; margin-bottom: 10px;">Author name</div>
+          <div style="height: 3px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;"><div style="height: 100%; width: 20%; background: #55555F;"></div></div>
+        </div>
+      </div>
+    </div>
+    <div style="width: 300px;">
+      <div style="font-size: 11px; color: #8A8172; margin-bottom: 9px;">Dock · accent (r22)</div>
+      <div style="display: flex; align-items: center; gap: 13px; padding: 12px 14px; border-radius: 22px; background: linear-gradient(135deg, rgba(249,190,61,0.16), rgba(249,190,61,0.05)); border: 1px solid rgba(249,190,61,0.25); box-shadow: 0 10px 36px rgba(249,190,61,0.14);">
+        <div style="width: 38px; height: 54px; border-radius: 5px; background: linear-gradient(160deg, #2E2E38, #16161A); flex-shrink: 0;"></div>
+        <div style="flex: 1;"><div style="font-size: 13.5px; font-weight: 600;">Pick up where you left off</div><div style="font-size: 11px; color: rgba(245,240,232,0.6);">page 212</div></div>
+      </div>
+    </div>
+  </div>
+  <div style="font-size: 12px; color: #6F6759; margin-bottom: 40px;">Covers: 50×74 in lists, 44×64 in headers, 38×54 in docks. Always <span style="font-family:'JetBrains Mono',monospace;">radius 5 to 6px</span> with a drop shadow. Never flat, never square.</div>
+
+  <!-- SPACING -->
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.18em; color: #6F6759; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.08);">06 · SPACING, RADII &amp; ATMOSPHERE</div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px;">
+    <div>
+      <div style="font-size: 12px; font-weight: 700; margin-bottom: 10px; color: #C8C0B2;">Spacing</div>
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #8A8172; line-height: 2;">screen pad · 22px<br>card pad · 12 to 18px<br>row gap · 8px<br>section gap · 20 to 30px<br>bottom safe · 22px</div>
+    </div>
+    <div>
+      <div style="font-size: 12px; font-weight: 700; margin-bottom: 10px; color: #C8C0B2;">Radii</div>
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #8A8172; line-height: 2;">cover · 5 to 6px<br>chip / pill · 999px<br>field · 16px<br>card · 18px<br>dock / sheet · 22px</div>
+    </div>
+    <div>
+      <div style="font-size: 12px; font-weight: 700; margin-bottom: 10px; color: #C8C0B2;">Atmosphere</div>
+      <div style="font-size: 11.5px; color: #8A8172; line-height: 1.65;">Every screen carries one radial amber glow from the top or centre. Never a flat fill. That is what made the first draft read as a wireframe.</div>
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #6F6759; margin-top: 9px; line-height: 1.6;">radial-gradient(130% 55% at 50% -8%,<br>rgba(249,190,61,.13), transparent 72%)</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; background: #0B0A08; }
+    * { box-sizing: border-box; }
+    a { color: #F9BE3D; }
+    a:hover { color: #FFD173; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; background: radial-gradient(130% 55% at 50% -8%, rgba(249,190,61,0.13), rgba(249,190,61,0.02) 45%, transparent 72%), #0B0A08; color: #F5F0E8; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden; position: relative;">
+
+  <!-- HEADER -->
+  <div style="display: flex; justify-content: space-between; align-items: center; padding: 30px 22px 20px;">
+    <div style="font-size: 25px; font-weight: 700; letter-spacing: -0.025em;">The library</div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#B5AC9B" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      </div>
+      <div style="width: 38px; height: 38px; border-radius: 50%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center;">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#B5AC9B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="15" cy="7" r="2.3" fill="#0B0A08"/><circle cx="9" cy="12" r="2.3" fill="#0B0A08"/><circle cx="16" cy="17" r="2.3" fill="#0B0A08"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEGMENTED -->
+  <div style="margin: 0 22px 18px; padding: 4px; background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; display: flex; gap: 4px;">
+    <div style="flex: 1; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 500; color: #8A8172; border-radius: 11px;">Discover</div>
+    <div style="flex: 1; height: 38px; display: flex; align-items: center; justify-content: center; font-size: 13.5px; font-weight: 600; color: #F5F0E8; background: rgba(255,255,255,0.09); border-radius: 11px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">My books</div>
+  </div>
+
+  <!-- FILTER CHIPS -->
+  <div style="display: flex; gap: 7px; padding: 0 22px 20px;">
+    <div style="padding: 8px 16px; border-radius: 999px; background: #F5F0E8; color: #16130F; font-size: 12.5px; font-weight: 600;">Reading</div>
+    <div style="padding: 8px 16px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); color: #8A8172; font-size: 12.5px; font-weight: 500;">Want</div>
+    <div style="padding: 8px 16px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); color: #8A8172; font-size: 12.5px; font-weight: 500;">Finished</div>
+    <div style="padding: 8px 16px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); color: #8A8172; font-size: 12.5px; font-weight: 500;">DNF</div>
+  </div>
+
+  <!-- BOOK LIST -->
+  <div style="display: flex; flex-direction: column; gap: 8px; padding: 0 22px;">
+
+    <!-- The Overstory -->
+    <div style="display: flex; gap: 14px; align-items: center; padding: 12px; background: linear-gradient(140deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.07); border-radius: 18px; box-shadow: 0 6px 22px rgba(0,0,0,0.34);">
+      <div style="width: 50px; height: 74px; border-radius: 6px; background: linear-gradient(160deg, #24503C, #14301F); box-shadow: 0 4px 14px rgba(0,0,0,0.5); flex-shrink: 0; padding: 7px 6px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;">
+        <div style="font-size: 6.5px; font-weight: 700; color: #E8DCC4; line-height: 1.15; letter-spacing: 0.02em;">THE<br>OVER<br>STORY</div>
+        <div style="width: 15px; height: 15px; border-radius: 50%; border: 1.2px solid rgba(232,220,196,0.5); align-self: flex-end;"></div>
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 2px;">The Overstory</div>
+        <div style="font-size: 11.5px; color: #8A8172; margin-bottom: 10px;">Richard Powers</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="flex: 1; height: 3px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
+            <div style="height: 100%; width: 42%; background: linear-gradient(90deg, #FFD173, {{accent}}); border-radius: 3px;"></div>
+          </div>
+          <div style="font-size: 10.5px; color: #8A8172; font-weight: 600;">42%</div>
+        </div>
+      </div>
+      <div style="padding: 8px 14px; border-radius: 999px; background: rgba(249,190,61,0.13); border: 1px solid rgba(249,190,61,0.28); color: {{accent}}; font-size: 11.5px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">Continue</div>
+    </div>
+
+    <!-- Piranesi -->
+    <div style="display: flex; gap: 14px; align-items: center; padding: 12px; background: rgba(255,255,255,0.028); border: 1px solid rgba(255,255,255,0.055); border-radius: 18px;">
+      <div style="width: 50px; height: 74px; border-radius: 6px; background: linear-gradient(160deg, #22386B, #101D3A); box-shadow: 0 4px 14px rgba(0,0,0,0.5); flex-shrink: 0; padding: 7px 6px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;">
+        <div style="font-size: 6.5px; font-weight: 700; color: #BCCDEF; line-height: 1.2;">PIRA<br>NESI</div>
+        <div style="height: 1.2px; width: 60%; background: rgba(188,205,239,0.45);"></div>
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 2px;">Piranesi</div>
+        <div style="font-size: 11.5px; color: #8A8172; margin-bottom: 10px;">Susanna Clarke · <span style="color: #6F6759;">audio</span></div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="flex: 1; height: 3px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
+            <div style="height: 100%; width: 53%; background: rgba(245,240,232,0.32); border-radius: 3px;"></div>
+          </div>
+          <div style="font-size: 10.5px; color: #8A8172; font-weight: 600;">3h 12m</div>
+        </div>
+      </div>
+      <div style="padding: 8px 14px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.09); color: #C8C0B2; font-size: 11.5px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">Listen</div>
+    </div>
+
+    <!-- Small Things -->
+    <div style="display: flex; gap: 14px; align-items: center; padding: 12px; background: rgba(255,255,255,0.028); border: 1px solid rgba(255,255,255,0.055); border-radius: 18px;">
+      <div style="width: 50px; height: 74px; border-radius: 6px; background: linear-gradient(160deg, #B85433, #7C3120); box-shadow: 0 4px 14px rgba(0,0,0,0.5); flex-shrink: 0; padding: 7px 6px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;">
+        <div style="font-size: 6px; font-weight: 700; color: #FBE9DC; line-height: 1.2;">SMALL<br>THINGS<br>LIKE<br>THESE</div>
+        <div style="width: 10px; height: 10px; background: rgba(251,233,220,0.4); border-radius: 1px;"></div>
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 2px;">Small Things Like These</div>
+        <div style="font-size: 11.5px; color: #8A8172; margin-bottom: 10px;">Claire Keegan</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="flex: 1; height: 3px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden;">
+            <div style="height: 100%; width: 18%; background: rgba(245,240,232,0.32); border-radius: 3px;"></div>
+          </div>
+          <div style="font-size: 10.5px; color: #8A8172; font-weight: 600;">18%</div>
+        </div>
+      </div>
+      <div style="padding: 8px 14px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.09); color: #C8C0B2; font-size: 11.5px; font-weight: 600; white-space: nowrap; flex-shrink: 0;">Continue</div>
+    </div>
+
+  </div>
+
+  <!-- STATS STRIP -->
+  <div style="display: flex; gap: 8px; padding: 20px 22px 0;">
+    <div style="flex: 1; padding: 14px 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055); border-radius: 16px;">
+      <div style="font-size: 21px; font-weight: 700; letter-spacing: -0.02em; color: {{accent}}; line-height: 1;">12</div>
+      <div style="font-size: 10.5px; color: #8A8172; margin-top: 5px; font-weight: 500;">day streak</div>
+    </div>
+    <div style="flex: 1; padding: 14px 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055); border-radius: 16px;">
+      <div style="font-size: 21px; font-weight: 700; letter-spacing: -0.02em; line-height: 1;">31<span style="font-size: 13px; color: #6F6759; font-weight: 600;">/50</span></div>
+      <div style="font-size: 10.5px; color: #8A8172; margin-top: 5px; font-weight: 500;">books in 2026</div>
+    </div>
+    <div style="flex: 1; padding: 14px 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.055); border-radius: 16px;">
+      <div style="font-size: 21px; font-weight: 700; letter-spacing: -0.02em; line-height: 1;">9.4<span style="font-size: 13px; color: #6F6759; font-weight: 600;">k</span></div>
+      <div style="font-size: 10.5px; color: #8A8172; margin-top: 5px; font-weight: 500;">pages read</div>
+    </div>
+  </div>
+
+  <!-- NOW READING DOCK -->
+  <div style="margin-top: auto; padding: 0 16px 12px;">
+    <div style="display: flex; align-items: center; gap: 13px; padding: 12px 14px; border-radius: 22px; background: linear-gradient(135deg, rgba(249,190,61,0.16), rgba(249,190,61,0.05)); border: 1px solid rgba(249,190,61,0.25); box-shadow: 0 10px 36px rgba(249,190,61,0.14), 0 4px 20px rgba(0,0,0,0.5);">
+      <div style="width: 38px; height: 54px; border-radius: 5px; background: linear-gradient(160deg, #24503C, #14301F); flex-shrink: 0; padding: 5px; box-shadow: 0 3px 10px rgba(0,0,0,0.45);">
+        <div style="font-size: 5px; font-weight: 700; color: #E8DCC4; line-height: 1.15;">THE<br>OVER<br>STORY</div>
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 13.5px; font-weight: 600; margin-bottom: 2px;">Pick up where you left off</div>
+        <div style="font-size: 11px; color: rgba(245,240,232,0.6);">page 212 · about 4h left</div>
+      </div>
+      <div style="width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(160deg, #FFD173, {{accent}}); display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 5px 20px rgba(249,190,61,0.45);">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#22190A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div style="display: flex; align-items: flex-end; border-top: 1px solid rgba(255,255,255,0.07); padding: 9px 0 16px;">
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px;">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 016.5 3H19v16H6.5A2.5 2.5 0 004 21.5z"/><path d="M9 7h6"/></svg>
+      <span style="font-size: 10px; font-weight: 700; color: {{accent}};">Library</span>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+      <div style="width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(160deg, #FFD173, {{accent}}); display: flex; align-items: center; justify-content: center; margin-top: -28px; box-shadow: 0 8px 26px rgba(249,190,61,0.45), 0 0 0 5px #0B0A08;">
+        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#22190A" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      </div>
+      <span style="font-size: 10px; font-weight: 600; color: #8A8172;">Add</span>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px;">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#6F6759" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <span style="font-size: 10px; font-weight: 500; color: #6F6759;">Stats</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#F9BE3D","options":["#F9BE3D","#D3FB4E","#FF7A45","#7FA8FF"],"section":"Theme"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#F9BE3D' };
+  }
+}
+</script>
+</body>
+</html>

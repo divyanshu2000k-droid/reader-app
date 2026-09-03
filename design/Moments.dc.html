@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #0B0A08; }
+    * { box-sizing: border-box; }
+    a { color: #F9BE3D; }
+    .cap { font-size: 12.5px; font-weight: 700; margin-bottom: 4px; }
+    .sub { font-size: 11.5px; color: #6F6759; margin-bottom: 13px; line-height: 1.5; }
+    .box { border-radius: 20px; background: #100E0B; border: 1px solid rgba(255,255,255,0.08); padding: 22px 20px; }
+  </style>
+</helmet>
+
+<div style="width: 1320px; background: #0B0A08; color: #F5F0E8; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; padding: 36px 40px 44px;">
+
+  <div style="margin-bottom: 30px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: #F9BE3D; margin-bottom: 8px;">THE IN BETWEEN MOMENTS</div>
+    <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.025em;">Confirmations, failures and payoffs</div>
+    <div style="font-size: 13.5px; color: #8A8172; margin-top: 7px; max-width: 720px; line-height: 1.6;">Six sheets and dialogs that sit between the screens. Every one of them is on a path a real user takes, and every one was missing.</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px;">
+
+    <!-- SHELF PICKER -->
+    <div>
+      <div class="cap">Which shelf?</div>
+      <div class="sub">Tapping add on a search result had no destination. Journey D.</div>
+      <div class="box">
+        <div style="width: 34px; height: 4px; border-radius: 3px; background: rgba(255,255,255,0.16); margin: 0 auto 18px;"></div>
+        <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 18px;">
+          <div style="width: 38px; height: 56px; border-radius: 5px; background: linear-gradient(160deg, #22386B, #101D3A); flex-shrink: 0;"></div>
+          <div style="min-width: 0;"><div style="font-size: 13.5px; font-weight: 600;">Piranesi</div><div style="font-size: 11px; color: #8A8172; margin-top: 2px;">Susanna Clarke · 245pp</div></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 7px;">
+          <div style="height: 46px; border-radius: 14px; background: linear-gradient(160deg, #FFD173, #F9BE3D); color: #22190A; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;">Start reading it now</div>
+          <div style="height: 44px; border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500;">Add to Want to read</div>
+          <div style="height: 44px; border-radius: 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 500;">I already finished it</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- IMPORT FAILED -->
+    <div>
+      <div class="cap">That file did not work</div>
+      <div class="sub">Bookmory loses users at exactly this point. Journey C.</div>
+      <div class="box" style="min-height: 296px;">
+        <div style="width: 52px; height: 52px; border-radius: 17px; background: rgba(158,59,54,0.14); border: 1px solid rgba(201,101,96,0.28); display: flex; align-items: center; justify-content: center; margin-bottom: 18px;">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#D97C77" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5"/><path d="M12 16.4v.01"/></svg>
+        </div>
+        <div style="font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 9px;">We could not read that file</div>
+        <div style="font-size: 12.5px; color: #8A8172; line-height: 1.6; margin-bottom: 18px;">It should be the .csv Goodreads emails you, not a zip or a screenshot. Nothing has been added and your library is untouched.</div>
+        <div style="height: 46px; border-radius: 14px; background: linear-gradient(160deg, #FFD173, #F9BE3D); color: #22190A; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; margin-bottom: 8px;">Pick a different file</div>
+        <div style="height: 42px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 500; color: #8A8172;">Show me the steps again</div>
+      </div>
+    </div>
+
+    <!-- DELETE ACCOUNT -->
+    <div>
+      <div class="cap">Delete account, confirm</div>
+      <div class="sub">Play requires the route. Typing the word is what stops the accident. Journey I.</div>
+      <div class="box" style="min-height: 296px;">
+        <div style="font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 10px; color: #D97C77;">This deletes everything</div>
+        <div style="font-size: 12.5px; color: #8A8172; line-height: 1.6; margin-bottom: 16px;">247 books, 1,412 sessions and 38 notes, gone from your phone and from our servers within 30 days. We cannot get them back for you.</div>
+        <div style="padding: 12px 14px; border-radius: 13px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); margin-bottom: 14px; display: flex; align-items: center; gap: 11px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F9BE3D" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M12 16V3"/><path d="M7 8l5-5 5 5"/><path d="M4 21h16"/></svg>
+          <span style="font-size: 12px; color: #C8C0B2; font-weight: 600;">Download your data first</span>
+        </div>
+        <div style="font-size: 11px; color: #8A8172; margin-bottom: 8px;">Type DELETE to confirm</div>
+        <div style="height: 46px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(201,101,96,0.32); display: flex; align-items: center; padding: 0 15px; font-size: 14px; font-weight: 700; letter-spacing: 0.1em; color: #6F6759; margin-bottom: 10px;">DELE</div>
+        <div style="height: 46px; border-radius: 14px; background: rgba(158,59,54,0.16); border: 1px solid rgba(201,101,96,0.30); color: #D97C77; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; opacity: 0.45;">Delete my account</div>
+      </div>
+    </div>
+
+    <!-- WELCOME TO PLUS -->
+    <div>
+      <div class="cap">Welcome to Plus</div>
+      <div class="sub">Payment went through and nothing acknowledged it. Journey J.</div>
+      <div class="box" style="background: radial-gradient(110% 55% at 50% 4%, rgba(249,190,61,0.20), transparent 64%), #100E0B; min-height: 296px; text-align: center;">
+        <div style="width: 60px; height: 60px; border-radius: 20px; background: linear-gradient(150deg, #FFD173, #F9BE3D); display: flex; align-items: center; justify-content: center; margin: 12px auto 20px; box-shadow: 0 10px 30px rgba(249,190,61,0.36);">
+          <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#22190A" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
+        </div>
+        <div style="font-size: 18px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 10px;">You are on Plus</div>
+        <div style="font-size: 12.5px; color: #8A8172; line-height: 1.6; margin-bottom: 20px;">Soundscapes, deeper stats, widgets and custom covers are all unlocked. Everything you had stays exactly where it was.</div>
+        <div style="height: 46px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600;">Try a soundscape</div>
+      </div>
+    </div>
+
+    <!-- TRIAL ENDING -->
+    <div>
+      <div class="cap">Trial ending</div>
+      <div class="sub">Basmo has one star reviews about surprise charges. Say the number out loud.</div>
+      <div class="box" style="min-height: 296px;">
+        <div style="width: 34px; height: 4px; border-radius: 3px; background: rgba(255,255,255,0.16); margin: 0 auto 18px;"></div>
+        <div style="font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 9px;">Two days left on your trial</div>
+        <div style="font-size: 12.5px; color: #8A8172; line-height: 1.6; margin-bottom: 18px;">On 14 August we will charge <b style="color:#F5F0E8;">₹699</b> for the year. Cancel before then and you pay nothing.</div>
+        <div style="padding: 13px 15px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); margin-bottom: 16px;">
+          <div style="font-size: 11.5px; color: #8A8172; line-height: 1.55;">If you do cancel, your books, sessions and stats all stay. You just lose the Plus extras.</div>
+        </div>
+        <div style="height: 46px; border-radius: 14px; background: linear-gradient(160deg, #FFD173, #F9BE3D); color: #22190A; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; margin-bottom: 8px;">Keep Plus</div>
+        <div style="height: 42px; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 500; color: #8A8172;">Cancel the trial</div>
+      </div>
+    </div>
+
+    <!-- RESTORE PURCHASE -->
+    <div>
+      <div class="cap">Restore a purchase</div>
+      <div class="sub">Needed after any reinstall or phone change. Sits on the Upgrade screen.</div>
+      <div class="box" style="min-height: 296px;">
+        <div style="width: 52px; height: 52px; border-radius: 17px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); display: flex; align-items: center; justify-content: center; margin-bottom: 18px;">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#C8C0B2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 109-9"/><path d="M3 4v5h5"/></svg>
+        </div>
+        <div style="font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 9px;">Already paying?</div>
+        <div style="font-size: 12.5px; color: #8A8172; line-height: 1.6; margin-bottom: 18px;">If you bought Plus on another phone, sign in with the same Google account and we will find it.</div>
+        <div style="height: 46px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; margin-bottom: 14px;">Restore my purchase</div>
+        <div style="padding: 12px 14px; border-radius: 13px; background: rgba(122,180,120,0.09); border: 1px solid rgba(134,188,132,0.24); display: flex; align-items: center; gap: 10px;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#86BC84" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M4 12l5 5L20 6"/></svg>
+          <span style="font-size: 11.5px; color: #A9D3A7;">Found it. Plus is back on.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top: 28px; padding: 17px 20px; background: rgba(249,190,61,0.09); border-left: 2px solid #F9BE3D; border-radius: 0 6px 6px 0;">
+    <div style="font-size: 13px; color: #C8C0B2; line-height: 1.65;"><b style="color:#F9BE3D;">All six follow the same three rules.</b> Say what happened in plain words. Say what is still safe, because in this category the fear is always losing books. Offer exactly one obvious next action, and make the destructive one harder to reach than the safe one.</div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

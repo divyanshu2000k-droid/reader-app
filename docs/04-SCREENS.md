@@ -1,0 +1,242 @@
+# SCREENS AND JOURNEYS
+
+Behaviour, not appearance. The design canvas is the source of truth for how things look;
+this document is the source of truth for what they do.
+
+**Read the whole file before building any screen.** Screens that look independent share
+state, and knowing that in advance changes how you structure things.
+
+---
+
+## Where the visuals live
+
+Behaviour is here. Appearance is in `design/`, as HTML you can read directly. Read the
+design file for a screen **before** building it.
+
+| Screen | Design file |
+|---|---|
+| Design system, colours and components | `Components.dc.html` |
+| States, motion, edge cases | `States.dc.html` |
+| All eleven journeys mapped | `Journeys.dc.html` |
+| Splash, restore, timer recovery, force update | `Launch.dc.html` |
+| Library, dark and light | `Main.dc.html`, `LibraryAL.dc.html` |
+| Reading timer | `Reading.dc.html`, `ReadingAL.dc.html` |
+| Log a session | `Session.dc.html`, `SessionAL.dc.html` |
+| Session complete | `SessionComplete.dc.html` |
+| Finish a book | `FinishBook.dc.html` |
+| Add a book, manual entry, library search | `AddBook.dc.html`, `ManualEntry.dc.html`, `LibrarySearch.dc.html` |
+| Book detail and actions sheet | `BookDetail.dc.html`, `BookActions.dc.html` |
+| Notes and note editor | `Notes.dc.html`, `NoteEditor.dc.html` |
+| Import flow | `ImportHowTo.dc.html`, `Import.dc.html`, `ImportDone.dc.html` |
+| Backup prompt, email sign in, account | `Backup.dc.html`, `Auth.dc.html`, `Account.dc.html` |
+| Stats, Settings, Upgrade | `Stats.dc.html`, `Settings.dc.html`, `Paywall.dc.html` |
+| Onboarding, three screens | `Onboarding.dc.html`, `Onboarding2.dc.html`, `Onboarding3.dc.html` |
+| Empty states | `Empty.dc.html` |
+| Shelf picker, import failure, delete confirm, Plus moments | `Moments.dc.html` |
+| Import progress, notification priming, trash, share card, widget | `Utility.dc.html` |
+
+Values come from `src/ui/theme.ts`, not from the HTML. Read the HTML for layout and
+composition.
+
+---
+
+## Global rules
+
+Apply everywhere unless a screen says otherwise.
+
+- Back always works and never loses unsaved input. Warn before discarding.
+- Every destructive action gets an undo toast, five seconds, above the tab bar.
+- Every list uses FlashList and has an empty state naming one specific next action.
+- Nothing under 44px is tappable. Body text is never below 12px.
+- Every screen must survive 360px width.
+- Primary buttons ride above the keyboard, never behind it.
+- Anything under 400ms shows no loading state at all.
+- Double taps are idempotent. Debounce every submit.
+
+---
+
+## Journey A · Cold start
+
+Runs on every launch. Four gates, strictly in this order. Each either passes through
+invisibly or takes over the screen.
+
+1. **Splash.** Under 800ms. Android 12+ system splash API. No spinner, no tagline. If the
+   library is slow, show the Library with skeleton rows rather than holding here.
+2. **Force update.** Remote flag check with a 2 second timeout. On timeout, proceed. Never
+   block launch on a network call. If the flag says this build is retired, show the update
+   screen with no dismiss.
+3. **Session recovery.** If an unfinished session exists in the database, show the recovery
+   sheet offering to save the elapsed time or discard it. Never silently discard.
+4. **Restore.** If signed in and the local database is empty, run first sync with the
+   restore screen and a real count.
+
+Then Library. In the ordinary returning case the user sees only the splash, briefly.
+
+---
+
+## Journey B · First run
+
+Three screens, skippable at any point.
+
+1. **Welcome.** Leads with Import from Goodreads, because that is who we are recruiting.
+   Secondary action starts fresh. States that no account is needed.
+2. **How it works.** Sells the thesis: logging works with or without a timer, any date.
+3. **Set a goal.** Number stepper with presets 12, 24, 36, 52. "No goal for now" is a
+   first class option and must be equally easy.
+
+Then notification priming, then the OS permission prompt, then Library.
+
+**Never block on any of it.** Skipping every screen must land in a working app.
+
+---
+
+## Journey C · Import
+
+The most fragile sequence in the product and where a defector lands or leaves.
+
+1. **How to export.** Four numbered steps. Users genuinely do not know Goodreads export
+   exists. An "Open Goodreads" button launches the browser.
+2. **File pick.** System document picker, `.csv` only.
+3. **Parse and progress.** Streaming parse, never load the whole file into memory. Progress
+   with a real count. A 2000 row file must not freeze the UI.
+4. **Preview.** Two numbers: ready, and needs attention. Only ambiguous rows are listed,
+   each with inline resolution. Ambiguity means a missing start date, unclear format, or a
+   title that matched nothing.
+5. **Commit.** A single transaction. Nothing is written before this point.
+6. **Done.** Real counts by shelf. Honest that Goodreads does not export sessions, so pace
+   charts start from today.
+
+**Failure branch:** wrong file type, malformed CSV, or zero rows all lead to the import
+failed sheet, which states the library is untouched and offers to pick another file.
+
+**Rules.** Never fabricate a date. Deduplicate by ISBN then by title plus author. Import is
+resumable if the app dies mid-commit.
+
+---
+
+## Journey D · Adding a book
+
+1. **Search.** Debounce 300ms. Query Google Books and Open Library in parallel. Merge on
+   ISBN, dedupe, render as results arrive rather than waiting for both. **"Add manually" is
+   visible in the results list, not only in the empty state.**
+2. **Shelf picker sheet.** Three options: start reading now, want to read, already finished.
+   Choosing finished routes into the finish flow so a rating can be captured.
+3. **Add manually.** Title, author, page count, format, cover. Only title is required. This
+   same screen is the edit form, reached from the actions sheet.
+
+Search failure shows the recoverable error from the States sheet. Offline shows the offline
+banner and manual entry still works completely.
+
+---
+
+## Journey E · The core loop
+
+**Log a session** is the most important screen in the app.
+
+- Opens from the Library card, book detail, or the FAB
+- Defaults: `from_position` is the current page, `occurred_at` is now, format is the book's
+  usual format
+- Quick add chips adjust `to_position` without typing
+- **The date field is prominent and always editable**, before and after saving
+- Format toggle per session, pages or minutes
+- Save writes to SQLite, returns immediately, queues sync. No spinner over the user's data
+
+**Timer.** Start creates an open session row immediately, so a crash cannot lose it. A
+foreground service keeps it alive. The notification carries working Pause and Finish.
+Finishing routes to Session complete.
+
+**Session complete.** Confirms the end page with a stepper, shows the editable date, shows
+streak, percent and time remaining. Two actions: Done, or I finished the book.
+
+**Editing.** Every session is editable and deletable from book detail, forever.
+
+---
+
+## Journey F · Finishing a book
+
+Half star rating, optional private note, editable finish date defaulting to today. On save:
+status becomes finished, the book **automatically leaves Currently Reading**, and the year
+count increments.
+
+Starting a re-read creates a new `reads` row. The previous read keeps its rating, review,
+dates and sessions untouched.
+
+---
+
+## Journey G · Notes and quotes
+
+List filtered by all, quotes, notes. The plus button opens the editor. Type toggle between
+quote and note, page defaulting to the current page, draft autosaved while typing because
+losing a half written note is a live StoryGraph complaint. Notes attach to the book rather
+than the read, so they survive re-reads.
+
+---
+
+## Journey H · Managing a book
+
+The actions sheet is the hub. Shelf move including DNF, start a re-read, edit details,
+notes, share progress, remove.
+
+**DNF keeps the pages already read.** They count toward yearly totals. Abandoning a book is
+not failure and the data should not treat it as such.
+
+**Remove** soft deletes, shows an undo toast, and the row appears in Recently Deleted for
+30 days.
+
+---
+
+## Journey I · Backup and account
+
+Prompt triggers at day seven or five books logged, whichever is first, and never on first
+launch. It is a sheet over the working app with "Not now" always available, and it can be
+dismissed indefinitely without degrading anything.
+
+Google sign in hands off to the system sheet. Email uses a six digit code with three
+attempts and a ten minute expiry.
+
+Account screen carries subscription, download everything, sign out, the legal links, and
+**delete account**. Deletion requires typing DELETE, offers a data download first, and
+purges within 30 days. **This is a Play Store requirement.**
+
+---
+
+## Journey J · Paying
+
+Upgrade lists the free tier **first and in full**, then Plus. Free means unlimited books,
+all statistics, timer, streaks, goals, both themes, import and export, no ads.
+
+Plus adds soundscapes, comparative statistics, widgets, custom covers.
+
+Trial ending states the exact amount and date. Purchase success confirms. Restore purchase
+is always reachable, needed after any reinstall.
+
+**Cancelling never locks anything the user logged.**
+
+---
+
+## Journey K · Settings and stats
+
+Settings holds the yearly goal, theme with a system option, one notification toggle,
+import, export, recently deleted, and account. Nothing else.
+
+Stats shows three separate numbers, a daily pace chart, and a genre breakdown, with a year
+switcher. All free. The empty state explains that charts need a few sessions rather than
+implying something is locked.
+
+---
+
+## Gaps you should expect to find
+
+This spec was written by walking eleven journeys, and eleven is not all of them. Things
+likely still missing, offered as prompts rather than a list to work through:
+
+- What happens when a book is deleted while its timer is running?
+- What happens if the same book is added twice by different editions?
+- What if a session's `to_position` exceeds the book's page count, because the page count
+  was wrong?
+- What does a re-read look like in the pace chart, two lines or one?
+- What if the user changes their goal mid year to below their current count?
+- What if a sync pull deletes a book the user is currently viewing?
+
+**When you find one, decide sensibly, write it in `DECISIONS.md`, and continue.** Do not
+stop and wait.

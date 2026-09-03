@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap">
+  <style>
+    body { margin: 0; background: #0B0A08; }
+    * { box-sizing: border-box; }
+    a { color: #F9BE3D; }
+    .n { padding: 8px 12px; border-radius: 9px; font-size: 11px; font-weight: 600; white-space: nowrap; border: 1px solid; }
+    .have { background: rgba(122,180,120,0.10); border-color: rgba(134,188,132,0.30); color: #A9D3A7; }
+    .new { background: rgba(249,190,61,0.13); border-color: rgba(249,190,61,0.34); color: #F9BE3D; }
+    .os { background: rgba(255,255,255,0.045); border-color: rgba(255,255,255,0.10); color: #8A8172; }
+    .ar { color: #45454E; font-size: 13px; align-self: center; }
+    .row { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; }
+    .jt { font-size: 13px; font-weight: 700; margin-bottom: 9px; }
+    .jd { font-size: 11px; color: #6F6759; margin-bottom: 11px; line-height: 1.5; }
+    .j { padding: 18px 20px; border-radius: 16px; background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.055); }
+  </style>
+</helmet>
+
+<div style="width: 1320px; background: #0B0A08; color: #F5F0E8; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; padding: 36px 40px 44px;">
+
+  <div style="margin-bottom: 26px;">
+    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: #F9BE3D; margin-bottom: 8px;">COVERAGE AUDIT</div>
+    <div style="font-size: 30px; font-weight: 700; letter-spacing: -0.025em;">Every journey, every screen</div>
+    <div style="font-size: 13.5px; color: #8A8172; margin-top: 7px; max-width: 720px; line-height: 1.6;">Eleven journeys walked end to end. Green was already drawn, amber was missing and is now drawn, grey is handled by Android itself and needs nothing from us.</div>
+  </div>
+
+  <div style="display: flex; gap: 9px; margin-bottom: 30px;">
+    <span class="n have">Already existed</span>
+    <span class="n new">Was missing, now added</span>
+    <span class="n os">Android handles it</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+
+    <div class="j">
+      <div class="jt">A · Cold start, every single launch</div>
+      <div class="jd">The journey I had skipped entirely. Every app has it and every user sees it more than any other screen.</div>
+      <div class="row"><span class="n new">Splash</span><span class="ar">→</span><span class="n new">Restore / sync</span><span class="ar">→</span><span class="n have">Library</span></div>
+      <div class="row"><span class="n new">Splash</span><span class="ar">→</span><span class="n new">Force update</span><span class="ar">→</span><span class="n os">Play Store</span></div>
+      <div class="row"><span class="n new">Splash</span><span class="ar">→</span><span class="n new">Timer recovery</span><span class="ar">→</span><span class="n have">Reading session</span></div>
+    </div>
+
+    <div class="j">
+      <div class="jt">B · First run, never used the app</div>
+      <div class="jd">The dots on screen 1 promised three screens. Only one existed.</div>
+      <div class="row"><span class="n have">Welcome</span><span class="ar">→</span><span class="n new">How it works</span><span class="ar">→</span><span class="n new">Set a goal</span></div>
+      <div class="row"><span class="ar">↳</span><span class="n new">Notification priming</span><span class="ar">→</span><span class="n os">OS permission</span><span class="ar">→</span><span class="n have">Empty library</span></div>
+    </div>
+
+    <div class="j">
+      <div class="jt">C · Migrating from Goodreads</div>
+      <div class="jd">Highest intent moment in the product. The failure branch had no screen.</div>
+      <div class="row"><span class="n have">How to export</span><span class="ar">→</span><span class="n os">File picker</span><span class="ar">→</span><span class="n new">Importing</span><span class="ar">→</span><span class="n have">Preview</span><span class="ar">→</span><span class="n have">Done</span></div>
+      <div class="row"><span class="ar">↳</span><span class="n new">Import failed</span><span class="ar">→</span><span class="n have">How to export</span></div>
+    </div>
+
+    <div class="j">
+      <div class="jt">D · Adding a book</div>
+      <div class="jd">Tapping add on a search result had nowhere to land. Which shelf?</div>
+      <div class="row"><span class="n have">Search</span><span class="ar">→</span><span class="n new">Shelf picker</span><span class="ar">→</span><span class="n have">Library</span></div>
+      <div class="row"><span class="n have">Search</span><span class="ar">→</span><span class="n have">No results</span><span class="ar">→</span><span class="n have">Add manually</span><span class="ar">→</span><span class="n new">Shelf picker</span></div>
+    </div>
+
+    <div class="j">
+      <div class="jt">E · A reading session</div>
+      <div class="jd">Finishing a timed session dropped the user nowhere. This is the app's core loop.</div>
+      <div class="row"><span class="n have">Library</span><span class="ar">→</span><span class="n have">Timer running</span><span class="ar">→</span><span class="n new">Session complete</span><span class="ar">→</span><span class="n have">Library</span></div>
+      <div class="row"><span class="n have">Library</span><span class="ar">→</span><span class="n have">Log session</span><span class="ar">→</span><span class="n have">Library</span></div>
+      <div class="row"><span class="n have">Timer</span><span class="ar">→</span><span class="n have">Notification</span><span class="ar">→</span><span class="n new">Session complete</span></div>
+    </div>
+
+    <div class="j">
+      <div class="jt">F · Finishing a book</div>
+      <div class="jd">Was complete already.</div>
+      <div class="row"><span class="n have">Book detail</span><span class="ar">→</span><span class="n have">Finish a book</span><span class="ar">→</span><span class="n have">Library</span></div>
+      <div class="row"><span class="ar">↳</span><span class="n have">Actions</span><span class="ar">→</span><span class="n have">Share card</span><span class="ar">→</span><span class="n os">Share sheet</span></div>
+    </div>
+
+    <div class="j">
+      <div class="jt">G · Notes and quotes</div>
+      <div class="jd">The plus button on the notes screen opened nothing.</div>
+      <div class="row"><span class="n have">Book detail</span><span class="ar">→</span><span class="n have">Notes list</span><span class="ar">→</span><span class="n new">Write a note</span></div>
+      <div class="row"><span class="ar">↳</span><span class="n os">Camera</span><span class="ar">→</span><span class="n new">Write a note</span></div>
+    </div>
+
+    <div class="j">
+      <div class="jt">H · Managing a book</div>
+      <div class="jd">Complete, with the actions sheet as the hub.</div>
+      <div class="row"><span class="n have">Actions</span><span class="ar">→</span><span class="n have">DNF</span><span class="ar">·</span><span class="n have">Re-read</span><span class="ar">·</span><span class="n have">Edit</span></div>
+      <div class="row"><span class="n have">Actions</span><span class="ar">→</span><span class="n have">Delete</span><span class="ar">→</span><span class="n have">Undo toast</span><span class="ar">→</span><span class="n have">Recently deleted</span></div>
+    </div>
+
+    <div class="j">
+      <div class="jt">I · Backup and account</div>
+      <div class="jd">Deleting an account is a Play Store requirement and needs a real confirmation, not a menu row.</div>
+      <div class="row"><span class="n have">Backup prompt</span><span class="ar">→</span><span class="n have">Email sign in</span><span class="ar">→</span><span class="n have">Account</span></div>
+      <div class="row"><span class="n have">Backup prompt</span><span class="ar">→</span><span class="n os">Google sheet</span><span class="ar">→</span><span class="n have">Account</span></div>
+      <div class="row"><span class="n have">Account</span><span class="ar">→</span><span class="n new">Delete confirmation</span><span class="ar">→</span><span class="n new">Splash</span></div>
+    </div>
+
+    <div class="j">
+      <div class="jt">J · Paying</div>
+      <div class="jd">Purchase succeeded and nothing acknowledged it. Restore is needed for reinstalls.</div>
+      <div class="row"><span class="n have">Upgrade</span><span class="ar">→</span><span class="n os">Play billing</span><span class="ar">→</span><span class="n new">Welcome to Plus</span></div>
+      <div class="row"><span class="n new">Trial ending</span><span class="ar">→</span><span class="n have">Upgrade</span><span class="ar">·</span><span class="n new">Restore purchase</span></div>
+    </div>
+
+    <div class="j">
+      <div class="jt">K · Settings and data</div>
+      <div class="jd">Complete.</div>
+      <div class="row"><span class="n have">Settings</span><span class="ar">→</span><span class="n have">Goal</span><span class="ar">·</span><span class="n have">Theme</span><span class="ar">·</span><span class="n have">Account</span></div>
+      <div class="row"><span class="n have">Settings</span><span class="ar">→</span><span class="n have">Export</span><span class="ar">→</span><span class="n os">Share sheet</span></div>
+    </div>
+
+    <div class="j" style="background: rgba(249,190,61,0.07); border-color: rgba(249,190,61,0.22);">
+      <div class="jt" style="color:#F9BE3D;">Deliberately not drawn</div>
+      <div class="jd" style="color:#8A8172;">Conscious omissions, not misses. Each is either an Android surface, a v1.1 item, or a form Claude Code derives from the system sheets.</div>
+      <div style="font-size: 11.5px; color: #8A8172; line-height: 1.9;">
+        Barcode scanner, moved to v1.1<br>
+        Tablet and landscape layouts, not Phase 1<br>
+        Year picker on Stats, a standard dropdown<br>
+        DNF confirmation, a two line dialog<br>
+        Payment failure, Play handles the retry
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top: 26px; padding: 17px 20px; background: rgba(249,190,61,0.09); border-left: 2px solid #F9BE3D; border-radius: 0 6px 6px 0;">
+    <div style="font-size: 13px; color: #C8C0B2; line-height: 1.65;"><b style="color:#F9BE3D;">Twelve screens were missing and every one of them sat on a path a real user takes.</b> The pattern worth noticing: they were all launch, recovery, confirmation and completion moments. Happy paths get designed because they are the fun part. The moments either side of them are what make an app feel finished, and they are exactly what a screen by screen audit misses until you walk the journeys instead.</div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>
