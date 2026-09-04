@@ -67,6 +67,55 @@ structurally impossible.
 
 ## Log
 
+## 2026-09-04 · `expo-system-ui` is load-bearing despite nothing importing it. Do not remove it.
+**The trap:** no file in `src/` imports `expo-system-ui`. It looks exactly like an unused
+dependency, and the obvious tidy-up is to delete it.
+**What it actually does:** it is what makes `userInterfaceStyle: 'automatic'` in
+`app.config.ts` work. Without it that setting is silently ignored, the system colour
+scheme never reaches the app, `useColors()` is stuck on one palette, and **light mode
+stops existing**. Expo's prebuild warns about this once —
+`userInterfaceStyle: Install expo-system-ui in your project to enable this feature` — and
+then never again.
+**Why it matters more than a missing dependency usually does:** both themes are a
+free-tier promise in `08-MONETISATION.md` and a store-listing claim. Removing this package
+breaks a shipped promise, and it breaks it **silently**: no typecheck failure, no lint
+failure, no test failure, and the app still launches and looks fine in whichever theme the
+emulator happens to be in.
+**Rule:** treat a dependency named in `app.config.ts` or `babel.config.js` as used, even
+when nothing imports it. This is the third instance of the same class of miss in Slice 0,
+after `babel-preset-expo` and `react-native-worklets`, all three caused by
+`npm install --legacy-peer-deps` not enforcing peers.
+**Revisit if:** never, while `userInterfaceStyle` is `automatic`.
+
+## 2026-09-04 · The debug APK is ~80 MB and that is not a problem
+**Observed:** `app-debug.apk` is 79.9 MB. The budget in `06-CONVENTIONS.md` is `< 15 MB`,
+so this reads as a fivefold overrun at a glance, and it prompted exactly that alarm once
+already.
+**Why it is expected:** a debug build carries an unminified JS bundle plus source maps,
+the dev client and Hermes debugger, and every ABI, with no R8 shrinking and no resource
+stripping. A release build minifies, shrinks, and splits per architecture so a user
+downloads one ABI.
+**The budget is a RELEASE budget.** Measure it at Slice 11 against a real release build,
+not before. Judging a debug APK against it produces false alarm at best and pointless
+optimisation at worst.
+**Separately, and also mistaken for the app:** the ~1 GB that appears during the first
+build is the **Android NDK** (`27.1.12297006`) installing into the SDK folder. It is a
+build tool, not part of the app.
+
+## 2026-09-04 · Environment and procedure now live in `docs/09-ENVIRONMENT.md`
+**Chose:** a ninth document holding the toolchain setup, the Metro workarounds, and the
+device-pass procedure.
+**Over:** leaving them in `DECISIONS.md`, or nowhere.
+**Because:** an audit of this session against the docs found every *decision* recorded and
+every *procedure* missing. Nothing captured the JDK version and path, `ANDROID_HOME`, the
+AVD name, that `cmdline-tools` has to be bootstrapped from a zip because `sdkmanager`
+cannot install itself, or how to actually run the device pass — several hours of work,
+recoverable only from a shell history that will not survive.
+**The distinction worth keeping:** `DECISIONS.md` records *why* and must stay readable in
+one sitting. `09-ENVIRONMENT.md` records *how*, is a recipe rather than an argument, and
+may grow long without cost. A decision that also needs a recipe gets an entry in both.
+**Revisit if:** the environment stops being a single Windows machine, at which point most
+of that file becomes CI configuration instead.
 
 ## 2026-09-03 · Slice 0 runs on a device. Two more missing dependencies found.
 **Verified on the Pixel 7 emulator:** the app launches, renders from theme tokens
@@ -152,6 +201,90 @@ reserved when it kept "one dev build as a fallback if the local toolchain gives 
 and `eas.json` already carries a `development` profile.
 **Revisit:** as soon as the diagnostic prints ALL CHECKS PASSED, retry
 `npx expo run:android`. Everything else in the toolchain is verified working.
+
+## 2026-09-04 · The device pass caught three upgrade-breaking bugs. A fresh install tests nothing.
+
+Migration `0001` had never run on a device. Run it did — first against a **populated v1
+database**, seeded to look like real data plus the shapes that matter. Three separate
+bugs, none of which a fresh install would ever have shown, and all three passed typecheck,
+lint, 34 unit tests and Prettier.
+
+### 1 · `0001` could never have run on a real reader's database
+**Symptom:** `UNIQUE constraint failed: reads.book_id, reads.read_number`.
+**Why:** the migration adds `UNIQUE (book_id, read_number) WHERE deleted_at IS NULL`. v1
+enforced nothing, so two live reads of one book could both be numbered 1 — and real
+databases will hold that, because nothing ever stopped it.
+**Why it is not merely "fails safe":** failing closed protected the data, and the data was
+byte-identical afterwards — verified by fingerprint, not assumed. But the app then stays
+on the old schema **forever**, retrying the same doomed migration on every launch, with no
+path out except reinstalling and losing the library. A permanently stuck app is not an
+acceptable resting state for a never-lose-data product.
+**Fix:** `0001` now renumbers duplicate live reads in creation order *before* creating the
+index, and enqueues the repaired rows for sync first, while they are still identifiable —
+the repair is what erases the evidence of which rows needed repairing. Verified on device:
+`rd-b2` went 1 → 2, the untouched book kept its numbering, and the soft-deleted duplicate
+was correctly left alone because the index is partial.
+**Rule, now in `03-DATA-MODEL.md`:** a migration that adds a constraint must repair the
+data violating it, in the same migration.
+**The file was hand-edited after generation,** which our own convention permits only
+because it has never shipped.
+
+### 2 · Backups were stamped with the version they were migrating TO
+**Symptom:** after the failed upgrade the backups directory held `reader-2-*.db` files
+whose contents were v1.
+**Why:** `backupBeforeMigration(SCHEMA_VERSION)` — the target version, not the version of
+the data being copied.
+**Why it matters:** the fix made hours earlier — never restore a backup from a newer
+schema than the running build — reads its answer from exactly that number. Mislabelled, it
+makes a v1 build refuse a backup it could read perfectly, and makes the filename describe
+an intention rather than a fact. The guard was built on a value that was wrong.
+**Fix:** `appliedMigrationCount()` in `client.ts`, so the name describes the contents.
+
+### 3 · A `SELECT` locked the database and broke the backup
+**Symptom, seen by the reader:** "Could not back up your library before updating", and a
+migration that would never run.
+**Cause:** the fix for bug 2. Reading the applied-migration count through drizzle's
+`.get()` left a read transaction open, and the very next step is
+`PRAGMA wal_checkpoint(TRUNCATE)`, which cannot truncate the WAL while a reader holds a
+lock: `NativeDatabase.execSync … database table is locked`.
+**Fix:** `appliedMigrationCount()` uses expo-sqlite's `getAllSync`, which runs the
+statement to completion and finalizes it.
+**Worth keeping:** I introduced this bug while fixing another, and it was invisible to
+every local check. Two fixes in a row landed in the same file and the second broke the
+first — the device is the only thing that noticed.
+**Also fixed, and it is why this was diagnosable at all:** the backup-failure branch
+discarded `error.cause` entirely. It now logs it. Until Sentry lands that `console.error`
+is the only place the reason exists, and without it the failure is just a sentence on a
+screen.
+
+### What passed
+RUNTIME 14/14 · COMPILE-TIME 1/1, including the two checks written yesterday and never
+run: **6b** (restore skips a newer-schema backup: restored v2, skipped v3) and **7**
+(cleanup leaves no orphaned reads or sessions). The WAL fix demonstrated again — `wal
+321392B → 0B` across a checkpoint, main file unchanged. The soft-delete cascade verified
+in the database rather than asserted: book, read and all three sessions carry one
+identical `deleted_at`, which is the cascade signature.
+
+Every row of the populated database survived every step: 4 books, 7 reads, 7 sessions,
+shelf, assignment and note, before and after.
+
+### Two things that are NOT app bugs, recorded so they are not re-diagnosed
+- **`adb shell input tap` does not reach the JS handler**, with or without window focus,
+  with `tap`, `touchscreen tap` or a zero-length `swipe`. ANR dialogs appeared twice with
+  reason "Input dispatching timed out (Application does not have a focused window)" — but
+  thread dumps taken at the time show **both the main thread and `mqt_v_js` idle in their
+  loopers**, so there is no evidence of an app-level hang, and the pass itself ran to
+  completion in ~40s. Treated as emulator/dev-client input friction, not an app defect.
+  If it turns out to be one, the evidence is here.
+- **The mitigation is `EXPO_PUBLIC_DEVICE_PASS=1`**, which runs the pass on mount. Better
+  than a tap anyway: a check suite that can only be started by a finger cannot be run from
+  a script, and Slice 2 has to re-run this against 2000 books.
+
+### The lesson, which is the same one as last time
+A fresh install is not a test of a migration. It has no rows to violate a new constraint,
+nothing to lose, and nothing to restore. `06-CONVENTIONS.md` already said "never commit a
+migration you have not run against a seeded database"; the rule was right and had simply
+never been executed. It now says how, step by step.
 
 ## 2026-09-04 · Prettier owns formatting, with exactly one exemption
 **Chose:** keep Prettier, add `.prettierignore` covering `src/ui/theme.ts` and the
@@ -453,6 +586,11 @@ system guarantees and executes nothing. Counting it as a runtime pass inflated t
 to 13/13 when only 12 things actually ran. These counts have to stay trustworthy for
 eleven more slices, and an inflated number is worse than a smaller honest one.
 **Current:** RUNTIME 13/13 · COMPILE-TIME 1/1.
+
+> **Superseded 2026-09-04:** now **RUNTIME 14/14 · COMPILE-TIME 1/1**, after check 6b was
+> added. The rule in this entry stands unchanged; only the number moved. Left in place
+> rather than edited, because a running log that quietly rewrites its own history is not
+> a log.
 
 ## 2026-09-03 · Known deferrals from the Slice 0 device pass
 Recorded so they are not rediscovered as surprises later. None is a defect; each is work

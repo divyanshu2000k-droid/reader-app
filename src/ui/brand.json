@@ -1,0 +1,4 @@
+{
+  "ground": "#0B0A08",
+  "_why": "The one colour that BOTH the JS theme and the native Android config need. app.config.ts is transpiled and evaluated by plain Node, which cannot require a .ts module, so it cannot import theme.ts - and duplicating the hex there is how the brand colour drifts. JSON is the only format both loaders read. theme.ts remains the single source components read from; this is its native-side spelling."
+}

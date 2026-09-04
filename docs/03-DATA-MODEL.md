@@ -246,7 +246,10 @@ separate. Audiobooks inflating page counts is the category's largest unmet compl
 
 ## Indexes
 
-Add these from the first migration, not when it gets slow.
+Add indexes when the table is created, not when it gets slow. Most of these landed in
+`0000_init`; `idx_reads_status`, `idx_reads_book_number` and the partial rewrites of the
+two `books` indexes came in `0001` — which is the migration that then needed a data
+repair to be applicable at all. Adding them at creation time would have cost nothing.
 
 ```sql
 CREATE INDEX idx_reads_book       ON reads(book_id) WHERE deleted_at IS NULL;
@@ -377,6 +380,24 @@ losing data.
 3. **Clear the live sidecars before copying the backup's in.** A stale `reader.db-wal`
    beside a restored database is replayed on next open and can reintroduce exactly the
    half-migrated state being rolled back.
+
+**A migration that ADDS A CONSTRAINT must repair the data that violates it, first, in
+the same migration.** Migration `0001` adds `UNIQUE (book_id, read_number) WHERE
+deleted_at IS NULL`. v1 enforced nothing, so a real database can hold two live reads of
+one book both numbered 1 — and on the first device pass against a populated database it
+did, and the migration failed with `UNIQUE constraint failed: reads.book_id,
+reads.read_number`.
+
+Failing closed is correct and it protected the data, but it is not survivable here: the
+app stays on the old schema forever, retries the same failing migration on every launch,
+and there is no path out short of reinstalling and losing everything. `0001` therefore
+renumbers duplicate live reads in creation order before creating the index, and enqueues
+the repaired rows for sync — a migration that changes rows is a write like any other.
+
+**Backups are named for the version of the data inside them, not the version being
+migrated to.** `backupBeforeMigration(appliedMigrationCount())`, never `SCHEMA_VERSION`.
+The first device pass produced `reader-2-*.db` files whose contents were v1, which
+silently defeats the rule above about never restoring a backup a build cannot read.
 
 Test every migration against a database seeded with 2000 books, and test the failure path
 by deliberately corrupting a migration once. There is no `{ name: 'none' }` success

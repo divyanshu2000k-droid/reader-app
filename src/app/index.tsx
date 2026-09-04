@@ -5,7 +5,7 @@
  * Slice 1 replaces this with the four launch gates and the tab shell.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 
 import { useMigrationStatus } from '@/db/migrate'
@@ -63,6 +63,27 @@ export default function Index() {
       setRunning(false)
     }
   }
+
+  /**
+   * Run the device pass without a human tap.
+   *
+   * Start Metro with `EXPO_PUBLIC_DEVICE_PASS=1` and the pass runs on mount. Added
+   * because driving the button over `adb shell input tap` proved unreliable — taps did
+   * not reach the JS handler even with the window focused — and because a check suite
+   * that can only be started by a finger cannot be run from a script later.
+   *
+   * `__DEV__` gates it exactly like the button, so it cannot ship.
+   */
+  useEffect(() => {
+    if (!__DEV__ || process.env.EXPO_PUBLIC_DEVICE_PASS !== '1') return
+    // Deferred out of the effect body: the checks set state as they run, and starting
+    // them synchronously here is the pattern react-hooks/set-state-in-effect exists to
+    // stop. A timeout of zero also lets the first frame paint before ~40s of database
+    // work begins, so the screen is never blank while it runs.
+    const t = setTimeout(() => void runDevChecks(), 0)
+    return () => clearTimeout(t)
+    // Mount only: a one-shot trigger, not a reaction to changing state.
+  }, [])
 
   return (
     <Screen>

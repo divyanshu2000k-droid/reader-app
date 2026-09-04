@@ -49,3 +49,44 @@ Run `seedSampleLibrary()` on an empty database and assert:
 - each session's `local_day` matches its `occurred_at` rendered in the device timezone
 - `reads.started_at` is still NULL, because the seed must never write a computed value
   into an override column
+
+## 5. Backup, against its real assumptions
+
+`backup.ts` has the most logic and the least execution in the codebase, so the pass
+exercises it rather than reasoning about it. Assert on a device:
+
+- `Paths.availableDiskSpace` returns a real number, so the 3x free-space guard guards
+  something
+- the database really is at `files/SQLite/reader.db`, the path the code assumes
+- a `-wal` sidecar exists and `checkpointWal()` actually drains it, so a bare copy of
+  `reader.db` would have lost committed data
+- the backup carries both sidecars, and prune keeps exactly three with no orphans
+
+## 6. Restore, in both directions
+
+**6.** After restoring, a row written *after* the backup is gone and a row written before
+it survives. This is what proves `closeDatabase()` is doing its job: on Android, deleting
+an open file leaves the connection on the unlinked inode, so without it the restore
+silently does nothing while reporting success.
+
+**6b.** Given a compatible backup **and** a more recent one stamped with a newer schema
+version, restore must choose the compatible one. A version-blind restore takes the newest
+file and hands the app a database it cannot read — the state a rollback lands in, which is
+worse than the failed migration being rolled back.
+
+## 7. Cleanup, which is also the cascade test
+
+The pass soft-deletes everything it created, including the seeded book, and then asserts
+there are **no live reads under a deleted book and no live sessions under a deleted read**.
+
+That assertion is the soft-delete cascade's behavioural test. It also keeps the counts
+honest: cleanup once matched only `Devcheck%`, so every run left the seeded book, its read
+and its three sessions behind, and the next run's seed added three more. A device pass
+that grows the database it is checking produces numbers that stop meaning anything.
+
+## What a migration needs on top of all this
+
+Every check above runs against whatever schema the app is on. **None of them tests an
+upgrade.** A migration must additionally be run against a POPULATED database of the
+previous schema — see the procedure in `docs/09-ENVIRONMENT.md`. Migration `0001` passed
+every check on this page and still could not run on a real reader's database.

@@ -1,6 +1,6 @@
 import type { ExpoConfig } from 'expo/config'
 
-import { dark } from './src/ui/theme'
+import brand from './src/ui/brand.json'
 
 /**
  * PLACEHOLDER PACKAGE ID.
@@ -43,6 +43,12 @@ const config: ExpoConfig = {
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'reader',
+  /**
+   * REQUIRES `expo-system-ui` IN dependencies. Nothing imports that package, so it looks
+   * unused and invites deletion — but without it this setting is silently ignored, the
+   * system colour scheme never reaches `useColors()`, and light mode stops existing.
+   * Both themes are a free-tier promise in docs/08-MONETISATION.md.
+   */
   userInterfaceStyle: 'automatic',
   // Android only for v1. See ADR 001.
   // The New Architecture is the default and no longer a config flag on SDK 57.
@@ -52,7 +58,11 @@ const config: ExpoConfig = {
     adaptiveIcon: {
       // The ground colour, imported rather than copied. A second hex here is a second
       // place the brand colour lives, and the one that never gets updated.
-      backgroundColor: dark.ground,
+      //
+      // JSON, not `theme.ts`: Expo transpiles this file and evaluates it in plain Node,
+      // which cannot require a TypeScript module. Importing the theme here fails the
+      // BUILD, not the typecheck — `npx expo run:android` was how it surfaced.
+      backgroundColor: brand.ground,
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',

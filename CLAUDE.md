@@ -44,8 +44,18 @@ The four, as evidence:
    the end of a nested object, so it read the *next* table's columns and passed.
 4. **`writeRow` rewrote `created_at` on every update**, because the caller's values were
    handed to `onConflictDoUpdate` wholesale.
+5. **Migration `0001` could never run on a real database.** It passed every local check
+   and applied cleanly to a fresh install; against a POPULATED v1 database it failed on
+   the first constraint it added, and would have left every existing reader stuck on the
+   old schema permanently. A fresh install is not a test of a migration.
+6. **A `SELECT` held a read lock that made the next line's WAL checkpoint fail**, so the
+   backup failed, so the migration refused to run. Typechecked, linted, threw nothing,
+   and bricked upgrades — surfacing to the reader only as "Could not back up your
+   library". **The device pass stayed at 14/14 throughout**, because it calls
+   `checkpointWal()` in isolation and never executes the failing sequence. A suite of
+   green checks over the parts of a startup path says nothing about the path.
 
-Add a fifth if the theme counts: `font.family` was declared from the first commit and
+Add another if the theme counts: `font.family` was declared from the first commit and
 applied by nothing, so the entire app rendered in the wrong typeface without a single
 error anywhere.
 
@@ -93,6 +103,30 @@ When you fix something in this shape, add it to the list above. The list is the 
 10. **No `any`.** TypeScript strict, always.
 11. **No CSS-only values.** React Native has no `radial-gradient`, no `box-shadow`
     strings, no `calc()`. The theme's `glowSpec` explains the gradient approach.
+12. **Docs change in the same task as the code, never afterwards.** A doc describing code
+    that no longer exists is a bug of the same severity as a failing test, and in practice
+    worse: a failing test announces itself, a stale doc quietly misleads the next session
+    into rebuilding the wrong thing. Specifically:
+
+    | You changed | Update, in the same task |
+    |---|---|
+    | The schema, an index, a column type | `docs/03-DATA-MODEL.md` |
+    | A convention, a command, a guard, a lint rule | `docs/06-CONVENTIONS.md` and `CLAUDE.md` |
+    | Finished or reshaped a slice | `docs/05-BUILD-PLAN.md` and the **Current state** block below |
+    | A screen contract or a global UI rule | `docs/04-SCREENS.md` |
+    | A library, or a dependency's role | `docs/02-ARCHITECTURE.md` |
+    | Anything non-obvious, ever | `DECISIONS.md`, **as you decide it** |
+
+    `DECISIONS.md` is written as you go, never reconstructed in a sweep at the end. A
+    reconstructed entry is missing the alternative you rejected and the reason, which is
+    the only part worth keeping.
+
+    **At the end of every task, before reporting it done, state in one line which docs you
+    touched and why.** If none, say so explicitly and say why none were affected — "no
+    schema, convention or slice boundary moved" is an answer; silence is not.
+
+    One full sweep has already been needed to repair drift accumulated across a single
+    slice (`DECISIONS.md`, 2026-09-04). That was the last one.
 
 ## Agent skills
 
@@ -116,6 +150,9 @@ npm run lint
 npm test                  # node --test, no device needed
 npm run test:tz           # the timezone-sensitive suites in UTC, IST and US Central
 npm run format:check      # Prettier owns formatting; theme.ts is the one exception
+
+EXPO_PUBLIC_DEVICE_PASS=1 npx expo start --clear   # runs the device pass on launch
+adb logcat -d | grep devcheck                      # its results
 ```
 
 `npm run typecheck` rather than a bare `tsc --noEmit`: the app compiles with `"types": []`
@@ -130,29 +167,35 @@ Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
-Slice 0 complete and **verified running on a device**, then reviewed and repaired. The
-app launches on the Pixel 7 emulator, renders from theme tokens, opens the database and
-reports its schema version. Schema, migrations, the single write path with `sync_queue`,
-theme, the ten shared components, path aliases, lint and the `lib/` + `domain/` modules
-are all in place. Typecheck and lint clean; 34 tests pass, 27 of them across IST, US
-Central and UTC.
+Slice 0 complete, reviewed, repaired, and **verified on a device including a real
+schema upgrade**. Typecheck, lint and Prettier clean; 37 tests pass, 27 of them across
+IST, US Central and UTC.
 
-**A code review on 2026-09-04 found and fixed twenty issues**, four of them silent data
-bugs: `created_at` rewritten on every update, a schema guard vacuous for two of seven
-tables, queue rows enqueued for writes that changed nothing, and a restore that would
-happily load a backup from a newer schema than the running build. Soft delete now
-cascades, the app renders in its actual typeface for the first time, and the lint rule
-covers spacing, radii and type sizes rather than colours alone. Full detail in
-`DECISIONS.md`, 2026-09-04.
+**Device pass on the Pixel 7 emulator: RUNTIME 14/14 · COMPILE-TIME 1/1**, including the
+two new checks (restore skips a newer-schema backup; cleanup leaves no orphaned rows) and
+the soft-delete cascade verified in the database rather than asserted.
 
-**Outstanding before Slice 1, and both are real:**
-- **Re-run the device pass.** Migration `0001` has never been executed on a device, and
-  `06-CONVENTIONS.md` forbids shipping a migration that has not run against a seeded
-  database. Checks `6b` (restore skips a newer-schema backup) and `7` (cascade cleanup)
-  are new and have never run.
-- **The third error tier does not exist.** Error boundary, Sentry and a migration retry
-  are scheduled into Slice 1 in `docs/05-BUILD-PLAN.md`.
+**Migration `0001` has now run against a POPULATED v1 database**, not just a fresh
+install — which is how three real bugs were found and fixed. See `DECISIONS.md`,
+2026-09-04. Every row survived; the new unique index no longer rejects existing data.
+
+**Outstanding before Slice 1:** the third error tier still does not exist — error
+boundary, Sentry and a migration retry are scheduled into Slice 1 in
+`docs/05-BUILD-PLAN.md`. Everything to date is x86_64 emulator only; arm64 and OEM
+background-killing are first exercised in Slice 6.
 
 See `docs/05-BUILD-PLAN.md`.
 
 Update this line at the end of every slice.
+
+## Environment
+
+`docs/09-ENVIRONMENT.md` holds the toolchain setup, the two Metro workarounds that will
+otherwise waste an hour each, and **how to run the device pass**. Read it before building
+on a new machine or running anything on a device.
+
+Two things from it that bite immediately: **Metro's file watcher does not work here**, so
+every source change needs `npx expo start --dev-client --clear` or you are testing stale
+code that looks like a pass; and **a dependency named in `app.config.ts` or
+`babel.config.js` is used even though nothing imports it** — `src/__tests__/config-deps.test.ts`
+guards that.

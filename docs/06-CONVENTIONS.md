@@ -267,6 +267,41 @@ Not comprehensive. Targeted at the things that silently corrupt data.
 **Do not bother testing:** component rendering, navigation, styling. Manual use catches
 those faster.
 
+### Running the device pass
+
+Everything above runs in Node. The checks that need a real SQLite connection and a real
+filesystem live in `src/db/devchecks.ts`, are specified in
+`src/db/__tests__/sync-queue.device.md`, and run on a device.
+
+**The procedure is in `docs/09-ENVIRONMENT.md`, and only there.** That file is the
+workshop; this one is the standard. What belongs here is the rule:
+
+**A migration is not tested until it has run against a POPULATED database of the previous
+schema.** A fresh install exercises none of the interesting paths: it has no rows to
+violate a new constraint, nothing to lose, and nothing to restore. Pin the journal to the
+old version, launch, populate, then restore the journal and relaunch.
+
+### The startup path is not covered by the device pass. Relaunch after touching it.
+
+**Rule: after any change to `db/client.ts`, `db/backup.ts` or `db/migrate.ts`, relaunch
+the app and confirm it reaches `schema vN`, and that `adb logcat | grep '\[migrate\]'` is
+silent.** It costs one launch.
+
+**The obvious rule — "re-run the device pass" — would not have caught the bug that
+prompted this one, and it is worth understanding why.** A read left a transaction open,
+so the `PRAGMA wal_checkpoint(TRUNCATE)` on the next line failed, so the backup failed, so
+migrations could never run. The device pass calls `checkpointWal()` directly, in
+isolation, with no open reader — it never executes the sequence that fails. It passed
+14/14 while upgrades were bricked.
+
+The pass tests **modules**. `performMigrations()` is a **sequence**, and the only thing
+that executes it is starting the app. A suite of green unit checks over the parts of a
+startup path says nothing about the path.
+
+This generalises past this one file: when a bug lives in the *order* of two correct
+operations, the test that finds it has to run them in that order, which usually means
+running the real entry point rather than its pieces.
+
 ---
 
 ## Formatting

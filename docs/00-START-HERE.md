@@ -93,6 +93,7 @@ the app must launch and do something useful.
 | `05-BUILD-PLAN.md` | The order to build in |
 | `06-CONVENTIONS.md` | Code structure and standards |
 | `08-MONETISATION.md` | What is free, what is paid, and why Plus is thin at launch |
+| `09-ENVIRONMENT.md` | How to build and run it, and how to run the device pass |
 | `../PREMORTEM.md` | What kills projects like this. Written for the human |
 | `DECISIONS.md` | Running log. You write this. |
 

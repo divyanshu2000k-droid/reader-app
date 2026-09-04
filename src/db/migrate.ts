@@ -13,7 +13,7 @@ import { migrate } from 'drizzle-orm/expo-sqlite/migrator'
 import { useEffect, useState } from 'react'
 
 import { backupBeforeMigration, pruneBackups, restoreNewestBackup } from './backup'
-import { getDb } from './client'
+import { appliedMigrationCount, getDb } from './client'
 import migrations from './migrations/migrations'
 import { appError, type AppError } from '@/lib/result'
 
@@ -22,7 +22,7 @@ export type MigrationStatus =
   | { readonly ok: true; readonly state: 'done'; readonly version: number }
   | { readonly ok: false; readonly state: 'failed'; readonly error: string }
 
-/** Bumped whenever a migration is added. Names the backup file. */
+/** The schema version this BUILD targets: how many migrations it knows about. */
 export const SCHEMA_VERSION = migrations.journal.entries.length
 
 let cached: MigrationStatus = { state: 'pending' }
@@ -37,10 +37,34 @@ let cached: MigrationStatus = { state: 'pending' }
  */
 let inFlight: Promise<MigrationStatus> | null = null
 
+/**
+ * The schema version the database on disk is ALREADY at, i.e. how many migrations have
+ * been applied to it.
+ *
+ * This is what names the backup, and the distinction is not pedantic. The backup used to
+ * be stamped with `SCHEMA_VERSION` — the version being migrated TO — so a copy of a v1
+ * database taken moments before a v1→v2 migration was written to disk as
+ * `reader-2-….db`. The device pass caught it: after a failed migration the backups
+ * directory held `reader-2-*.db` files whose contents were v1.
+ *
+ * That mislabelling silently defeats the rule in `restoreNewestBackup`, which decides
+ * what it can safely read from exactly this number. A v1 build would refuse a backup it
+ * could read perfectly well, and the name would describe an intention rather than a fact.
+ *
+ * The read itself lives in `client.ts`: it must finalize its statement, or the WAL
+ * checkpoint in the very next step cannot run. See `appliedMigrationCount`.
+ */
 async function performMigrations(): Promise<MigrationStatus> {
-  const backup = await backupBeforeMigration(SCHEMA_VERSION)
+  // Named for the version of the data being copied, NOT the version being migrated to.
+  const backup = await backupBeforeMigration(appliedMigrationCount())
   if (!backup.ok) {
     // Fail closed. An app on an old schema still works; a half-migrated one may not.
+    //
+    // The cause is logged because until Sentry lands this is the ONLY place it exists:
+    // the reader sees "could not back up", and without this line nobody — including the
+    // next device pass — can find out why. Discovered the hard way: this branch fired on
+    // a device and the cause had already been thrown away.
+    console.error('[migrate] backup failed:', backup.error.message, backup.error.cause)
     cached = { ok: false, state: 'failed', error: backup.error.message }
     return cached
   }
@@ -51,6 +75,7 @@ async function performMigrations(): Promise<MigrationStatus> {
     cached = { ok: true, state: 'done', version: SCHEMA_VERSION }
     return cached
   } catch (cause) {
+    console.error('[migrate] migration failed:', cause)
     // The running code's version, so a backup from a NEWER schema is never restored
     // over it. See restoreNewestBackup.
     const restored = restoreNewestBackup(SCHEMA_VERSION)

@@ -70,6 +70,30 @@ export function runInTransaction(task: () => void): void {
 }
 
 /**
+ * How many migrations have already been applied to the database on disk.
+ *
+ * Lives here because `client.ts` is the only file permitted to touch raw SQLite, and
+ * because HOW it reads matters: `getAllSync` runs the statement to completion and
+ * finalizes it. A drizzle `.get()` here left a read transaction open, and the very next
+ * thing the caller does is `checkpointWal()` — which cannot truncate the WAL while any
+ * reader holds a lock. The device pass caught it as
+ * `NativeDatabase.execSync … database table is locked`, surfacing to the reader as
+ * "Could not back up your library before updating" and a migration that could never run.
+ *
+ * Returns 0 when the table does not exist, which is a fresh install.
+ */
+export function appliedMigrationCount(): number {
+  try {
+    const rows = openHandle().getAllSync<{ n: number }>(
+      'select count(*) as n from __drizzle_migrations',
+    )
+    return rows[0]?.n ?? 0
+  } catch {
+    return 0
+  }
+}
+
+/**
  * Execute a raw statement. DEV ONLY, and it throws in production.
  *
  * This exists for exactly one caller: the atomicity check in `devchecks.ts`, which has to

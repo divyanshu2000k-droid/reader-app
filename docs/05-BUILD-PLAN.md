@@ -47,6 +47,11 @@ sessions has a correct `local_day`, and each left a row in `sync_queue`.
 
 ---
 
+> **Slice 0 device pass: done, 2026-09-04.** RUNTIME 14/14 · COMPILE-TIME 1/1 on the
+> Pixel 7 emulator, and migration `0001` verified against a POPULATED v1 database rather
+> than a fresh install — which is the only reason three upgrade-breaking bugs were found
+> before a reader hit them. See `DECISIONS.md`.
+
 ## Slice 1 · Launch and shell
 **~4 days**
 

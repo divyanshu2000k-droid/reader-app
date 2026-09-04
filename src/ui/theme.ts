@@ -10,6 +10,8 @@
 
 import type { TextStyle } from 'react-native'
 
+import brand from './brand.json'
+
 // ─── COLOUR ──────────────────────────────────────────────────────────────────
 
 /**
@@ -47,7 +49,9 @@ export interface Palette {
 }
 
 export const dark = {
-  ground: '#0B0A08',
+  // From brand.json, because the Android adaptive icon needs this exact value and
+  // app.config.ts cannot import a .ts module. See the note in that file.
+  ground: brand.ground,
   surface: 'rgba(255,255,255,0.03)',
   surfaceRaised: 'rgba(255,255,255,0.055)',
   border: 'rgba(255,255,255,0.055)',
