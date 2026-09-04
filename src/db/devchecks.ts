@@ -21,19 +21,15 @@
  * and everything it creates is soft-deleted.
  */
 
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm'
 import { Directory, File, Paths } from 'expo-file-system'
 
 import { checkpointWal, dangerouslyExecDevSql, DATABASE_NAME, getDb } from './client'
 import { books, reads, sessions, syncQueue } from './schema'
 import { restoreRow, softDelete, writeRow } from './write'
-import {
-  backupBeforeMigration,
-  listBackups,
-  pruneBackups,
-  restoreNewestBackup,
-} from './backup'
-import { seedSampleLibrary } from './seed'
+import { backupBeforeMigration, listBackups, pruneBackups, restoreNewestBackup } from './backup'
+import { SCHEMA_VERSION } from './migrate'
+import { seedSampleLibrary, SEEDED_TITLE } from './seed'
 import { now, toLocalDay } from '@/lib/dates'
 import { newId } from '@/lib/ids'
 
@@ -92,8 +88,6 @@ async function checkEnqueueOnWrite() {
       id,
       title: 'Devcheck Book',
       source: 'manual',
-      createdAt: now(),
-      updatedAt: now(),
     })
     assert(r.ok, 'writeRow returned an error')
 
@@ -109,8 +103,6 @@ async function checkEnqueueOnWrite() {
       id,
       title: 'Devcheck Delete',
       source: 'manual',
-      createdAt: now(),
-      updatedAt: now(),
     })
     const del = await softDelete('books', id)
     assert(del.ok, 'softDelete returned an error')
@@ -154,7 +146,9 @@ async function checkAtomicity() {
    */
   await check('2a. a failing ENQUEUE rolls back the table write', async () => {
     const id = newId()
-    const booksBefore = await getDb().select({ n: sql<number>`count(*)` }).from(books)
+    const booksBefore = await getDb()
+      .select({ n: sql<number>`count(*)` })
+      .from(books)
     let renamed = false
 
     try {
@@ -165,8 +159,6 @@ async function checkAtomicity() {
         id,
         title: 'Devcheck Atomicity',
         source: 'manual',
-        createdAt: now(),
-        updatedAt: now(),
       })
 
       assert(
@@ -187,7 +179,9 @@ async function checkAtomicity() {
         'rows can exist locally that will never sync.',
     )
 
-    const booksAfter = await getDb().select({ n: sql<number>`count(*)` }).from(books)
+    const booksAfter = await getDb()
+      .select({ n: sql<number>`count(*)` })
+      .from(books)
     assert(
       (booksBefore[0]?.n ?? -1) === (booksAfter[0]?.n ?? -2),
       `books count changed: ${booksBefore[0]?.n} -> ${booksAfter[0]?.n}`,
@@ -198,8 +192,6 @@ async function checkAtomicity() {
       id: newId(),
       title: 'Devcheck Atomicity Probe',
       source: 'manual',
-      createdAt: now(),
-      updatedAt: now(),
     })
     assert(probe.ok, 'sync_queue was not restored: the rename-back failed')
 
@@ -211,7 +203,9 @@ async function checkAtomicity() {
     // write fails *inside* the transaction. If the pair were two statements that merely
     // usually both succeed, a sync_queue row would survive. It must not.
     const id = newId()
-    const before = await getDb().select({ n: sql<number>`count(*)` }).from(syncQueue)
+    const before = await getDb()
+      .select({ n: sql<number>`count(*)` })
+      .from(syncQueue)
 
     const r = await writeRow('sessions', {
       id,
@@ -222,8 +216,6 @@ async function checkAtomicity() {
       fromPosition: 0,
       toPosition: 10,
       isTimed: 0,
-      createdAt: now(),
-      updatedAt: now(),
     })
 
     assert(!r.ok, 'the write unexpectedly SUCCEEDED - is PRAGMA foreign_keys really ON?')
@@ -231,7 +223,9 @@ async function checkAtomicity() {
     const rows = await queueRowsFor('sessions', id)
     assert(rows.length === 0, `orphaned queue row survived a failed write (${rows.length})`)
 
-    const after = await getDb().select({ n: sql<number>`count(*)` }).from(syncQueue)
+    const after = await getDb()
+      .select({ n: sql<number>`count(*)` })
+      .from(syncQueue)
     assert(
       (before[0]?.n ?? 0) === (after[0]?.n ?? 0),
       `queue length changed: ${before[0]?.n} -> ${after[0]?.n}`,
@@ -263,7 +257,9 @@ async function checkLocalOnlyTables() {
 
 async function checkSeed() {
   await check('4. seed writes 1 book, 1 read, 3 sessions and 5 queue rows', async () => {
-    const before = await getDb().select({ n: sql<number>`count(*)` }).from(syncQueue)
+    const before = await getDb()
+      .select({ n: sql<number>`count(*)` })
+      .from(syncQueue)
     const seeded = await seedSampleLibrary()
     assert(seeded.ok, `seed failed: ${seeded.ok ? '' : seeded.error.message}`)
 
@@ -295,7 +291,9 @@ async function checkSeed() {
     const formats = new Set(sessionRows.map((s) => s.format))
     assert(formats.has('pages') && formats.has('minutes'), 'seed lost the mixed formats')
 
-    const after = await getDb().select({ n: sql<number>`count(*)` }).from(syncQueue)
+    const after = await getDb()
+      .select({ n: sql<number>`count(*)` })
+      .from(syncQueue)
     const added = (after[0]?.n ?? 0) - (before[0]?.n ?? 0)
     assert(added === 5, `expected 5 new queue rows, got ${added}`)
 
@@ -349,28 +347,33 @@ async function checkBackupAssumptions() {
   })
 
   await check('5e. backup copies the database AND both sidecars', async () => {
-    const made = await backupBeforeMigration(99)
+    const made = await backupBeforeMigration(SCHEMA_VERSION)
     assert(made.ok, `backup failed: ${made.ok ? '' : made.error.message}`)
-    assert(made.value.uri !== '', 'backup returned an empty uri')
+    assert(made.value.kind === 'made', 'backup was skipped, but the database exists')
+    const backup = made.value.backup
 
-    const copy = new File(made.value.uri)
+    const copy = new File(backup.uri)
     assert(copy.exists, 'the backup file does not exist')
     assert((copy.size ?? 0) > 0, 'the backup file is empty')
+    assert(
+      backup.schemaVersion === SCHEMA_VERSION,
+      `backup recorded schema ${backup.schemaVersion}, expected ${SCHEMA_VERSION}`,
+    )
 
     // The sidecars are the belt-and-braces half of the fix.
-    const walCopy = new File(`${made.value.uri}-wal`)
+    const walCopy = new File(`${backup.uri}-wal`)
     const liveWal = new File(Paths.document, 'SQLite', `${DATABASE_NAME}-wal`)
     const walCopied = walCopy.exists
     assert(
       !liveWal.exists || walCopied,
       'a live -wal exists but was not copied alongside the backup',
     )
-    return `${made.value.name} ${(copy.size ?? 0)}B, wal copied=${walCopied}`
+    return `${backup.name} ${copy.size ?? 0}B, wal copied=${walCopied}`
   })
 
   await check('5f. backups are listed newest-first and prune keeps three', async () => {
     // Make enough backups to force a prune.
-    for (let i = 0; i < 4; i += 1) await backupBeforeMigration(90 + i)
+    for (let i = 0; i < 4; i += 1) await backupBeforeMigration(SCHEMA_VERSION)
     const before = listBackups()
     assert(before.length >= 4, `expected >=4 backups, got ${before.length}`)
     for (let i = 1; i < before.length; i += 1) {
@@ -407,12 +410,10 @@ async function checkRestore() {
       id: markerId,
       title: 'Devcheck Restore Marker',
       source: 'manual',
-      createdAt: now(),
-      updatedAt: now(),
     })
     checkpointWal()
 
-    const made = await backupBeforeMigration(98)
+    const made = await backupBeforeMigration(SCHEMA_VERSION)
     assert(made.ok, 'backup before restore failed')
 
     // A row created AFTER the backup. It must be gone once we restore.
@@ -421,15 +422,13 @@ async function checkRestore() {
       id: afterId,
       title: 'Devcheck Written After Backup',
       source: 'manual',
-      createdAt: now(),
-      updatedAt: now(),
     })
     checkpointWal()
 
     const presentBefore = await getDb().select().from(books).where(eq(books.id, afterId))
     assert(presentBefore.length === 1, 'the post-backup row was not written')
 
-    const restored = restoreNewestBackup()
+    const restored = restoreNewestBackup(SCHEMA_VERSION)
     assert(restored.ok, `restore failed: ${restored.ok ? '' : restored.error.message}`)
 
     // Read through a NEW query after restore. Whether the existing connection sees the
@@ -445,19 +444,108 @@ async function checkRestore() {
     )
     return 'marker survived, post-backup row gone'
   })
+
+  /**
+   * THE DIRECTION THAT MATTERS, and the one the code used to get wrong.
+   *
+   * `restoreNewestBackup` picked the newest file by timestamp and ignored the schema
+   * version sitting in its own filename. After a rollback to an older build, the newest
+   * backup on disk is from a schema this binary has never seen, and restoring it hands
+   * the app a database it cannot read — a worse state than the failed migration being
+   * rolled back.
+   *
+   * Asserting "restore works" would never have caught that. This asserts the specific
+   * thing the design depends on: given a compatible backup AND a newer one that is more
+   * recent, the compatible one wins.
+   */
+  await check('6b. restore SKIPS a backup from a newer schema than this build', async () => {
+    // A backup this build can read.
+    const compatibleMarker = newId()
+    await writeRow('books', {
+      id: compatibleMarker,
+      title: 'Devcheck Compatible Backup Marker',
+      source: 'manual',
+    })
+    checkpointWal()
+    const compatible = await backupBeforeMigration(SCHEMA_VERSION)
+    assert(compatible.ok && compatible.value.kind === 'made', 'compatible backup failed')
+
+    // A NEWER row, captured in a backup stamped with a FUTURE schema version. It is the
+    // newest backup on disk, so a version-blind restore would choose it.
+    const futureMarker = newId()
+    await writeRow('books', {
+      id: futureMarker,
+      title: 'Devcheck Future Schema Marker',
+      source: 'manual',
+    })
+    checkpointWal()
+    const future = await backupBeforeMigration(SCHEMA_VERSION + 1)
+    assert(future.ok && future.value.kind === 'made', 'future-schema backup failed')
+    assert(
+      listBackups()[0]?.name === future.value.backup.name,
+      'the future-schema backup is not the newest on disk, so this check proves nothing',
+    )
+
+    const restored = restoreNewestBackup(SCHEMA_VERSION)
+    assert(restored.ok, `restore failed: ${restored.ok ? '' : restored.error.message}`)
+
+    const compatibleRow = await getDb()
+      .select()
+      .from(books)
+      .where(eq(books.id, compatibleMarker))
+    const futureRow = await getDb().select().from(books).where(eq(books.id, futureMarker))
+
+    assert(compatibleRow.length === 1, 'the compatible backup was not the one restored')
+    assert(
+      futureRow.length === 0,
+      'THE FUTURE-SCHEMA BACKUP WAS RESTORED. A rollback would leave the app holding a ' +
+        'database it cannot read.',
+    )
+    return `restored v${SCHEMA_VERSION} backup, skipped the newer v${SCHEMA_VERSION + 1} one`
+  })
 }
 
 // ─── CLEANUP ─────────────────────────────────────────────────────────────────
 
 async function cleanup() {
-  await check('7. cleanup: devcheck rows soft-deleted, backups pruned', async () => {
+  await check('7. cleanup: every row this pass created is soft-deleted', async () => {
+    // The seeded book is included deliberately. Cleanup used to match only 'Devcheck%',
+    // so every run left `The Overstory`, its read and its three sessions behind — and
+    // the NEXT run's seed added three more. A device pass that grows the database it is
+    // checking is a device pass whose counts stop meaning anything.
     const rows = await getDb()
       .select()
       .from(books)
-      .where(sql`${books.title} LIKE 'Devcheck%' AND ${books.deletedAt} IS NULL`)
+      .where(
+        sql`(${books.title} LIKE 'Devcheck%' OR ${books.title} = ${SEEDED_TITLE})
+            AND ${books.deletedAt} IS NULL`,
+      )
     for (const b of rows) await softDelete('books', b.id)
+
+    // The cascade should have taken the reads and sessions with them. Asserting it here
+    // is what makes "cleaned up" a fact rather than an intention.
+    const liveReads = await getDb()
+      .select({ id: reads.id })
+      .from(reads)
+      .innerJoin(books, eq(reads.bookId, books.id))
+      .where(and(isNull(reads.deletedAt), isNotNull(books.deletedAt)))
+    assert(
+      liveReads.length === 0,
+      `${liveReads.length} reads survived their deleted book - the cascade is not working`,
+    )
+
+    const liveSessions = await getDb()
+      .select({ id: sessions.id })
+      .from(sessions)
+      .innerJoin(reads, eq(sessions.readId, reads.id))
+      .where(and(isNull(sessions.deletedAt), isNotNull(reads.deletedAt)))
+    assert(
+      liveSessions.length === 0,
+      `${liveSessions.length} sessions survived their deleted read`,
+    )
+
     pruneBackups()
-    return `${rows.length} devcheck books soft-deleted`
+    return `${rows.length} books soft-deleted, no orphaned reads or sessions`
   })
 }
 

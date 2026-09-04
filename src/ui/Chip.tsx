@@ -11,7 +11,7 @@
 
 import { Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native'
 
-import { font, radius, size } from './theme'
+import { font, motion, radius, rules, size, space, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
 interface Props {
@@ -31,7 +31,7 @@ export function Chip({ label, selected = false, onPress, accessibilityLabel, sty
       accessibilityState={{ selected }}
       accessibilityLabel={accessibilityLabel ?? label}
       onPress={onPress}
-      hitSlop={6}
+      hitSlop={size.hitSlopTight}
       style={({ pressed }) => [
         styles.base,
         {
@@ -45,12 +45,12 @@ export function Chip({ label, selected = false, onPress, accessibilityLabel, sty
       ]}
     >
       <Text
-        numberOfLines={1}
-        style={{
-          color: selected ? c.ground : c.textMuted,
-          fontSize: font.secondary.size + 1,
-          fontWeight: selected ? '600' : '500',
-        }}
+        numberOfLines={2}
+        maxFontSizeMultiplier={rules.maxFontScale}
+        style={[
+          typeStyle(font.chip, { weight: selected ? '600' : '500' }),
+          { color: selected ? c.ground : c.textMuted },
+        ]}
       >
         {label}
       </Text>
@@ -60,10 +60,14 @@ export function Chip({ label, selected = false, onPress, accessibilityLabel, sty
 
 const styles = StyleSheet.create({
   base: {
-    paddingHorizontal: 16,
+    paddingHorizontal: space.chipPadX,
+    // Vertical padding rather than a fixed height: at 200% font scale the pill grows
+    // instead of clipping. Four quick-add chips on a 360px screen is the tightest
+    // layout in the app.
+    paddingVertical: space.labelGap,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
   },
-  pressed: { transform: [{ scale: 0.97 }] },
+  pressed: { transform: [{ scale: motion.press.scale }] },
 })

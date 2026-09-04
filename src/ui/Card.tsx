@@ -8,7 +8,7 @@
 import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 
-import { radius, space } from './theme'
+import { motion, radius, space } from './theme'
 import { useColors } from './useTheme'
 
 interface Props {
@@ -20,7 +20,13 @@ interface Props {
   style?: StyleProp<ViewStyle>
 }
 
-export function Card({ children, variant = 'resting', onPress, accessibilityLabel, style }: Props) {
+export function Card({
+  children,
+  variant = 'resting',
+  onPress,
+  accessibilityLabel,
+  style,
+}: Props) {
   const c = useColors()
 
   const shape: ViewStyle =
@@ -63,5 +69,5 @@ export function Card({ children, variant = 'resting', onPress, accessibilityLabe
 
 const styles = StyleSheet.create({
   base: { borderWidth: 1 },
-  pressed: { transform: [{ scale: 0.97 }], opacity: 0.9 },
+  pressed: { transform: [{ scale: motion.press.scale }], opacity: motion.press.opacity },
 })

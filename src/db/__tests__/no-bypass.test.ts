@@ -7,8 +7,14 @@
  *
  * The other half is behavioural and needs a device: perform a write through the public
  * query API, assert exactly one matching queue row, then force the enqueue to throw and
- * assert the table write rolled back. That lives in `sync-queue.device.test.ts` and
- * runs in Slice 0's device pass.
+ * assert the table write rolled back. It is specified in
+ * `src/db/__tests__/sync-queue.device.md` and implemented in `src/db/devchecks.ts`,
+ * which runs from a `__DEV__`-only button.
+ *
+ * There is no `sync-queue.device.test.ts`, and there cannot be: Metro excludes
+ * `__tests__/` from module resolution, so a device check living there is silently not
+ * bundled. This comment named that file for a while, which is exactly the kind of
+ * pointer that sends the next reader looking for code that does not exist.
  *
  * Run with: npm test
  */
@@ -170,6 +176,41 @@ test('every syncable table is a real table, and local-only tables are excluded',
 })
 
 /**
+ * Extract one table's COLUMN OBJECT from schema.ts, by matching braces rather than by
+ * regex.
+ *
+ * THIS IS THE SECOND VERSION, AND THE FIRST ONE ASSERTED NOTHING FOR TWO TABLES.
+ *
+ * It terminated the column list at the first newline-two-spaces-brace. Tables written
+ * as
+ * `sqliteTable('x', { ... })` — `shelves` and `goals` — close with `})` at column zero
+ * and have no such line, so the match ran on into the NEXT table's body and happily
+ * found that table's `id` and `...syncColumns`. Gutting `shelves` down to a single
+ * column left the test passing.
+ *
+ * A regex cannot find the end of a nested object; brace matching can. The non-vacuity
+ * check below gutted all seven tables in turn and watched this fail seven times.
+ */
+function columnsOf(schemaSource: string, tableName: string): string {
+  const decl = schemaSource.search(new RegExp(String.raw`sqliteTable\(\s*'${tableName}'\s*,`))
+  assert.notEqual(decl, -1, `${tableName} is not declared in schema.ts`)
+
+  const open = schemaSource.indexOf('{', decl)
+  assert.notEqual(open, -1, `no column object found for ${tableName}`)
+
+  let depth = 0
+  for (let i = open; i < schemaSource.length; i += 1) {
+    const ch = schemaSource[i]
+    if (ch === '{') depth += 1
+    else if (ch === '}') {
+      depth -= 1
+      if (depth === 0) return schemaSource.slice(open + 1, i)
+    }
+  }
+  throw new Error(`unbalanced braces reading the columns of ${tableName}`)
+}
+
+/**
  * Guards the bug that finding 2 was: `book_shelves` was registered as syncable while
  * having a composite key and no sync columns, so `softDelete` on it would have failed at
  * runtime on the first shelf removal. The compiler now catches this via `_shapeCheck` in
@@ -179,16 +220,38 @@ test('every syncable table has an id and the full sync columns', () => {
   const schemaSource = readFileSync(join(SRC, 'db', 'schema.ts'), 'utf8')
 
   for (const name of syncableTablesFromSource()) {
-    const body = schemaSource.match(
-      new RegExp(`sqliteTable\\(\\s*'${name}',\\s*\\{([\\s\\S]*?)\\n  \\}`),
-    )
-    assert.ok(body?.[1], `could not read the column list for ${name}`)
+    const columns = columnsOf(schemaSource, name)
 
-    assert.match(body[1], /id: text\('id'\)\.primaryKey\(\)/, `${name} needs a UUID id`)
+    assert.match(columns, /id: text\('id'\)\.primaryKey\(\)/, `${name} needs a UUID id`)
     assert.ok(
-      body[1].includes('...syncColumns'),
+      columns.includes('...syncColumns'),
       `${name} needs created_at, updated_at and deleted_at, or it cannot be soft-deleted ` +
         'and its removal cannot be undone',
     )
   }
+})
+
+/**
+ * The extractor must stop at the table it was asked about.
+ *
+ * This is the assertion that would have failed on the first version: `columnsOf` used to
+ * run past the end of `shelves` and read `book_shelves`, so a gutted table borrowed a
+ * later table's columns and passed. Length is a crude proxy, but a body that has
+ * swallowed a whole other table is an order of magnitude too long, and `shelves` is
+ * exactly the table the old regex could not terminate.
+ */
+test('the column extractor stops at the table it was asked for', () => {
+  const schemaSource = readFileSync(join(SRC, 'db', 'schema.ts'), 'utf8')
+
+  const shelves = columnsOf(schemaSource, 'shelves')
+  assert.ok(
+    !shelves.includes('book_id'),
+    'columnsOf ran past shelves into book_shelves - the guard is vacuous again',
+  )
+
+  const goals = columnsOf(schemaSource, 'goals')
+  assert.ok(
+    !goals.includes('table_name'),
+    'columnsOf ran past goals into sync_queue - the guard is vacuous again',
+  )
 })

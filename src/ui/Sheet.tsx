@@ -13,7 +13,15 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native'
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -23,7 +31,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { font, motion, radius, scrim, space } from './theme'
+import { font, motion, radius, rules, scrim, size, space, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
 interface Props {
@@ -109,19 +117,21 @@ export function Sheet({ visible, onClose, title, children, dismissable = true }:
         {title ? (
           <Text
             accessibilityRole="header"
-            style={{
-              color: c.text,
-              fontSize: font.heading.size,
-              fontWeight: '600',
-              paddingHorizontal: space.screen,
-              paddingBottom: 12,
-            }}
+            maxFontSizeMultiplier={rules.maxFontScale}
+            style={[
+              typeStyle(font.heading),
+              {
+                color: c.text,
+                paddingHorizontal: space.screen,
+                paddingBottom: space.sheetTitleGap,
+              },
+            ]}
           >
             {title}
           </Text>
         ) : null}
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: space.screen, gap: 12 }}
+          contentContainerStyle={{ paddingHorizontal: space.screen, gap: space.sheetGap }}
           keyboardShouldPersistTaps="handled"
         >
           {children}
@@ -148,14 +158,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     borderTopWidth: 1,
-    paddingTop: 10,
+    paddingTop: space.sheetTop,
   },
   grabber: {
-    width: 38,
-    height: 4,
-    borderRadius: 2,
+    width: size.grabber.w,
+    height: size.grabber.h,
+    borderRadius: radius.grabber,
     alignSelf: 'center',
-    marginBottom: 14,
+    marginBottom: space.rowWide,
     opacity: 0.6,
   },
 })

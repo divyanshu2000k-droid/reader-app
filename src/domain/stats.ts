@@ -21,19 +21,32 @@ import { yearOfLocalDay, type LocalDay } from '@/lib/dates'
 export interface ReadingTotals {
   readonly pages: number
   readonly minutes: number
+  /**
+   * Sessions that could not be counted: one end missing, or logged backwards.
+   *
+   * Carried alongside the totals rather than dropped, because a total that quietly
+   * excludes rows is a number the reader cannot reconcile with their own session list.
+   * A non-zero value here is the UI's cue to offer a fix, never to hide the total.
+   */
+  readonly unusable: number
 }
 
-export const EMPTY_TOTALS: ReadingTotals = { pages: 0, minutes: 0 }
+export const EMPTY_TOTALS: ReadingTotals = { pages: 0, minutes: 0, unusable: 0 }
 
 export function totals(sessions: readonly ProgressSession[]): ReadingTotals {
   let pages = 0
   let minutes = 0
+  let unusable = 0
   for (const s of sessions) {
     const amount = sessionAmount(s)
+    if (amount === null) {
+      unusable += 1
+      continue
+    }
     if (s.format === 'pages') pages += amount
     else minutes += amount
   }
-  return { pages, minutes }
+  return { pages, minutes, unusable }
 }
 
 /** Hours, for display only. The stored and summed unit is always minutes. */
@@ -56,16 +69,16 @@ export interface DayTotals extends ReadingTotals {
  * zeroes and a list does not.
  */
 export function dailyTotals(sessions: readonly ProgressSession[]): DayTotals[] {
-  const byDay = new Map<LocalDay, { pages: number; minutes: number }>()
+  const byDay = new Map<LocalDay, ProgressSession[]>()
   for (const s of sessions) {
-    const bucket = byDay.get(s.localDay) ?? { pages: 0, minutes: 0 }
-    const amount = sessionAmount(s)
-    if (s.format === 'pages') bucket.pages += amount
-    else bucket.minutes += amount
+    const bucket = byDay.get(s.localDay) ?? []
+    bucket.push(s)
     byDay.set(s.localDay, bucket)
   }
+  // Delegates to `totals` rather than re-implementing the sum, so the unusable-session
+  // rule cannot be right in one function and wrong in the other.
   return [...byDay.entries()]
-    .map(([day, t]) => ({ day, pages: t.pages, minutes: t.minutes }))
+    .map(([day, rows]) => ({ day, ...totals(rows) }))
     .sort((a, b) => a.day.localeCompare(b.day))
 }
 

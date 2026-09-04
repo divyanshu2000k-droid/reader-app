@@ -249,7 +249,8 @@ counts break progress and statistics silently, which is worse than an obvious er
 | Navigation | Expo Router | File based, legible, deep linking free |
 | State | Zustand | Minimal, no boilerplate, assistant writes it well |
 | Server state | TanStack Query | Only for the two search APIs, not for local data |
-| Styling | StyleSheet plus a typed theme object | No extra runtime; theme file mirrors the design system sheet exactly |
+| Styling | StyleSheet plus a typed theme object | No extra runtime; theme file mirrors the design system sheet exactly. Every colour, spacing, radius and type size is lint-enforced to come from it |
+| Fonts | Plus Jakarta Sans, embedded at build time via the `expo-font` config plugin | Five weights linked as an Android XML font family, so one `fontFamily` plus a `fontWeight` resolves correctly. Runtime `useFonts()` would mean a blocked splash or a visible reflow against a sub-2s cold start. Applied only through `typeStyle()` in `theme.ts` |
 | Lists | FlashList | FlatList will not survive a 2000 book import |
 | Payments | RevenueCat | Free under $2500 monthly tracked revenue, handles Play billing edge cases you should not hand write |
 | Strings | One flat `src/lib/strings.ts` | No i18n library. Costs nothing now, saves the India localisation later. See `06-CONVENTIONS.md` |

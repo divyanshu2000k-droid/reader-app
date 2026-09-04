@@ -18,7 +18,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 
-import { motion, radius, rules, size } from './theme'
+import { font, motion, radius, rules, size, space } from './theme'
 import { useColors } from './useTheme'
 
 interface SkeletonProps {
@@ -32,11 +32,7 @@ export function Skeleton({ width = '100%', height = 12, style }: SkeletonProps) 
   const shimmer = useSharedValue(0)
 
   useEffect(() => {
-    shimmer.value = withRepeat(
-      withTiming(1, { duration: motion.shimmer.duration }),
-      -1,
-      false,
-    )
+    shimmer.value = withRepeat(withTiming(1, { duration: motion.shimmer.duration }), -1, false)
   }, [shimmer])
 
   const sweep = useAnimatedStyle(() => ({ opacity: 0.35 + shimmer.value * 0.35 }))
@@ -44,7 +40,7 @@ export function Skeleton({ width = '100%', height = 12, style }: SkeletonProps) 
   return (
     <Animated.View
       style={[
-        { width, height, borderRadius: 6, backgroundColor: c.surfaceRaised },
+        { width, height, borderRadius: radius.skeleton, backgroundColor: c.surfaceRaised },
         sweep,
         style,
       ]}
@@ -57,10 +53,14 @@ export function SkeletonBookRow() {
   const c = useColors()
   return (
     <View style={[styles.row, { borderColor: c.border, borderRadius: radius.card }]}>
-      <Skeleton width={size.coverList.w} height={size.coverList.h} style={{ borderRadius: radius.cover }} />
+      <Skeleton
+        width={size.coverList.w}
+        height={size.coverList.h}
+        style={{ borderRadius: radius.cover }}
+      />
       <View style={styles.rowText}>
-        <Skeleton width="70%" height={14} />
-        <Skeleton width="45%" height={11} />
+        <Skeleton width="70%" height={font.bodyStrong.lineHeight} />
+        <Skeleton width="45%" height={font.secondary.lineHeight} />
         <Skeleton width="100%" height={size.progressBar} />
       </View>
     </View>
@@ -99,6 +99,12 @@ export function SkeletonGate({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 14, padding: 12, borderWidth: 1, alignItems: 'center' },
-  rowText: { flex: 1, gap: 8 },
+  row: {
+    flexDirection: 'row',
+    gap: space.rowWide,
+    padding: space.cardTight,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  rowText: { flex: 1, gap: space.row },
 })

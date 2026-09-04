@@ -1,0 +1,12 @@
+{
+  // The test files, and only the test files, get the Node globals. They run under
+  // `tsx --test` on the desktop rather than on a phone, so `node:test`, `node:assert`
+  // and `node:fs` are legitimate there and nowhere else.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/**/__tests__/**/*.ts"],
+  // The base config excludes the tests; this one is only about them.
+  "exclude": ["node_modules", "android", "ios"]
+}

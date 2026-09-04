@@ -153,6 +153,273 @@ and `eas.json` already carries a `development` profile.
 **Revisit:** as soon as the diagnostic prints ALL CHECKS PASSED, retry
 `npx expo run:android`. Everything else in the toolchain is verified working.
 
+## 2026-09-04 · Prettier owns formatting, with exactly one exemption
+**Chose:** keep Prettier, add `.prettierignore` covering `src/ui/theme.ts` and the
+generated migrations, format every other file, and add `format:check` so the state is
+verifiable rather than aspirational.
+**Over:** dropping Prettier and letting ESLint own formatting.
+**Because:** `eslint-config-prettier` is already in the chain, and its entire job is
+turning ESLint's formatting rules *off*. Dropping Prettier would leave nothing owning
+layout until a stylistic plugin was added and configured — a new dependency and a new
+config surface to buy back something already installed and working.
+**The exemption is `theme.ts`, and it is deliberate.** Its scales are aligned columns:
+
+    heading:     { size: 17, weight: '600', letterSpacing: -0.3, lineHeight: 22 }
+    bodyStrong:  { size: 14.5, weight: '600', letterSpacing: -0.15, lineHeight: 20 }
+
+Prettier collapses that to one space after each colon. The alignment is the point: the
+file is a design system sheet expressed in code, and reading a scale as a table is how a
+wrong value gets spotted. One exemption is a judgement; a second would be a pattern, so
+argue for it before adding one.
+**What was actually wrong before:** Prettier was installed, a `format` script existed, and
+26 files did not pass — including files nobody had touched in weeks. Half-enforced
+formatting is worse than either extreme, because every real diff arrives buried in
+unrelated reflow.
+**Revisit if:** the alignment in `theme.ts` stops being maintained by hand, at which point
+the exemption is buying nothing and should go.
+
+## 2026-09-04 · The specs now describe the code that exists
+Documentation drift found while checking `docs/` against `src/` after the review. Each of
+these was a doc asserting something the code had stopped doing, which is worse than
+silence — the specs are the thing a future session trusts when its context is gone.
+
+- **`03-DATA-MODEL.md` still described `book_shelves` with a composite primary key**, four
+  months of decisions after it gained a UUID id, the full sync columns and a partial
+  unique index. The doc described the exact shape that would have crashed `writeRow` on
+  the first shelf assignment. Now documents the real shape *and* why the tidier relational
+  answer was rejected.
+- **Enum columns were documented as bare `TEXT`.** They carry `.$type<T>()`, which is what
+  makes a database row assignable to its domain type without a cast. Added as a table,
+  with the reason, because "it is just a string" is how the cast comes back.
+- **The backup contract omitted all three device-found facts:** checkpoint the WAL and
+  copy the sidecars, close the connection before restoring, clear the live sidecars first.
+  The doc said "restore the newest backup"; the code correctly restores the newest backup
+  *this build can read*. All four now recorded where the contract lives.
+- **`06-CONVENTIONS.md` said "one transaction" without saying how that had been false.**
+  Added the `runInTransaction` rule, why an async callback typechecks and silently commits
+  early, and what the two source guards catch — plus why the substitute test passed.
+- **`05-BUILD-PLAN.md` carried the scale work nowhere.** Slice 2 now owns the 2000-book
+  seed, migrations at scale and the 60fps budget as one item, because they are only
+  meaningful together. Slice 6 now states plainly that everything before it ran on an
+  x86_64 emulator, that arm64 has never been compiled, and that OEM background-killing is
+  first exercised there.
+- **`04-SCREENS.md` promised an undo toast** without saying toasts queue, and required
+  360px width without requiring 200% font scale.
+- **`02-ARCHITECTURE.md` had no row for fonts** despite the theme naming a typeface.
+- **`CLAUDE.md` said `npx tsc --noEmit`**, which now typechecks only half the tree.
+
+**The pattern worth naming:** every one of these was a doc that was true when written. The
+rule in `06-CONVENTIONS.md` — keep `docs/` current in the same commit as the change — is
+the cheap version of this sweep, and this sweep is what it costs when the rule slips.
+
+## 2026-09-04 · Slice 0 code review: twenty fixes, four of them silent data bugs
+
+A full review of `src/` by a reader coming to it cold. Everything below was found by
+reading against the specs rather than by anything failing — typecheck, lint and all tests
+were green throughout. That is the whole point, and it is why the **silent-pass hazard**
+now has its own section in `CLAUDE.md`.
+
+### 1 · `writeRow` rewrote `created_at` on every update
+**The bug:** `onConflictDoUpdate({ target: t.id, set: row })` was handed the caller's
+entire values object, `createdAt` included. Every update therefore reset the row's
+creation date to whatever the caller happened to pass. Editing a book's title six months
+on silently moved it to today, and a library sorted by date added would quietly be wrong.
+**Fix:** `RowFor<K>` now `Omit`s `createdAt`, `updatedAt` and `deletedAt` entirely. The
+caller cannot supply them; `writeRow` stamps `createdAt` on insert only and `updatedAt` on
+both, and the conflict `set` excludes the identity and the creation date.
+**Why omit rather than ignore:** excluding `deletedAt` too means a delete cannot be
+performed by passing `deletedAt` to `writeRow`, which would have enqueued an `upsert`
+instead of a `delete` and skipped the cascade below.
+
+### 2 · The schema guard asserted nothing for two of the seven tables
+**The bug:** `no-bypass.test.ts` extracted a table's column list with a regex terminating
+at the first `\n  }`. Tables written as `sqliteTable('x', { … })` — `shelves` and `goals` —
+close with `})` at column zero, so the match ran on into the *next* table's body and found
+that table's `id` and `...syncColumns`. Gutting `shelves` to a single column left the test
+green. This is the guard that exists specifically to catch the `book_shelves` mistake.
+**Fix:** brace matching instead of a regex — a regex cannot find the end of a nested
+object — plus a second test asserting the extractor stops at the table it was asked for.
+**Proven, not assumed:** each of the seven tables was gutted in turn, twice — once with no
+`id` and once with no `...syncColumns` — and the guard was watched to fail all fourteen
+times, then to pass again on the restored file.
+
+### 3 · `softDelete` and `restoreRow` enqueued for writes that changed nothing
+**The bug:** `UPDATE … WHERE id = ?` against a missing or already-deleted row succeeds
+with zero rows changed, and the queue row was written regardless. Sync-queue replay
+idempotency is on the must-test list in `06-CONVENTIONS.md`, and this is the case that
+breaks its assumption.
+**Fix:** the predicates gained `isNull(deletedAt)` / `isNotNull(deletedAt)`, which is what
+makes `changes` trustworthy — zero now means "nothing to do" precisely — and both
+functions return without enqueueing.
+
+### 4 · `restoreNewestBackup` ignored the schema version in its own filename
+**The bug:** backups are named `reader-<schemaVersion>-<unixMs>.db` and were selected
+purely by timestamp. After a rollback to an older build — a halted staged release, a
+reinstalled older APK — the newest backup on disk is from a schema this binary has never
+seen. Restoring it hands the app a database with columns it cannot read, which is a worse
+state than the failed migration being rolled back, in the exact situation where the reader
+is already having a bad day.
+**Fix:** `restoreNewestBackup(currentSchemaVersion)` takes the newest backup whose version
+is `<= current`, and reports "No backup this version can read" when only newer ones exist.
+`listBackups` now parses the name with a strict pattern and ignores anything that does not
+match, rather than guessing an age from `split('-').pop()`.
+**Also killed the sentinel.** `backupBeforeMigration` returned `ok({ name: 'none', uri: '' })`
+on a fresh install and `restoreNewestBackup` had a matching `!uri` check — a second
+outcome smuggled through the success branch, which every caller has to know about and one
+will eventually forget. It now returns a `BackupOutcome` union of `made | skipped`; the
+compiler found all four call sites.
+**New device check 6b** asserts the direction that matters: given a compatible backup AND
+a more recent incompatible one, the compatible one is restored.
+
+### 5 · Soft delete now cascades. A deleted book stops counting.
+**Chose:** soft-deleting a book soft-deletes its reads, their sessions, its notes and its
+shelf assignments, in the same transaction, each with its own queue row. Restore reverses
+exactly that set.
+**Over:** leaving children live and filtering on the parent's `deleted_at` in every query.
+**Because:** a book with `deleted_at` set and live sessions keeps contributing to every
+statistic. The reader's yearly pages include a book that is no longer in their library and
+no screen can explain the discrepancy — and a total that cannot be reconciled poisons
+trust in every other total. "Remember to filter the parent" across a dozen `queries.ts`
+files is the same losing strategy as "remember to enqueue", which is why `write.ts` exists
+at all.
+**How restore knows what to undo:** every row in one cascade carries the same
+`deleted_at`, and restore clears only children matching the parent's exact timestamp. A
+session deleted separately last week has a different one and stays deleted — undoing
+"remove this book" must not resurrect something the reader meant to throw away. No new
+column needed.
+**Cost, accepted:** deleting a book with 500 sessions writes 500 queue rows. Correct —
+each genuinely has to reach the server — and it is one transaction, so it stays one atomic
+undoable action. A batch delete should raise one toast, not five hundred.
+**Written into `docs/03-DATA-MODEL.md`** as its own section.
+
+### 6 · Enum columns carry their unions; the hand-written duplicates are gone
+**The bug:** `sessions.format` was a bare `text()` inferring as `string`, while
+`ProgressSession.format` was `SessionFormat`. A row read from the database was therefore
+*not assignable* to the domain type it describes, and the first `queries.ts` in Slice 2
+would have needed a cast — under slice pressure, that is what it would have got.
+**Fix:** `.$type<SessionFormat>()` and friends on `format`, `status`, `source`, `type` and
+`sync_queue.operation`. The unions moved to the top of `schema.ts` as the single source
+and the parallel re-declaration at the bottom is deleted. `06-CONVENTIONS.md` forbids
+hand-written duplicates of schema types; that is exactly what they were.
+
+### 7 · The Toast is a queue, not a slot
+**The bug:** `present` replaced the visible toast wholesale. Deleting two sessions in
+quick succession — the most ordinary interaction in a list — discarded the first delete's
+undo before the reader could reach it. No warning, no trace, row already gone. Rule 2 says
+undo on every destructive action, and the one component responsible was dropping them.
+**Fix:** a FIFO queue; each toast gets its own full `rules.toastMs` window, keyed by id so
+it never inherits the remainder of the previous one's timer.
+**Deliberately not capped**, because dropping on overflow reintroduces the bug. A screen
+deleting many rows should raise ONE toast whose undo reverses the batch; that is the
+caller's job and it is written down in the file.
+
+### 8 · The app now renders in Plus Jakarta Sans, for the first time
+**The bug:** `font.family` has been in `theme.ts` since the first commit, `expo-font` was
+never installed, and no component ever set `fontFamily`. Every string in the app rendered
+in Roboto while the design system claimed otherwise, and nothing looked broken enough to
+notice.
+**Chose:** `expo-font`'s config plugin with `android.fonts[].fontDefinitions`, embedding
+five weights at build time.
+**Over:** `useFonts()` at runtime.
+**Because:** the cold-start budget is under two seconds and a runtime load means either a
+blocked splash or a visible reflow when the real face arrives. The `fontDefinitions` form
+generates an Android XML font family, so one `fontFamily` plus a `fontWeight` resolves to
+the right file — the plain `fonts: [...]` array does NOT do weight mapping on Android and
+every weight would have silently rendered as whichever file loaded first.
+**Applied through `typeStyle(font.token)`,** the only place `font.family` is set, and a
+lint rule now bans bare `fontSize` / `fontWeight` / `fontFamily` in components. A
+hand-written text style is how the family gets forgotten again.
+**Requires a native rebuild** (`npx expo run:android`); it will not appear over Metro
+alone.
+
+### 9 · The lint rule covers spacing, radii and type sizes, not just colours
+**The bug:** `CLAUDE.md` rule 3 names colours, spacing, radii *and* type sizes; the rule
+checked colours. The other three drifted freely, and the shared primitives were the worst
+offenders — a pill height of `34`, four inline radii, a dozen bare paddings, and four
+components inventing font sizes as `font.body.size + 0.5`: a size that does not exist,
+written so it reads as though it does.
+**Fix:** bare numbers are banned on every spacing, radius and type property (zero is
+allowed — it means "none", not a chosen value), and token-against-literal arithmetic is
+banned outright. Every value it caught was named in `theme.ts`: `font.button`,
+`font.buttonSmall`, `font.chip`, `font.input`, sixteen new `space` entries, four `radius`,
+`size.pill`, `size.grabber`, `size.fieldMultiline`, and a `shadow` group.
+**Deliberately allows `insets.bottom + space.bottomSafe`:** adding a runtime value the
+theme cannot know to a token is the correct way to use one. Only literals are the hazard.
+**Verified non-vacuous** against a probe file: four violations caught, and zero,
+`flex: 1`, `borderWidth: 1`, `opacity` and `'100%'` correctly ignored.
+
+### 10 · 200% font scale: the primitives were the thing breaking it
+**The bug:** `rules.maxFontScale = 2.0` was declared and enforced nowhere, while `Button`,
+`Chip`, `Field` and `Segmented` combined fixed heights with `numberOfLines={1}`. Every
+label clipped at large font scale — the accessibility failure `06-CONVENTIONS.md` singles
+out by name, baked into the shared components before a single screen existed.
+**Fix:** `maxFontSizeMultiplier={rules.maxFontScale}` on every `Text` and `TextInput`;
+fixed heights became `minHeight` with vertical padding, so controls grow instead of
+clipping; single-line labels became two.
+**Added to Slice 11 and to the pre-submit checklist**, because only real screens prove it.
+
+### 11 · The domain surfaces bad data instead of swallowing it
+**`sessionAmount` returned 0 for a backwards session.** A session typed as page 120 to 40
+contributed nothing to any total, with no error, no flag and no way for the reader to find
+the row responsible — their pages number was simply wrong and unexplainable. It now
+returns `null`, `isBackwards()` names the case, and `ReadingTotals` carries an `unusable`
+count so a total that excludes rows can say so. Silently discarding a row the reader
+deliberately created is the worst of the three options.
+**`currentPosition` returned 0 when it meant "nothing says".** For a read with only
+audiobook sessions it reported page 0, so book detail would confidently print "page 0 of
+502" for a book the reader was ten hours into. Now `number | null`, matching
+`percentComplete` right beside it, which had this right all along.
+**`dailyTotals` now delegates to `totals`** rather than re-implementing the sum, so the
+unusable rule cannot be right in one function and wrong in the other.
+
+### 12 · Smaller, but each one real
+- **Missing indexes.** `reads.status` (the library list filters on it first), a partial
+  unique on `(book_id, read_number)`, and `idx_books_title` / `idx_books_isbn` made partial
+  on `deleted_at IS NULL` — they were the only non-partial indexes in the schema, so the
+  index the library scans carried every book ever deleted. Migration `0001`.
+- **`"types": ["node"]` was global,** putting `Buffer`, `__dirname` and `node:fs` in scope
+  for app code: typechecks, lints, crashes on the device. Now `"types": []` with a separate
+  `tsconfig.test.json` for the test files, and `npm run typecheck` runs both. Verified:
+  those three are now compile errors in `src/lib/`. `process.env` remains legal because
+  Expo itself declares it for `EXPO_PUBLIC_*`, which is correct.
+- **`ScreenGlow` used a fixed SVG gradient id.** SVG ids are document-global, so two
+  `Screen`s mounted at once — which happens the moment a sheet hosts one — collide and one
+  wins for both. Now per-instance via `useId()`, stripped to word characters.
+- **`test:tz` did not run `streaks.test.ts`,** the one suite where the timezone genuinely
+  changes the answer, holding the DST case and every "11pm on the 31st" boundary. It ran
+  only in whatever zone the machine happened to be in. Now a readable
+  `scripts/test-tz.js`; 27 tests in each of UTC, IST and US Central.
+- **`app.config.ts` hardcoded `#0B0A08`** for the adaptive icon, a copy of
+  `theme.dark.ground` outside the lint rule's reach. It imports the token now.
+- **Two stale doc pointers fixed.** `no-bypass.test.ts` referenced a
+  `sync-queue.device.test.ts` that does not and cannot exist — Metro excludes `__tests__/`
+  from resolution — and `DECISIONS.md` claimed `theme.ts` gained a `_lightMatchesDark`
+  symbol that was never written. Both corrected in place, the latter with a visible
+  correction note rather than a rewrite: this file is how context gets rebuilt, so a false
+  claim in it is worse than a missing one.
+- **`index.tsx` recomputed the device-pass tally** instead of calling `summarise`, leaving
+  `summarise` dead and the runtime/compile-time split implemented twice — the exact drift
+  back to one inflated number that the split exists to prevent.
+- **The device pass left its seed behind.** Cleanup matched only `Devcheck%`, so every run
+  left `The Overstory`, its read and its three sessions, and the next run's seed added
+  three more. A device pass that grows the database it is checking produces counts that
+  stop meaning anything. It now removes the seeded book too and asserts no orphaned reads
+  or sessions survive — which doubles as the cascade's behavioural test.
+
+**Deferred deliberately, all recorded where they will be seen:**
+- Error boundary, Sentry and migration retry → **Slice 1**, written into
+  `docs/05-BUILD-PLAN.md` with its own "done when". `runMigrations()` memoises its promise
+  for the process lifetime, so today a failed migration cannot be retried without killing
+  the app.
+- `Sheet`'s scrim runs `withTiming` on an already-animated value, so reduce-motion only
+  half applies → **Slice 11** polish. Cosmetic.
+- 2000-book scale and FlashList tuning → **Slice 2**, unchanged from the earlier entry.
+
+**NOT YET RUN ON A DEVICE.** Migration `0001` has never executed against a real database,
+and `06-CONVENTIONS.md` forbids shipping a migration that has not run against a seeded one.
+Device checks `6b` and `7` are new. The next device pass is a gate on Slice 1, not a
+formality.
+
 <!-- Add entries below, newest first -->
 
 ## 2026-09-03 · THE WRITE PATH WAS NEVER ATOMIC. Caught by the real atomicity test.
@@ -352,9 +619,17 @@ no error boundary can catch.
 `animationType="none"` so the Modal does not run competing timing, and `useReducedMotion`
 zeroing both. Previously the comment cited the tokens and the code used the Modal's
 default slide. A comment describing behaviour the code lacks is worse than no comment.
-**Also · `theme.ts` gained `_lightMatchesDark`,** a structural check that light and dark
-carry the same tokens, so a token added to one and forgotten in the other is a compile
-error rather than something a cast hides at the call site.
+**Also · `theme.ts` enforces that light and dark carry the same tokens,** so a token
+added to one and forgotten in the other is a compile error rather than something a cast
+hides at the call site.
+
+> **Corrected 2026-09-04.** This entry originally said `theme.ts` gained a
+> `_lightMatchesDark` structural check. There is no such symbol and there never was: the
+> guarantee is delivered by an explicit `Palette` interface plus `satisfies Palette` on
+> each scheme, which is strictly better because it fails at the palette rather than at a
+> call site. Left visible rather than rewritten, because this file is how context gets
+> rebuilt and a claim about a symbol that does not exist sends the next reader hunting
+> for it.
 
 ## 2026-09-03 · When exactly a streak breaks
 **Chose:** with D as the most recent day having a session, the streak is alive on D and

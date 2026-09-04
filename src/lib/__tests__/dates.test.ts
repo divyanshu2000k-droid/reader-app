@@ -32,7 +32,7 @@ test('local_day is the calendar day the reader experienced, not the UTC day', ()
   assert.equal(toLocalDay(localTime(2026, 6, 15, 12, 0)), '2026-06-15')
 })
 
-test('a late-night session on New Year\'s Eve belongs to the year that was ending', () => {
+test("a late-night session on New Year's Eve belongs to the year that was ending", () => {
   assert.equal(localYearOf(localTime(2026, 12, 31, 23, 30)), 2026)
   assert.equal(localYearOf(localTime(2027, 1, 1, 0, 30)), 2027)
 })

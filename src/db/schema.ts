@@ -27,6 +27,20 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
 
+// ─── THE DOMAIN VOCABULARY ───────────────────────────────────────────────────
+// Declared here and attached to their columns with `.$type<>()` below, so
+// `Session['format']` IS `SessionFormat` rather than a `string` that happens to agree
+// with one. A parallel union next to a bare `text()` column is the hand-written
+// duplicate that docs/06-CONVENTIONS.md forbids: it lets a row read from the database
+// fail to satisfy a domain type, and the fix at that call site is always a cast.
+
+export type ReadStatus = 'want' | 'reading' | 'finished' | 'dnf'
+export type SessionFormat = 'pages' | 'minutes'
+export type BookSource = 'google' | 'openlibrary' | 'manual' | 'import'
+export type NoteType = 'quote' | 'note'
+/** Local only, but the same rule applies: the column carries the union, not `string`. */
+export type SyncOperation = 'upsert' | 'delete'
+
 /** Columns every syncable table carries. Spread into each table definition. */
 const syncColumns = {
   createdAt: integer('created_at').notNull(),
@@ -57,15 +71,20 @@ export const books = sqliteTable(
     coverColor: text('cover_color'),
     publisher: text('publisher'),
     publishedYear: integer('published_year'),
-    /** `google` | `openlibrary` | `manual` | `import` */
-    source: text('source').notNull().default('manual'),
+    source: text('source').$type<BookSource>().notNull().default('manual'),
     /** The upstream id, for a later metadata refresh. */
     sourceId: text('source_id'),
     ...syncColumns,
   },
   (t) => [
-    index('idx_books_title').on(t.title),
-    index('idx_books_isbn').on(t.isbn13),
+    // Partial like every other index here: a deleted book is never listed or searched,
+    // so it has no business in the index the library list scans.
+    index('idx_books_title')
+      .on(t.title)
+      .where(sql`deleted_at IS NULL`),
+    index('idx_books_isbn')
+      .on(t.isbn13)
+      .where(sql`deleted_at IS NULL`),
   ],
 )
 
@@ -81,8 +100,8 @@ export const reads = sqliteTable(
     bookId: text('book_id')
       .notNull()
       .references(() => books.id),
-    /** `want` | `reading` | `finished` | `dnf`. DNF is first class; its pages still count. */
-    status: text('status').notNull(),
+    /** DNF is first class; its pages still count. */
+    status: text('status').$type<ReadStatus>().notNull(),
     /** 0.5 to 5.0 in 0.5 steps. */
     rating: real('rating'),
     review: text('review'),
@@ -104,7 +123,18 @@ export const reads = sqliteTable(
     ...syncColumns,
   },
   (t) => [
-    index('idx_reads_book').on(t.bookId).where(sql`deleted_at IS NULL`),
+    index('idx_reads_book')
+      .on(t.bookId)
+      .where(sql`deleted_at IS NULL`),
+    // The library list filters by status before anything else.
+    index('idx_reads_status')
+      .on(t.status)
+      .where(sql`deleted_at IS NULL`),
+    // One read number per book. Partial, so a deleted read frees its number to be
+    // re-used, exactly like the book_shelves pair index.
+    uniqueIndex('idx_reads_book_number')
+      .on(t.bookId, t.readNumber)
+      .where(sql`deleted_at IS NULL`),
   ],
 )
 
@@ -136,8 +166,8 @@ export const sessions = sqliteTable(
      * aggregate groups on this column. See DECISIONS.md, 2026-09-03.
      */
     localDay: text('local_day').notNull(),
-    /** `pages` | `minutes`. Lives on the session, not the book, so one book can hold both. */
-    format: text('format').notNull(),
+    /** Lives on the session, not the book, so one book can hold both. */
+    format: text('format').$type<SessionFormat>().notNull(),
     fromPosition: integer('from_position'),
     toPosition: integer('to_position'),
     /** Only set for timed sessions. NULL plus isTimed=1 means the session is still open. */
@@ -148,10 +178,16 @@ export const sessions = sqliteTable(
     ...syncColumns,
   },
   (t) => [
-    index('idx_sessions_read').on(t.readId).where(sql`deleted_at IS NULL`),
-    index('idx_sessions_date').on(t.occurredAt).where(sql`deleted_at IS NULL`),
+    index('idx_sessions_read')
+      .on(t.readId)
+      .where(sql`deleted_at IS NULL`),
+    index('idx_sessions_date')
+      .on(t.occurredAt)
+      .where(sql`deleted_at IS NULL`),
     // Carries every statistics query, because every day bucket groups on it.
-    index('idx_sessions_day').on(t.localDay).where(sql`deleted_at IS NULL`),
+    index('idx_sessions_day')
+      .on(t.localDay)
+      .where(sql`deleted_at IS NULL`),
   ],
 )
 
@@ -195,7 +231,9 @@ export const bookShelves = sqliteTable(
     uniqueIndex('idx_book_shelves_pair')
       .on(t.bookId, t.shelfId)
       .where(sql`deleted_at IS NULL`),
-    index('idx_book_shelves_book').on(t.bookId).where(sql`deleted_at IS NULL`),
+    index('idx_book_shelves_book')
+      .on(t.bookId)
+      .where(sql`deleted_at IS NULL`),
   ],
 )
 
@@ -211,14 +249,17 @@ export const notes = sqliteTable(
       .references(() => books.id),
     /** Nullable, for provenance only. */
     readId: text('read_id').references(() => reads.id),
-    /** `quote` | `note` */
-    type: text('type').notNull().default('note'),
+    type: text('type').$type<NoteType>().notNull().default('note'),
     content: text('content').notNull(),
     page: integer('page'),
     imagePath: text('image_path'),
     ...syncColumns,
   },
-  (t) => [index('idx_notes_book').on(t.bookId).where(sql`deleted_at IS NULL`)],
+  (t) => [
+    index('idx_notes_book')
+      .on(t.bookId)
+      .where(sql`deleted_at IS NULL`),
+  ],
 )
 
 // ─── GOALS ───────────────────────────────────────────────────────────────────
@@ -242,8 +283,7 @@ export const syncQueue = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     tableName: text('table_name').notNull(),
     rowId: text('row_id').notNull(),
-    /** `upsert` | `delete` */
-    operation: text('operation').notNull(),
+    operation: text('operation').$type<SyncOperation>().notNull(),
     queuedAt: integer('queued_at').notNull(),
     attempts: integer('attempts').notNull().default(0),
   },
@@ -283,8 +323,3 @@ export type BookShelf = typeof bookShelves.$inferSelect
 export type NewBookShelf = typeof bookShelves.$inferInsert
 export type Goal = typeof goals.$inferSelect
 export type NewGoal = typeof goals.$inferInsert
-
-export type ReadStatus = 'want' | 'reading' | 'finished' | 'dnf'
-export type SessionFormat = 'pages' | 'minutes'
-export type BookSource = 'google' | 'openlibrary' | 'manual' | 'import'
-export type NoteType = 'quote' | 'note'

@@ -32,6 +32,24 @@ book                 the work itself. Metadata only, no dates, no progress.
 SQLite locally, Postgres remotely, same shape. Drizzle definitions live in
 `src/db/schema.ts`.
 
+**Every enum-ish column below carries its union through `.$type<T>()`,** and the unions
+are declared at the top of `schema.ts` as the single source:
+
+| Column | Type |
+|---|---|
+| `books.source` | `BookSource` — `google` · `openlibrary` · `manual` · `import` |
+| `reads.status` | `ReadStatus` — `want` · `reading` · `finished` · `dnf` |
+| `sessions.format` | `SessionFormat` — `pages` · `minutes` |
+| `notes.type` | `NoteType` — `quote` · `note` |
+| `sync_queue.operation` | `SyncOperation` — `upsert` · `delete` |
+
+This is not decoration. Without `.$type<>()` these infer as `string`, so a row read from
+the database is **not assignable** to the domain type that describes it — `Session` would
+not satisfy `ProgressSession` — and the fix at the call site is always a cast. Twelve
+`queries.ts` files casting rows into domain types is how a `format` of `"Pages"` from a
+bad import reaches the statistics code. A parallel hand-written union beside a bare
+`text()` column is the duplicate `06-CONVENTIONS.md` forbids; the column IS the type.
+
 ### `books`
 
 The work. Contains no progress and no dates, deliberately.
@@ -135,7 +153,21 @@ Free form tags, many to many. Not three hardcoded statuses. Users want mood shel
 priority queues and series groupings.
 
 `shelves`: `id`, `name`, `color`, `sort_order`, timestamps.
-`book_shelves`: `book_id`, `shelf_id`, `added_at`. Composite PK.
+`book_shelves`: `id` (UUID PK), `book_id`, `shelf_id`, `added_at`, and the full
+`created_at` / `updated_at` / `deleted_at` set, plus
+`UNIQUE (book_id, shelf_id) WHERE deleted_at IS NULL`.
+
+**NOT a composite primary key, though that is the tidier relational answer.** A composite
+key leaves nowhere to put `deleted_at`, which would make a shelf assignment the only row
+in the app that cannot be soft-deleted, and therefore the only destructive action with no
+undo — breaking a non-negotiable rule to save one column. It also broke the write path
+outright: the table was registered as syncable, so `writeRow` would have emitted
+`onConflictDoUpdate` against a nonexistent `id` and `softDelete` would have set a column
+that did not exist, crashing on the first shelf assignment in Slice 2.
+
+The partial unique index buys back exactly what the composite key was for: one live
+assignment per book-and-shelf pair, while still allowing the pair to be re-added after a
+soft delete.
 
 Note that `status` on `reads` and shelves are different things. Status is where a book is
 in its lifecycle; shelves are the user's own organisation.
@@ -218,17 +250,64 @@ Add these from the first migration, not when it gets slow.
 
 ```sql
 CREATE INDEX idx_reads_book       ON reads(book_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_reads_status     ON reads(status)  WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_reads_book_number
+                                  ON reads(book_id, read_number) WHERE deleted_at IS NULL;
 CREATE INDEX idx_sessions_read    ON sessions(read_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_sessions_date    ON sessions(occurred_at) WHERE deleted_at IS NULL;
 CREATE INDEX idx_sessions_day     ON sessions(local_day)   WHERE deleted_at IS NULL;
-CREATE INDEX idx_books_title      ON books(title);
-CREATE INDEX idx_books_isbn       ON books(isbn13);
+CREATE INDEX idx_books_title      ON books(title)   WHERE deleted_at IS NULL;
+CREATE INDEX idx_books_isbn       ON books(isbn13)  WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX idx_book_shelves_pair
+                                  ON book_shelves(book_id, shelf_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_book_shelves_book ON book_shelves(book_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_notes_book       ON notes(book_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_sync_queue       ON sync_queue(queued_at);
 ```
+
+**Every index on a soft-deletable table is partial.** The two on `books` were not, which
+meant the index the library list scans carried every book the reader had ever deleted.
+`idx_reads_status` exists because the library list filters on status before anything
+else. `idx_reads_book_number` is unique and partial: one live read number per book, and a
+deleted read frees its number to be re-used, exactly like the `book_shelves` pair index.
 
 The `local_day` index carries every statistics query, because every day-bucketed aggregate
 groups on it. It matters most. The `occurred_at` index carries ordering within a day and
 the session list on book detail.
+
+---
+
+## What a delete takes with it
+
+Deleting is soft everywhere, and **a soft delete cascades to the rows that belong to the
+deleted row**, in the same transaction, each with its own `sync_queue` entry.
+
+| Deleting a | also soft-deletes |
+|---|---|
+| `book` | its `reads`, their `sessions`, its `notes`, its `book_shelves` |
+| `read` | its `sessions` |
+| `shelf` | its `book_shelves` |
+
+**Why, and it is not obvious.** The alternative — setting `deleted_at` on the book and
+leaving its sessions live — is what the code shipped with. It means every statistic keeps
+counting a book the reader deleted: their yearly pages include a book that is no longer in
+their library, and there is no screen on which that number can be explained. A reader who
+cannot reconcile a total against their own data stops trusting every total, which is
+precisely the failure this product exists to avoid. The alternative fix, "remember to
+filter on the parent's `deleted_at`" in every one of a dozen `queries.ts` files, is the
+same losing strategy as "remember to enqueue".
+
+**How restore knows what to undo.** Every row in one cascade is stamped with the *same*
+`deleted_at`, and restoring the parent clears only children carrying that exact timestamp.
+A session the reader deleted separately last week has a different timestamp and stays
+deleted — undoing "remove this book" must not resurrect something they meant to throw
+away.
+
+**The cost, accepted deliberately.** Deleting a book with 500 sessions writes 500 queue
+rows. That is correct: every one of those rows genuinely has to reach the server. It is
+one transaction, so the reader still sees one atomic, undoable action.
+
+Enforced in `src/db/write.ts` and nowhere else. A `queries.ts` file cannot delete.
 
 ---
 
@@ -271,10 +350,38 @@ violate the never-lose-data directive. Concretely:
 | Retention | Keep the newest three. Delete older ones **after** a successful migration, never before |
 | Free space | Check available space first. Require at least 3x the database size. If unavailable, **block the migration** and surface a clear message |
 | If backup fails | **Fail closed.** Do not migrate. An app on an old schema still works; an app with a half-migrated database may not |
-| Restore | On migration failure, restore the newest backup, roll the schema version back, and report to Sentry |
+| Restore | On migration failure, restore the newest backup **that this build can read**, roll the schema version back, and report to Sentry |
+
+**Never restore a backup from a newer schema than the running code.** The version is in
+the filename and `restoreNewestBackup(currentSchemaVersion)` takes the newest at or below
+it. After a rollback to an older build — a halted staged release, a reinstalled older APK
+— the newest backup on disk is from a schema this binary has never seen, and restoring it
+hands the app a database with columns it cannot read: a worse state than the failed
+migration being rolled back, arrived at in the one code path whose entire job is not
+losing data.
+
+**Three implementation facts that are not optional, each found the hard way on a device:**
+
+1. **Checkpoint the WAL before copying, and copy the `-wal` and `-shm` sidecars too.**
+   `journal_mode = WAL` means a committed transaction can live entirely in `reader.db-wal`
+   until a checkpoint, so a plain copy of `reader.db` alone can be missing the reader's
+   most recent sessions. Measured on device: `wal 263712B → 0B` across a checkpoint, main
+   file unchanged. A bare copy would have missed 263 KB of committed data — and it looks
+   like success, which is worse than no backup at all.
+2. **Close the database before restoring.** On Android, deleting an open file does not
+   affect the already-open descriptor: SQLite stays attached to the now-unlinked inode, so
+   copying a backup into that path has no effect on the running app and later writes go to
+   the orphaned inode and are lost at exit. Without `closeDatabase()` the restore silently
+   does nothing **while reporting success**, in the code path that then tells the reader
+   "your library was restored from a backup taken moments ago".
+3. **Clear the live sidecars before copying the backup's in.** A stale `reader.db-wal`
+   beside a restored database is replayed on next open and can reintroduce exactly the
+   half-migrated state being rolled back.
 
 Test every migration against a database seeded with 2000 books, and test the failure path
-by deliberately corrupting a migration once.
+by deliberately corrupting a migration once. There is no `{ name: 'none' }` success
+sentinel: a backup attempt returns `made` or `skipped`, so "no backup exists" cannot be
+mistaken for "a backup exists".
 
 ---
 
@@ -327,5 +434,7 @@ If any of these can happen, the model is wrong:
 - A hard delete
 - Two devices generating the same ID
 - A local write that reaches SQLite without reaching `sync_queue`
+- A live session belonging to a deleted read, or a live read belonging to a deleted book
+- An update that rewrites a row's `created_at`
 - A device clock deciding which side of a conflict wins
 - Statistics that require a network call

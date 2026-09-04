@@ -22,7 +22,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 
-import { font, radius, size } from './theme'
+import { font, motion, radius, rules, size, space, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
 export type ButtonVariant = 'primary' | 'secondary' | 'pill' | 'danger'
@@ -63,11 +63,19 @@ export function Button({
   }, [onPress])
 
   const isDisabled = disabled || busy
-  const height =
+  /**
+   * MIN height, never a fixed one.
+   *
+   * These were fixed heights with `numberOfLines={1}`, which clips every label at large
+   * system font scales. `06-CONVENTIONS.md` requires every layout to survive 200% —
+   * it is one Android setting, and the primitives were the thing breaking it. A button
+   * that grows taller is correct; a button whose label is cut in half is not.
+   */
+  const minHeight =
     variant === 'primary'
       ? size.buttonPrimary
       : variant === 'pill'
-        ? 34
+        ? size.pill
         : size.buttonSecondary
 
   const shape: ViewStyle =
@@ -79,7 +87,7 @@ export function Button({
             borderRadius: radius.pill,
             borderWidth: 1,
             borderColor: c.accentBorder,
-            paddingHorizontal: 14,
+            paddingHorizontal: space.pillPadX,
           }
         : variant === 'danger'
           ? {
@@ -104,12 +112,10 @@ export function Button({
           ? c.danger
           : c.text
 
-  const textSize =
-    variant === 'primary'
-      ? font.bodyStrong.size + 1
-      : variant === 'pill'
-        ? font.secondary.size
-        : font.body.size + 0.5
+  // Named sizes from the scale. These were `font.bodyStrong.size + 1` and
+  // `font.body.size + 0.5`: sizes that did not exist, written to look like they did.
+  const textToken =
+    variant === 'primary' ? font.button : variant === 'pill' ? font.secondary : font.buttonSmall
 
   return (
     <Pressable
@@ -121,7 +127,7 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         shape,
-        { height, minHeight: variant === 'pill' ? size.minTouch : height },
+        { minHeight: variant === 'pill' ? size.minTouch : minHeight },
         pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,
         style,
@@ -130,12 +136,12 @@ export function Button({
       <View style={styles.row}>
         {busy ? <ActivityIndicator size="small" color={textColor} /> : null}
         <Text
-          numberOfLines={1}
-          style={{
-            color: textColor,
-            fontSize: textSize,
-            fontWeight: variant === 'primary' ? '700' : '600',
-          }}
+          numberOfLines={2}
+          maxFontSizeMultiplier={rules.maxFontScale}
+          style={[
+            typeStyle(textToken, { weight: variant === 'primary' ? '700' : '600' }),
+            { color: textColor },
+          ]}
         >
           {busy ? (busyLabel ?? label) : label}
         </Text>
@@ -145,8 +151,14 @@ export function Button({
 }
 
 const styles = StyleSheet.create({
-  base: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  pressed: { transform: [{ scale: 0.97 }] },
+  base: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: space.buttonPadX,
+    // Vertical padding, so a wrapped label is never flush against the edge.
+    paddingVertical: space.labelGap,
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.row },
+  pressed: { transform: [{ scale: motion.press.scale }] },
   disabled: { opacity: 0.4 },
 })

@@ -20,20 +20,26 @@ export interface ProgressSession {
 }
 
 /**
- * The furthest position reached, for one format.
+ * The furthest position reached, for one format, or null when nothing says.
  *
- * Scoped to a single read's sessions by the caller. A re-read starts from zero because
- * it is a different `reads` row with its own sessions, which is the whole point of the
- * three-table model.
+ * NULL RATHER THAN ZERO, for the same reason `percentComplete` returns null: they are
+ * different facts and the UI shows them differently. This used to return 0 for a read
+ * with only audiobook sessions when asked for pages, which is indistinguishable from
+ * "on page 0" — so the book detail screen would confidently print "page 0 of 502" for a
+ * book the reader is ten hours into.
+ *
+ * Scoped to a single read's sessions by the caller. A re-read starts from nothing
+ * because it is a different `reads` row with its own sessions, which is the whole point
+ * of the three-table model.
  */
 export function currentPosition(
   sessions: readonly ProgressSession[],
   format: SessionFormat,
-): number {
-  let max = 0
+): number | null {
+  let max: number | null = null
   for (const s of sessions) {
     if (s.format !== format) continue
-    if (s.toPosition !== null && s.toPosition > max) max = s.toPosition
+    if (s.toPosition !== null && (max === null || s.toPosition > max)) max = s.toPosition
   }
   return max
 }
@@ -65,9 +71,34 @@ export function exceedsKnownLength(position: number, total: number | null): bool
   return total !== null && total > 0 && position > total
 }
 
-/** Units covered by one session. Zero when either end is unknown. */
-export function sessionAmount(session: ProgressSession): number {
-  if (session.fromPosition === null || session.toPosition === null) return 0
-  const delta = session.toPosition - session.fromPosition
-  return delta > 0 ? delta : 0
+/**
+ * True when a session ends before it starts — page 120 to page 40.
+ *
+ * Almost always a typo, occasionally a reader logging a re-read of an earlier chapter.
+ * Either way the app cannot know what it means, so it says so rather than guessing.
+ */
+export function isBackwards(session: ProgressSession): boolean {
+  return (
+    session.fromPosition !== null &&
+    session.toPosition !== null &&
+    session.toPosition < session.fromPosition
+  )
+}
+
+/**
+ * Units covered by one session, or NULL when that cannot honestly be computed: either
+ * end unknown, or the session runs backwards.
+ *
+ * This used to clamp both cases to 0 and carry on. A session typed as 120 to 40 then
+ * contributed nothing to any total, with no error, no flag and no way for the reader to
+ * find out — their pages number was simply wrong and unexplainable. Silently discarding
+ * a row the reader deliberately created is the worst of the three options; the other two
+ * are counting it wrong and saying so. This says so.
+ *
+ * Every caller must decide what to do with null. `totals` counts them as `unusable`.
+ */
+export function sessionAmount(session: ProgressSession): number | null {
+  if (session.fromPosition === null || session.toPosition === null) return null
+  if (isBackwards(session)) return null
+  return session.toPosition - session.fromPosition
 }

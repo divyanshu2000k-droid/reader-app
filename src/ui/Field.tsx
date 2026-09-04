@@ -19,7 +19,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 
-import { font, radius, size } from './theme'
+import { font, radius, rules, size, space, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
 interface Props {
@@ -51,7 +51,10 @@ export function Field({
 
   return (
     <View style={[styles.wrap, style]}>
-      <Text style={{ color: c.textMuted, fontSize: font.label.size, fontWeight: '500' }}>
+      <Text
+        maxFontSizeMultiplier={rules.maxFontScale}
+        style={[typeStyle(font.label), { color: c.textMuted }]}
+      >
         {label}
       </Text>
       <TextInput
@@ -63,33 +66,39 @@ export function Field({
         keyboardType={keyboardType}
         autoFocus={autoFocus}
         multiline={multiline}
+        maxFontSizeMultiplier={rules.maxFontScale}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         style={[
           styles.input,
+          typeStyle(font.input),
           {
-            minHeight: multiline ? size.field * 2 : size.field,
+            minHeight: multiline ? size.fieldMultiline : size.field,
             borderRadius: radius.field,
             color: c.text,
-            fontSize: font.heading.size + 1,
-            backgroundColor: error
-              ? c.dangerSurface
-              : focused
-                ? c.accentSurface
-                : c.surface,
+            backgroundColor: error ? c.dangerSurface : focused ? c.accentSurface : c.surface,
             borderColor: error ? c.dangerBorder : focused ? c.accentBorder : c.border,
             textAlignVertical: multiline ? 'top' : 'center',
           },
         ]}
       />
       {error ? (
-        <Text style={{ color: c.danger, fontSize: font.label.size }}>{error}</Text>
+        <Text
+          maxFontSizeMultiplier={rules.maxFontScale}
+          style={[typeStyle(font.label), { color: c.danger }]}
+        >
+          {error}
+        </Text>
       ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: 6 },
-  input: { borderWidth: 1, paddingHorizontal: 17, paddingVertical: 12, fontWeight: '600' },
+  wrap: { gap: space.labelGap },
+  input: {
+    borderWidth: 1,
+    paddingHorizontal: space.fieldPadX,
+    paddingVertical: space.fieldPadY,
+  },
 })

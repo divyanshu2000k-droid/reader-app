@@ -10,7 +10,7 @@
 
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 
-import { font, size } from './theme'
+import { font, radius, rules, size, space, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
 interface Option<T extends string> {
@@ -39,11 +39,7 @@ export function Segmented<T extends string>({
     <View
       accessibilityRole="tablist"
       accessibilityLabel={accessibilityLabel}
-      style={[
-        styles.track,
-        { backgroundColor: c.surface, borderColor: c.border },
-        style,
-      ]}
+      style={[styles.track, { backgroundColor: c.surface, borderColor: c.border }, style]}
     >
       {options.map((o) => {
         const selected = o.value === value
@@ -60,12 +56,12 @@ export function Segmented<T extends string>({
             ]}
           >
             <Text
-              numberOfLines={1}
-              style={{
-                color: selected ? c.text : c.textMuted,
-                fontSize: font.body.size,
-                fontWeight: selected ? '600' : '500',
-              }}
+              numberOfLines={2}
+              maxFontSizeMultiplier={rules.maxFontScale}
+              style={[
+                typeStyle(font.body, { weight: selected ? '600' : '500' }),
+                { color: selected ? c.text : c.textMuted },
+              ]}
             >
               {o.label}
             </Text>
@@ -77,11 +73,18 @@ export function Segmented<T extends string>({
 }
 
 const styles = StyleSheet.create({
-  track: { flexDirection: 'row', gap: 4, padding: 4, borderRadius: 15, borderWidth: 1 },
+  track: {
+    flexDirection: 'row',
+    gap: space.segmentPad,
+    padding: space.segmentPad,
+    borderRadius: radius.segment,
+    borderWidth: 1,
+  },
   segment: {
     flex: 1,
     minHeight: size.minTouch,
-    borderRadius: 12,
+    paddingVertical: space.labelGap,
+    borderRadius: radius.segmentInner,
     alignItems: 'center',
     justifyContent: 'center',
   },

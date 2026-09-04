@@ -67,6 +67,12 @@ This is the one unforgivable failure in this category, documented with real quot
 `01-PRODUCT.md`. Soft deletes everywhere. Undo on every destructive action. Backup before
 migration. If you are unsure whether something is safe, make it safer.
 
+**And verify it in the direction the guarantee runs.** Every data-loss bug found in this
+codebase so far typechecked, linted, threw nothing, and was wrong — the write path that
+rolled nothing back, the restore that silently did nothing while reporting success, the
+guard that asserted nothing for two tables. Read the silent-pass hazard in `CLAUDE.md`
+before writing anything that claims a safety property.
+
 ### 6. Small, verifiable steps
 
 Build one vertical slice at a time and make it work end to end before starting the next.

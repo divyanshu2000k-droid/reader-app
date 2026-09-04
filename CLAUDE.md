@@ -26,6 +26,51 @@ hold at once. It is not optional.
 **Disagree when you should.** If a spec decision looks wrong, say so with reasoning, note
 it in `DECISIONS.md`, then proceed. What you must never do is silently deviate.
 
+## The silent-pass hazard
+
+**Four bugs in this codebase have now had the identical shape: it typechecks, it lints, it
+does not throw, and it is wrong.** None was found by writing more code or by reading more
+carefully. Each was found only by asserting the specific behaviour the design depends on,
+in the direction it depends on it.
+
+The four, as evidence:
+
+1. **The write path was never atomic.** `transaction(async () => …)` typechecks against a
+   synchronous dialect and commits before its statements run. Nothing rolled back for all
+   of Slice 0.
+2. **`restoreNewestBackup` silently did nothing** while reporting success, because
+   deleting an open file on Android leaves the connection on the unlinked inode.
+3. **The schema guard asserted nothing for two of seven tables.** Its regex could not find
+   the end of a nested object, so it read the *next* table's columns and passed.
+4. **`writeRow` rewrote `created_at` on every update**, because the caller's values were
+   handed to `onConflictDoUpdate` wholesale.
+
+Add a fifth if the theme counts: `font.family` was declared from the first commit and
+applied by nothing, so the entire app rendered in the wrong typeface without a single
+error anywhere.
+
+**What this costs you, and what to do instead.**
+
+- **"It does not throw" is not "it works."** Neither is a clean typecheck, a clean lint, or
+  a passing test you have never seen fail.
+- **Write the specified assertion, in the specified direction.** The substitute is always
+  easier and is usually testing the easy half. "The transaction aborts when the first
+  statement fails" is a different and much weaker claim than "the second statement failing
+  rolls the first one back", and only the second one is the guarantee.
+- **Watch every new guard fail at least once.** Break the thing it protects, on purpose,
+  and confirm it goes red. A guard nobody has watched fail is decoration. When the fix for
+  the schema guard landed, all seven tables were gutted in turn and the guard was watched
+  to fail fourteen times before it was believed.
+- **Be most suspicious where the code is most confident.** All four bugs lived in files
+  whose comments explained, correctly and at length, why they were safe.
+- **Suspect anything that cannot fail loudly:** a value silently clamped to zero, an error
+  swallowed into a default, a sentinel returned through a success branch, a cascade that
+  is nobody's job, a token declared and never used.
+
+When you fix something in this shape, add it to the list above. The list is the point.
+
+---
+
 ## Non-negotiable rules
 
 1. **Local first.** Every read comes from SQLite. Every write goes to SQLite first and
@@ -66,22 +111,47 @@ they touch product decisions, `docs/` wins.
 npx expo run:android      # build and run locally, free and unlimited
 npx expo start            # dev server, after a build exists
 npx drizzle-kit generate  # create a migration after editing schema.ts
-npx tsc --noEmit          # typecheck
+npm run typecheck         # app AND tests: they use separate tsconfigs
+npm run lint
+npm test                  # node --test, no device needed
+npm run test:tz           # the timezone-sensitive suites in UTC, IST and US Central
+npm run format:check      # Prettier owns formatting; theme.ts is the one exception
 ```
+
+`npm run typecheck` rather than a bare `tsc --noEmit`: the app compiles with `"types": []`
+so Node globals are not in scope for code that runs on a phone, and the test files compile
+separately under `tsconfig.test.json` where `node:test` and `node:fs` are legitimate. The
+bare command only checks half of it.
+
+**A native rebuild is required** after changing `app.config.ts` — the embedded fonts live
+there. Metro alone will not pick it up.
 
 Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
-Slice 0 substantially complete and **verified running on a device**. The app launches on
-the Pixel 7 emulator, renders from theme tokens, opens the database and reports
-`schema v1`. Schema, migrations, the single write path with `sync_queue`, theme, the ten
-shared components, path aliases, lint and the `lib/` + `domain/` modules are all in place.
-Typecheck and lint clean, 30 tests passing across IST, US Central and UTC.
+Slice 0 complete and **verified running on a device**, then reviewed and repaired. The
+app launches on the Pixel 7 emulator, renders from theme tokens, opens the database and
+reports its schema version. Schema, migrations, the single write path with `sync_queue`,
+theme, the ten shared components, path aliases, lint and the `lib/` + `domain/` modules
+are all in place. Typecheck and lint clean; 34 tests pass, 27 of them across IST, US
+Central and UTC.
 
-Outstanding before Slice 1: the device pass (the four behavioural checks in
-`src/db/__tests__/sync-queue.device.md`, the seed script, and `backup.ts`, which has the
-most logic and the least execution in the codebase), plus Sentry once a DSN exists.
+**A code review on 2026-09-04 found and fixed twenty issues**, four of them silent data
+bugs: `created_at` rewritten on every update, a schema guard vacuous for two of seven
+tables, queue rows enqueued for writes that changed nothing, and a restore that would
+happily load a backup from a newer schema than the running build. Soft delete now
+cascades, the app renders in its actual typeface for the first time, and the lint rule
+covers spacing, radii and type sizes rather than colours alone. Full detail in
+`DECISIONS.md`, 2026-09-04.
+
+**Outstanding before Slice 1, and both are real:**
+- **Re-run the device pass.** Migration `0001` has never been executed on a device, and
+  `06-CONVENTIONS.md` forbids shipping a migration that has not run against a seeded
+  database. Checks `6b` (restore skips a newer-schema backup) and `7` (cascade cleanup)
+  are new and have never run.
+- **The third error tier does not exist.** Error boundary, Sentry and a migration retry
+  are scheduled into Slice 1 in `docs/05-BUILD-PLAN.md`.
 
 See `docs/05-BUILD-PLAN.md`.
 

@@ -8,6 +8,8 @@
  * If you need a value that is not here, add it here first.
  */
 
+import type { TextStyle } from 'react-native'
+
 // ─── COLOUR ──────────────────────────────────────────────────────────────────
 
 /**
@@ -129,7 +131,42 @@ export const font = {
   secondary:   { size: 11.5, weight: '500', lineHeight: 17 },
   label:       { size: 11, weight: '500', lineHeight: 15 },
   caption:     { size: 10.5, weight: '500', lineHeight: 14 },
+
+  // ── CONTROL TYPE ──
+  // These four used to be written at the call site as arithmetic on the sizes above —
+  // `font.bodyStrong.size + 1`, `font.body.size + 0.5`, `font.secondary.size + 1`,
+  // `font.heading.size + 1`. That is a font size that does not exist in the scale,
+  // spelled so it reads as if it does. Four components each invented their own.
+  // If a size is real it belongs here with a name; if it is not, it should not be used.
+  button:      { size: 15.5, weight: '700', lineHeight: 21 },
+  buttonSmall: { size: 13.5, weight: '600', lineHeight: 19 },
+  chip:        { size: 12.5, weight: '500', lineHeight: 17 },
+  input:       { size: 18, weight: '600', lineHeight: 24 },
 } as const
+
+/**
+ * One type token, resolved into a React Native text style.
+ *
+ * EVERY `<Text>` in the app goes through this, and that is the point: `font.family` was
+ * declared in this file from the first commit and applied by nothing, so the whole app
+ * rendered in Roboto while the design system said otherwise. A component that spells out
+ * `fontSize` and `fontWeight` by hand is a component that will forget the family, and
+ * nothing about the result looks broken enough to notice.
+ *
+ * `weight` may be overridden because a few controls use one size at two weights. The
+ * size never can: that is what the scale is for.
+ */
+export function typeStyle(
+  token: { readonly size: number; readonly weight?: string; readonly lineHeight?: number },
+  overrides: { readonly weight?: TextStyle['fontWeight'] } = {},
+): TextStyle {
+  return {
+    fontFamily: font.family,
+    fontSize: token.size,
+    fontWeight: overrides.weight ?? (token.weight as TextStyle['fontWeight']),
+    lineHeight: token.lineHeight,
+  }
+}
 
 // ─── SPACE, RADIUS, SIZE ─────────────────────────────────────────────────────
 
@@ -138,8 +175,28 @@ export const space = {
   card: 18,        // inside a card
   cardTight: 12,   // inside a compact card
   row: 8,          // between list rows
+  rowWide: 14,     // between a cover and the text beside it
   section: 20,     // between sections
   bottomSafe: 22,  // above the nav bar
+
+  // ── CONTROL SPACING ──
+  // Named rather than written inline. The lint rule below forbids bare numbers on
+  // spacing properties, so a value that is not here cannot be used.
+  stackTight: 10,  // between stacked lines in an empty state
+  labelGap: 6,     // between a field label and its input
+  buttonPadX: 18,
+  pillPadX: 14,
+  chipPadX: 16,
+  fieldPadX: 17,
+  fieldPadY: 12,
+  segmentPad: 4,   // inner padding and gap of the segmented control
+  sheetTop: 10,    // above the grabber
+  sheetTitleGap: 12,
+  sheetGap: 12,    // between a sheet's children
+  toastGap: 16,    // between the toast message and its Undo
+  toastPadX: 16,
+  toastPadY: 14,
+  toastLift: 56,   // clears the tab bar
 } as const
 
 export const radius = {
@@ -152,6 +209,10 @@ export const radius = {
   buttonSmall: 14,
   chip: 999,
   pill: 999,
+  segment: 15,      // the segmented control's outer track
+  segmentInner: 12, // one selected segment
+  grabber: 2,
+  skeleton: 6,
 } as const
 
 export const size = {
@@ -160,6 +221,8 @@ export const size = {
   buttonPrimary: 56,
   buttonSecondary: 46,
   field: 54,
+  /** A multiline field starts two rows tall. Named, not `field * 2` at the call site. */
+  fieldMultiline: 108,
   iconButton: 38,
   iconButtonLarge: 44,
   fab: 52,
@@ -169,6 +232,19 @@ export const size = {
   coverDock: { w: 38, h: 54 },
   coverHero: { w: 84, h: 124 },
   progressBar: 3,
+  pill: 34,
+  grabber: { w: 38, h: 4 },
+  /** Extra tap area around controls whose visual box is smaller than minTouch. */
+  hitSlop: 10,
+  hitSlopTight: 6,
+} as const
+
+/**
+ * Drop shadows. React Native has no `box-shadow` string, so a shadow is four values and
+ * they have to travel together or they drift apart between components.
+ */
+export const shadow = {
+  cover: { opacity: 0.5, radius: 14, offsetY: 4, elevation: 4 },
 } as const
 
 // ─── ATMOSPHERE ──────────────────────────────────────────────────────────────
@@ -224,7 +300,7 @@ export const glowSpec = {
 // ─── MOTION ──────────────────────────────────────────────────────────────────
 
 export const motion = {
-  press:      { scale: 0.97, duration: 120, easing: 'ease-out' },
+  press:      { scale: 0.97, opacity: 0.9, duration: 120, easing: 'ease-out' },
   screenPush: { duration: 240, easing: 'cubic-bezier(0.2,0,0,1)' },
   sheetUp:    { duration: 280, easing: 'cubic-bezier(0.2,0,0,1)' },
   scrimFade:  { duration: 200 },
@@ -277,5 +353,7 @@ export const theme = {
   glowSpec,
   coverFallbacks,
   scrim,
+  shadow,
+  typeStyle,
 } as const
 export type Theme = typeof theme

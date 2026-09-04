@@ -57,8 +57,22 @@ sessions has a correct `local_day`, and each left a row in `sync_queue`.
 - Tab shell: Library, Add, Stats, with Add as a raised centre button
 - Settings reachable from the Library header, not a tab
 
-**Done when:** the app launches to an empty Library, tabs switch, and toggling the remote
-flag shows the update screen.
+**Carried over from Slice 0, and NOT optional — the third error tier does not exist yet.**
+`06-CONVENTIONS.md` specifies "unrecoverable → error boundary with a restart, reported to
+Sentry", and today a failed migration renders as a line of grey text on the placeholder
+screen. All three land here because all three belong to the launch path:
+
+- A root **error boundary** with a restart action, wrapping the gates
+- **Sentry**, wired to the DSN in `app.config.ts`, reporting unrecoverable errors. The
+  `TODO(Slice 0)` in `src/db/migrate.ts` is the first call site
+- **A retry for a failed migration.** `runMigrations()` memoises its promise for the
+  process lifetime, so after a failure-and-restore there is no way to try again without
+  killing the app. The restore path deliberately closes the database, so a retry is
+  meaningful — it just needs a way to be reached
+
+**Done when:** the app launches to an empty Library, tabs switch, toggling the remote
+flag shows the update screen, and a deliberately corrupted migration shows the error
+boundary with a working restart rather than grey text.
 
 ---
 
@@ -68,11 +82,21 @@ flag shows the update screen.
 - Library with shelf tabs, FlashList from the start
 - Book detail: metadata, progress, session list, previous reads
 - Book actions sheet: shelf move, re-read, edit, notes, share, delete
-- Soft delete with undo toast, and Recently Deleted
+- Soft delete with undo toast, and Recently Deleted. The delete cascades to reads,
+  sessions, notes and shelf assignments, and undo reverses exactly that set — see
+  `03-DATA-MODEL.md`. One toast for a batch, never one per row
 - Empty states for every list
+- **Scale, all three parts, and they only make sense together.** Nothing before this slice
+  exercises a large library, and testing scale before the list exists measures nothing:
+  1. Extend `src/db/seed.ts` to generate **2000 books** with realistic session counts
+  2. **Re-run every migration against that seeded database.** `06-CONVENTIONS.md` forbids
+     shipping a migration that has not, and `0001` adds a UNIQUE index — the exact kind
+     that passes on five rows and fails on two thousand
+  3. **Hold 60fps scrolling it**, which is what FlashList tuning is for. If it does not
+     hold, that is a bug, not a tradeoff
 
 **Done when:** seeded books display, you can move one between shelves, delete it, and
-restore it.
+restore it — and a 2000-book library migrates cleanly and scrolls at 60fps.
 
 ---
 
@@ -165,9 +189,21 @@ backing out of a half written note does not lose it.
 - Recovery sheet when the app was killed mid session
 - Notification permission priming before the system prompt
 
-**Done when:** start a timer, force stop the app, reopen, and be offered the elapsed time.
-**Test on Xiaomi and Samsung**, they kill background work far more aggressively than stock
-Android and this is where the feature will break.
+**EVERYTHING BEFORE THIS SLICE RAN ON AN x86_64 EMULATOR ONLY.** Two things are first
+exercised here, and both are capable of invalidating work that looked finished:
+
+- **arm64-v8a has never been compiled**, let alone run. Every native dependency —
+  expo-sqlite, Reanimated, react-native-svg, the embedded fonts — has only ever been built
+  for the wrong architecture. Build to a **physical phone** at the start of this slice,
+  not at the end.
+- **The emulator cannot reproduce the thing that actually matters.** Xiaomi and Samsung
+  kill background work far more aggressively than stock Android, which is the single
+  highest-risk item in Phase 1 and the entire reason the timer has a two-week hard limit.
+  A foreground service that survives the emulator tells you nothing about MIUI.
+
+**Done when:** start a timer on a physical phone, force stop the app, reopen, and be
+offered the elapsed time. **Test on Xiaomi and Samsung specifically** — this is where the
+feature will break.
 
 > **Hard rule: two weeks, then ship without it.** Manual logging is the differentiated
 > feature and it already works. The timer is table stakes you can add in 1.1. Three to
@@ -258,6 +294,13 @@ every book and statistic untouched.
 - Every loading skeleton and error state from the States sheet
 - Widget, if Slice 6 did not exhaust your patience for native work
 - Play Store listing, screenshots, privacy policy hosted somewhere
+- **Walk every screen at 200% system font scale** (Settings → Display → Font size, max).
+  Nothing clips, nothing overlaps, no row loses its label. The primitives carry
+  `maxFontSizeMultiplier` and grow rather than clip, but only real screens prove it. This
+  is one Android setting and it is the accessibility failure `06-CONVENTIONS.md` calls out
+  by name
+- **`Sheet` scrim double-timing**: it runs `withTiming` on an already-animated value, so
+  reduce-motion only half applies. Cosmetic, deferred here from the Slice 0 review
 
 **Done when:** a fresh install walks a stranger from launch to logging their first session
 without confusion.
@@ -292,6 +335,7 @@ demoralising in a way that compounds.
 - [ ] Migration tested from a seeded old schema
 - [ ] Crash free above 99.5% across a week of your own use
 - [ ] Every string checked for a stray em dash
+- [ ] **Every screen walked at 200% system font scale**, nothing clipped or overlapping
 - [ ] **The dev-only device-check trigger is absent from the release bundle.** `src/db/devchecks.ts`
       is reached only through a `require()` inside an `if (__DEV__)` block in
       `src/app/index.tsx`, which Metro should drop from a production build. Verify it,

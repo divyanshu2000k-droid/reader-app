@@ -16,6 +16,9 @@ import type { Result } from '@/lib/result'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
+/** Exported so the device pass can clean up after itself by title. */
+export const SEEDED_TITLE = 'The Overstory'
+
 export async function seedSampleLibrary(): Promise<Result<{ bookId: string }>> {
   const ts = now()
   const bookId = newId()
@@ -23,12 +26,10 @@ export async function seedSampleLibrary(): Promise<Result<{ bookId: string }>> {
 
   const book = await writeRow('books', {
     id: bookId,
-    title: 'The Overstory',
+    title: SEEDED_TITLE,
     author: 'Richard Powers',
     pageCount: 502,
     source: 'manual',
-    createdAt: ts,
-    updatedAt: ts,
   })
   if (!book.ok) return book
 
@@ -41,8 +42,6 @@ export async function seedSampleLibrary(): Promise<Result<{ bookId: string }>> {
     // reader overrides it. Never write a computed value into these columns.
     startedAt: null,
     finishedAt: null,
-    createdAt: ts,
-    updatedAt: ts,
   })
   if (!read.ok) return read
 
@@ -67,8 +66,6 @@ export async function seedSampleLibrary(): Promise<Result<{ bookId: string }>> {
       fromPosition: p.from,
       toPosition: p.to,
       isTimed: 0,
-      createdAt: ts,
-      updatedAt: ts,
     })
     if (!result.ok) return result
   }

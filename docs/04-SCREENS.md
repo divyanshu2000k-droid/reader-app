@@ -45,10 +45,15 @@ composition.
 Apply everywhere unless a screen says otherwise.
 
 - Back always works and never loses unsaved input. Warn before discarding.
-- Every destructive action gets an undo toast, five seconds, above the tab bar.
+- Every destructive action gets an undo toast, five seconds, above the tab bar. Toasts
+  **queue** rather than replace, so a second delete never discards the first one's undo —
+  but a screen deleting many rows at once raises ONE toast that reverses the batch, not
+  one per row.
 - Every list uses FlashList and has an empty state naming one specific next action.
 - Nothing under 44px is tappable. Body text is never below 12px.
-- Every screen must survive 360px width.
+- Every screen must survive 360px width **and 200% system font scale**. The shared
+  primitives grow rather than clip and cap scaling at `rules.maxFontScale`, but only real
+  screens prove it.
 - Primary buttons ride above the keyboard, never behind it.
 - Anything under 400ms shows no loading state at all.
 - Double taps are idempotent. Debounce every submit.

@@ -12,7 +12,7 @@
 
 import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 
-import { coverFallbacks, font, radius, size } from './theme'
+import { coverFallbacks, font, radius, rules, shadow, size, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
 type CoverSize = 'list' | 'header' | 'dock' | 'hero'
@@ -84,11 +84,11 @@ export function BookCover({
       ) : (
         <Text
           numberOfLines={1}
-          style={{
-            color: c.textSecondary,
-            fontSize: variant === 'hero' ? font.title.size : font.bodyStrong.size,
-            fontWeight: '700',
-          }}
+          maxFontSizeMultiplier={rules.maxFontScale}
+          style={[
+            typeStyle(variant === 'hero' ? font.title : font.bodyStrong, { weight: '700' }),
+            { color: c.textSecondary },
+          ]}
         >
           {title.trim().charAt(0).toUpperCase()}
         </Text>
@@ -102,9 +102,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOpacity: 0.5,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+    shadowOpacity: shadow.cover.opacity,
+    shadowRadius: shadow.cover.radius,
+    shadowOffset: { width: 0, height: shadow.cover.offsetY },
+    elevation: shadow.cover.elevation,
   },
 })

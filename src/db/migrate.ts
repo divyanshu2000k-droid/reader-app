@@ -51,7 +51,9 @@ async function performMigrations(): Promise<MigrationStatus> {
     cached = { ok: true, state: 'done', version: SCHEMA_VERSION }
     return cached
   } catch (cause) {
-    const restored = restoreNewestBackup()
+    // The running code's version, so a backup from a NEWER schema is never restored
+    // over it. See restoreNewestBackup.
+    const restored = restoreNewestBackup(SCHEMA_VERSION)
     const error: AppError = appError('unrecoverable', 'Could not update the database', {
       safe: restored.ok
         ? 'Your library was restored from a backup taken moments ago.'

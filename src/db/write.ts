@@ -17,12 +17,22 @@
  * discovered as a reader's missing data. See DECISIONS.md, 2026-09-03.
  */
 
-import { eq, sql } from 'drizzle-orm'
-import type { SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
+import { and, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm'
+import type { AnySQLiteColumn, SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 
-import { getDb, runInTransaction } from './client'
-import { bookShelves, books, goals, notes, reads, sessions, shelves, syncQueue } from './schema'
-import { now } from '@/lib/dates'
+import { getDb, runInTransaction, type Database } from './client'
+import {
+  bookShelves,
+  books,
+  goals,
+  notes,
+  reads,
+  sessions,
+  shelves,
+  syncQueue,
+  type SyncOperation,
+} from './schema'
+import { now, type UnixMs } from '@/lib/dates'
 import { appError, attempt, type Result } from '@/lib/result'
 
 /**
@@ -48,8 +58,20 @@ const SYNCABLE = {
 
 export type SyncableTable = keyof typeof SYNCABLE
 
-/** The insert shape for one syncable table, e.g. `RowFor<'sessions'>`. */
-export type RowFor<K extends SyncableTable> = (typeof SYNCABLE)[K]['$inferInsert']
+/**
+ * What a caller supplies for one syncable table, e.g. `RowFor<'sessions'>`.
+ *
+ * `createdAt`, `updatedAt` and `deletedAt` are deliberately NOT part of it:
+ *   - `createdAt` and `updatedAt` are stamped here, so a caller cannot get them wrong
+ *     and an update cannot rewrite a creation date.
+ *   - `deletedAt` is owned by `softDelete` and `restoreRow`. A delete performed by
+ *     passing `deletedAt` to `writeRow` would enqueue an `upsert` rather than a
+ *     `delete`, and would skip the cascade below.
+ */
+export type RowFor<K extends SyncableTable> = Omit<
+  (typeof SYNCABLE)[K]['$inferInsert'],
+  'createdAt' | 'updatedAt' | 'deletedAt'
+> & { id: string }
 
 export const SYNCABLE_TABLES = Object.keys(SYNCABLE) as SyncableTable[]
 
@@ -67,6 +89,7 @@ export function isSyncable(name: string): name is SyncableTable {
  */
 interface SyncableShape extends SQLiteTable {
   id: SQLiteColumn
+  createdAt: SQLiteColumn
   updatedAt: SQLiteColumn
   deletedAt: SQLiteColumn
 }
@@ -85,14 +108,167 @@ void _shapeCheck
  *
  * It is contained to this one helper, and the guarantee it erases is restored by
  * `_shapeCheck` above, which fails to compile if any registered table lacks `id`,
- * `updatedAt` or `deletedAt`. The public API of this module is fully typed.
+ * `createdAt`, `updatedAt` or `deletedAt`. The public API of this module is fully typed.
  */
 function tableFor(name: SyncableTable): SyncableShape {
   return SYNCABLE[name] as unknown as SyncableShape
 }
 
+// ─── THE SOFT-DELETE CASCADE ─────────────────────────────────────────────────
+
+/**
+ * WHAT A DELETE TAKES WITH IT.
+ *
+ * Soft-deleting a book soft-deletes its reads, its sessions, its notes and its shelf
+ * assignments, in the same transaction, each with its own queue row. Restoring the book
+ * reverses exactly that set.
+ *
+ * The alternative — a book whose `deleted_at` is set while its sessions stay live — was
+ * the shape this file shipped with, and it means every statistic keeps counting a book
+ * the reader deleted. Wrong numbers that nobody can explain are precisely what this
+ * product exists not to produce, and "remember to filter deleted parents" in twelve
+ * separate `queries.ts` files is the same losing strategy as "remember to enqueue".
+ *
+ * HOW RESTORE KNOWS WHAT TO UNDO. Every row in one cascade is stamped with the same
+ * `deleted_at`, and restore only clears children whose `deleted_at` equals the parent's.
+ * A session the reader deleted on its own last week has a different timestamp and stays
+ * deleted, which is the behaviour they would expect: undoing "remove this book" should
+ * not silently resurrect something else they meant to throw away.
+ *
+ * The cost is that deleting a book with 500 sessions writes 500 queue rows. That is
+ * correct — every one of those rows genuinely has to reach the server — and it is one
+ * transaction, so the reader sees one atomic undoable action.
+ */
+interface ChildLink {
+  readonly table: SyncableTable
+  /**
+   * Ids of child rows pointing at `parentId`, narrowed by a predicate on the child's
+   * own `deleted_at`. Closes over the concrete table so nothing here needs a cast.
+   */
+  readonly ids: (
+    db: Database,
+    parentId: string,
+    when: (deletedAt: AnySQLiteColumn) => SQL,
+  ) => string[]
+}
+
+const CHILDREN: Partial<Record<SyncableTable, readonly ChildLink[]>> = {
+  books: [
+    {
+      table: 'reads',
+      ids: (db, parentId, when) =>
+        db
+          .select({ id: reads.id })
+          .from(reads)
+          .where(and(eq(reads.bookId, parentId), when(reads.deletedAt)))
+          .all()
+          .map((r) => r.id),
+    },
+    {
+      table: 'notes',
+      ids: (db, parentId, when) =>
+        db
+          .select({ id: notes.id })
+          .from(notes)
+          .where(and(eq(notes.bookId, parentId), when(notes.deletedAt)))
+          .all()
+          .map((r) => r.id),
+    },
+    {
+      table: 'book_shelves',
+      ids: (db, parentId, when) =>
+        db
+          .select({ id: bookShelves.id })
+          .from(bookShelves)
+          .where(and(eq(bookShelves.bookId, parentId), when(bookShelves.deletedAt)))
+          .all()
+          .map((r) => r.id),
+    },
+  ],
+  reads: [
+    {
+      table: 'sessions',
+      ids: (db, parentId, when) =>
+        db
+          .select({ id: sessions.id })
+          .from(sessions)
+          .where(and(eq(sessions.readId, parentId), when(sessions.deletedAt)))
+          .all()
+          .map((r) => r.id),
+    },
+  ],
+  shelves: [
+    {
+      table: 'book_shelves',
+      ids: (db, parentId, when) =>
+        db
+          .select({ id: bookShelves.id })
+          .from(bookShelves)
+          .where(and(eq(bookShelves.shelfId, parentId), when(bookShelves.deletedAt)))
+          .all()
+          .map((r) => r.id),
+    },
+  ],
+}
+
+// ─── PRIMITIVES, ALL SYNCHRONOUS AND ALL TRANSACTION-INTERNAL ────────────────
+
+function enqueue(
+  db: Database,
+  table: SyncableTable,
+  rowId: string,
+  operation: SyncOperation,
+  ts: UnixMs,
+): void {
+  db.insert(syncQueue)
+    .values({ tableName: table, rowId, operation, queuedAt: ts, attempts: 0 })
+    .run()
+}
+
+/** Soft-deletes every live descendant of `id`, depth first, enqueueing each. */
+function cascadeDelete(db: Database, table: SyncableTable, id: string, ts: UnixMs): void {
+  for (const child of CHILDREN[table] ?? []) {
+    const t = tableFor(child.table)
+    for (const childId of child.ids(db, id, isNull)) {
+      db.update(t).set({ deletedAt: ts, updatedAt: ts }).where(eq(t.id, childId)).run()
+      enqueue(db, child.table, childId, 'delete', ts)
+      cascadeDelete(db, child.table, childId, ts)
+    }
+  }
+}
+
+/**
+ * Reverses one cascade: restores only descendants stamped with `deletedAt`, the
+ * timestamp the parent carried. Anything deleted separately keeps its own timestamp and
+ * stays deleted.
+ */
+function cascadeRestore(
+  db: Database,
+  table: SyncableTable,
+  id: string,
+  deletedAt: UnixMs,
+  ts: UnixMs,
+): void {
+  for (const child of CHILDREN[table] ?? []) {
+    const t = tableFor(child.table)
+    const matching = child.ids(db, id, (col) => eq(col, deletedAt))
+    for (const childId of matching) {
+      db.update(t).set({ deletedAt: null, updatedAt: ts }).where(eq(t.id, childId)).run()
+      enqueue(db, child.table, childId, 'upsert', ts)
+      cascadeRestore(db, child.table, childId, deletedAt, ts)
+    }
+  }
+}
+
+// ─── THE PUBLIC API ──────────────────────────────────────────────────────────
+
 /**
  * Insert or update a row, and enqueue it for sync, atomically.
+ *
+ * `createdAt` is stamped on insert and NEVER touched by the update branch. It used to be
+ * part of the caller's values and part of the conflict `set`, which meant every edit
+ * rewrote the row's creation date to whatever the caller passed — silent, invisible, and
+ * only noticeable months later as a library sorted wrongly by date added.
  *
  * `updatedAt` is stamped locally as an optimistic placeholder only. The authoritative
  * value is stamped by Postgres on push and written back. A device clock never decides
@@ -100,7 +276,7 @@ function tableFor(name: SyncableTable): SyncableShape {
  */
 export async function writeRow<K extends SyncableTable>(
   table: K,
-  values: RowFor<K> & { id: string },
+  values: RowFor<K>,
 ): Promise<Result<void>> {
   return attempt(
     async () => {
@@ -108,24 +284,25 @@ export async function writeRow<K extends SyncableTable>(
       const ts = now()
       // One timestamp for the row and the queue entry. Reading the clock twice can
       // produce two values and makes the pair look like two separate edits.
-      const row = { ...values, updatedAt: ts }
+      const insertRow = { ...values, createdAt: ts, updatedAt: ts }
+
+      // The conflict branch updates everything the caller supplied EXCEPT the identity
+      // and the creation date. Writing `id` back to itself is harmless; writing
+      // `createdAt` is the bug above.
+      const { id: _identity, ...mutable } = values
+      const updateSet = { ...mutable, updatedAt: ts }
+
       const db = getDb()
 
       // Synchronous, inside a real transaction. See runInTransaction in client.ts for
       // why drizzle's own transaction helper with an async callback silently fails to
       // roll back here.
       runInTransaction(() => {
-        db.insert(t).values(row).onConflictDoUpdate({ target: t.id, set: row }).run()
-        db
-          .insert(syncQueue)
-          .values({
-            tableName: table,
-            rowId: values.id,
-            operation: 'upsert',
-            queuedAt: ts,
-            attempts: 0,
-          })
+        db.insert(t)
+          .values(insertRow)
+          .onConflictDoUpdate({ target: t.id, set: updateSet })
           .run()
+        enqueue(db, table, values.id, 'upsert', ts)
       })
     },
     (cause) =>
@@ -137,9 +314,13 @@ export async function writeRow<K extends SyncableTable>(
 }
 
 /**
- * Soft delete. Deletes are soft everywhere, no exceptions: `deleted_at` is set, the row
- * syncs, and a purge job removes rows older than 30 days. This is also what powers
- * Recently Deleted and every undo toast.
+ * Soft delete, cascading to children. Deletes are soft everywhere, no exceptions:
+ * `deleted_at` is set, the row syncs, and a purge job removes rows older than 30 days.
+ * This is also what powers Recently Deleted and every undo toast.
+ *
+ * A row that is already deleted, or that does not exist, changes nothing and enqueues
+ * NOTHING. Enqueueing a delete for a row the server may never have seen is how a replay
+ * ends up processing operations against rows that are not there.
  */
 export async function softDelete(table: SyncableTable, id: string): Promise<Result<void>> {
   return attempt(
@@ -149,17 +330,18 @@ export async function softDelete(table: SyncableTable, id: string): Promise<Resu
       const db = getDb()
 
       runInTransaction(() => {
-        db.update(t).set({ deletedAt: ts, updatedAt: ts }).where(eq(t.id, id)).run()
-        db
-          .insert(syncQueue)
-          .values({
-            tableName: table,
-            rowId: id,
-            operation: 'delete',
-            queuedAt: ts,
-            attempts: 0,
-          })
+        // `isNull(deletedAt)` in the predicate is what makes `changes` trustworthy: with
+        // it, zero changed rows means "already deleted, or never existed", and both are
+        // no-ops rather than a second queue row.
+        const res = db
+          .update(t)
+          .set({ deletedAt: ts, updatedAt: ts })
+          .where(and(eq(t.id, id), isNull(t.deletedAt)))
           .run()
+        if (res.changes === 0) return
+
+        enqueue(db, table, id, 'delete', ts)
+        cascadeDelete(db, table, id, ts)
       })
     },
     (cause) =>
@@ -170,7 +352,12 @@ export async function softDelete(table: SyncableTable, id: string): Promise<Resu
   )
 }
 
-/** Undo a soft delete. Enqueues an upsert, because to the server this is a resurrection. */
+/**
+ * Undo a soft delete, and everything that delete took with it. Enqueues an upsert,
+ * because to the server this is a resurrection.
+ *
+ * A row that is not deleted changes nothing and enqueues nothing.
+ */
 export async function restoreRow(table: SyncableTable, id: string): Promise<Result<void>> {
   return attempt(
     async () => {
@@ -179,17 +366,20 @@ export async function restoreRow(table: SyncableTable, id: string): Promise<Resu
       const db = getDb()
 
       runInTransaction(() => {
-        db.update(t).set({ deletedAt: null, updatedAt: ts }).where(eq(t.id, id)).run()
-        db
-          .insert(syncQueue)
-          .values({
-            tableName: table,
-            rowId: id,
-            operation: 'upsert',
-            queuedAt: ts,
-            attempts: 0,
-          })
+        // Read the timestamp BEFORE clearing it: it is the key that identifies which
+        // children belonged to this delete rather than to an earlier separate one.
+        const existing = db.select({ deletedAt: t.deletedAt }).from(t).where(eq(t.id, id)).all()
+        const deletedAt = existing[0]?.deletedAt
+
+        const res = db
+          .update(t)
+          .set({ deletedAt: null, updatedAt: ts })
+          .where(and(eq(t.id, id), isNotNull(t.deletedAt)))
           .run()
+        if (res.changes === 0) return
+
+        enqueue(db, table, id, 'upsert', ts)
+        if (typeof deletedAt === 'number') cascadeRestore(db, table, id, deletedAt, ts)
       })
     },
     (cause) => appError('recoverable', 'Could not restore that', { cause }),
@@ -216,6 +406,8 @@ export async function drainSyncQueue(): Promise<Result<{ drained: number }>> {
 
 /** How many writes are waiting. Powers the quiet sync indicator, never a blocking spinner. */
 export async function pendingSyncCount(): Promise<number> {
-  const rows = await getDb().select({ n: sql<number>`count(*)` }).from(syncQueue)
+  const rows = await getDb()
+    .select({ n: sql<number>`count(*)` })
+    .from(syncQueue)
   return rows[0]?.n ?? 0
 }

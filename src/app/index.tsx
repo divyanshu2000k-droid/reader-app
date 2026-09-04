@@ -11,7 +11,7 @@ import { Text, View } from 'react-native'
 import { useMigrationStatus } from '@/db/migrate'
 import { Button } from '@/ui/Button'
 import { Screen } from '@/ui/Screen'
-import { font } from '@/ui/theme'
+import { font, rules, space, typeStyle } from '@/ui/theme'
 import { useColors } from '@/ui/useTheme'
 
 export default function Index() {
@@ -45,12 +45,18 @@ export default function Index() {
       // static `import` but not for `require`, so an aliased require fails at runtime
       // with "Cannot find module" while still typechecking cleanly.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const mod = require('../db/devchecks') as {
-        runDeviceChecks: () => Promise<{ name: string; passed: boolean }[]>
-      }
+      const mod = require('../db/devchecks') as typeof import('../db/devchecks')
       const results = await mod.runDeviceChecks()
-      const passed = results.filter((r) => r.passed).length
-      setDevSummary(`${passed}/${results.length} passed`)
+
+      // `summarise` rather than a tally recomputed here. The counts are reported runtime
+      // and compile-time separately on purpose (DECISIONS.md, 2026-09-03), and a second
+      // implementation of that split is a second thing that can drift back into one
+      // inflated number. It also stopped `summarise` being dead code.
+      const s = mod.summarise(results)
+      setDevSummary(
+        `RUNTIME ${s.runtimePassed}/${s.runtimeTotal} · ` +
+          `COMPILE-TIME ${s.compilePassed}/${s.compileTotal}`,
+      )
     } catch (e) {
       setDevSummary(e instanceof Error ? `crashed: ${e.message}` : 'crashed')
     } finally {
@@ -60,24 +66,31 @@ export default function Index() {
 
   return (
     <Screen>
-      <View style={{ flex: 1, justifyContent: 'center', gap: 8 }}>
-        <Text style={{ color: c.text, fontSize: font.title.size, fontWeight: '700' }}>
+      <View style={{ flex: 1, justifyContent: 'center', gap: space.row }}>
+        <Text
+          maxFontSizeMultiplier={rules.maxFontScale}
+          style={[typeStyle(font.title), { color: c.text }]}
+        >
           Reader
         </Text>
-        <Text style={{ color: c.textMuted, fontSize: font.body.size }}>
+        <Text
+          maxFontSizeMultiplier={rules.maxFontScale}
+          style={[typeStyle(font.body), { color: c.textMuted }]}
+        >
           Slice 0 · foundations
         </Text>
         <Text
-          style={{
-            color: status.state === 'failed' ? c.danger : c.textFaint,
-            fontSize: font.label.size,
-          }}
+          maxFontSizeMultiplier={rules.maxFontScale}
+          style={[
+            typeStyle(font.label),
+            { color: status.state === 'failed' ? c.danger : c.textFaint },
+          ]}
         >
           {line}
         </Text>
 
         {__DEV__ ? (
-          <View style={{ gap: 8, marginTop: 24 }}>
+          <View style={{ gap: space.row, marginTop: space.section }}>
             <Button
               label="Run device checks"
               busyLabel="Running checks"
@@ -86,7 +99,10 @@ export default function Index() {
               onPress={runDevChecks}
             />
             {devSummary ? (
-              <Text style={{ color: c.textMuted, fontSize: font.label.size }}>
+              <Text
+                maxFontSizeMultiplier={rules.maxFontScale}
+                style={[typeStyle(font.label), { color: c.textMuted }]}
+              >
                 {devSummary} · see logcat for detail
               </Text>
             ) : null}

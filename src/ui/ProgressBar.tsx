@@ -58,11 +58,7 @@ export function ProgressBar({ fraction, active = false, style }: Props) {
       style={[styles.track, { backgroundColor: c.border }, style]}
     >
       <Animated.View
-        style={[
-          styles.fill,
-          fill,
-          { backgroundColor: active ? c.accent : c.textGhost },
-        ]}
+        style={[styles.fill, fill, { backgroundColor: active ? c.accent : c.textGhost }]}
       />
     </View>
   )

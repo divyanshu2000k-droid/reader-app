@@ -105,6 +105,48 @@ export async function createSession(input: NewSession): Promise<Result<Session>>
 }
 ```
 
+`writeRow` stamps `created_at`, `updated_at` and `deleted_at` itself, so `RowFor<K>` omits
+all three and a caller cannot pass them. An update that rewrites a row's creation date, or
+a delete performed by setting `deleted_at` through `writeRow` — which would enqueue an
+`upsert` instead of a `delete` and skip the cascade — are both unrepresentable rather than
+merely discouraged.
+
+### Transactions: `runInTransaction`, never `db.transaction(async …)`
+
+**"One transaction" was false for the whole of Slice 0, and everything passed.**
+
+Drizzle's expo-sqlite driver is a **synchronous** dialect, so `transaction()` is typed to
+take a sync callback. Handing it an `async` callback typechecks — the return type is just
+`Promise<T>` — but **the transaction commits the instant the callback returns its
+promise**, before any awaited statement has executed. Every statement then runs outside
+the transaction and nothing rolls back. A failing enqueue left the table row behind: a row
+that exists locally and never reaches the server, discovered months later on a new phone.
+
+```ts
+// WRONG. Typechecks, lints, never throws, and rolls nothing back.
+await db.transaction(async (tx) => { … })
+
+// RIGHT. src/db/client.ts, wrapping expo-sqlite's withTransactionSync.
+runInTransaction(() => {
+  db.insert(t).values(row).run()
+  db.insert(syncQueue).values(entry).run()
+})
+```
+
+Everything inside `runInTransaction` must be synchronous. Drizzle's builders end in
+`.run()` / `.all()` / `.get()` on this dialect, so there is nothing to await; the public
+functions in `write.ts` stay `async` so no caller changed.
+
+**Two guards in `src/db/__tests__/no-bypass.test.ts`:** one fails on any
+`.transaction(async` anywhere in `src/`, the other on any `db.insert` / `db.update` /
+`db.delete` or raw `execSync` / `runSync` outside the one file allowed to have them.
+
+**Why the original test did not catch it, which is the lesson worth keeping.** The
+substitute test asserted that a transaction *aborts* when its first statement fails. That
+is a different and much weaker claim than the second statement failing and rolling the
+first one back — and only the second is the guarantee `write.ts` exists to provide. See
+the silent-pass hazard in `CLAUDE.md`.
+
 ---
 
 ## Styling
@@ -209,13 +251,40 @@ Not comprehensive. Targeted at the things that silently corrupt data.
   `db.insert(` / `db.update(` / `db.delete(` outside `src/db/write.ts`, and a behavioural
   test per syncable table asserting one matching queue row and that a failing enqueue rolls
   the table write back
-- Statistics aggregation, especially pages and hours staying separate
+- **Every schema-shape guard, watched failing at least once.** A guard that has only ever
+  been seen to pass may be reading the wrong thing entirely: the first version of the
+  syncable-table check terminated its regex at the wrong brace and silently asserted
+  nothing for two of the seven tables. Break what it protects, on purpose, and see it go
+  red before you trust it
+- **A soft delete cascades and its restore reverses exactly that set.** A live session
+  under a deleted read is a wrong statistic that no screen can explain
+- Statistics aggregation, especially pages and hours staying separate, and sessions that
+  cannot be counted surfacing as `unusable` rather than as a silent zero
 - Import parsing against real Goodreads exports, including malformed ones
 - Sync queue replay idempotency
 - Migrations against a 2000 book seeded database
 
 **Do not bother testing:** component rendering, navigation, styling. Manual use catches
 those faster.
+
+---
+
+## Formatting
+
+**Prettier owns it.** `eslint-config-prettier` is in the ESLint chain specifically to turn
+off every formatting rule, so ESLint judges correctness and Prettier judges layout, and
+they never disagree. Run `npm run format`; `npm run format:check` fails the same way CI
+would.
+
+**`src/ui/theme.ts` is the single exception, in `.prettierignore`.** Its type, space and
+radius scales are laid out as aligned columns, and Prettier collapses that to one space
+after each colon. The alignment is the point: the file is a design system sheet expressed
+in code, and reading a scale as a table is how a wrong value gets spotted. Nothing else is
+exempt, and a second exemption should be argued for rather than added.
+
+Formatting was previously half-enforced — Prettier was installed, a `format` script
+existed, and 26 files did not pass — which is worse than either extreme, because the diff
+noise makes every real change harder to read.
 
 ---
 

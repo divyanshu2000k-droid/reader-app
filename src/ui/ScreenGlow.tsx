@@ -9,6 +9,7 @@
  * think about it again.
  */
 
+import { useId } from 'react'
 import { StyleSheet } from 'react-native'
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 
@@ -19,15 +20,29 @@ export function ScreenGlow({ variant = 'top' }: { variant?: keyof typeof glowSpe
   const c = useColors()
   const spec = glowSpec[variant]
 
+  /**
+   * A UNIQUE gradient id per instance.
+   *
+   * This was the literal string "screenGlow". SVG ids are global to the document, so two
+   * Screens mounted at once — which happens the moment a sheet hosts one over another —
+   * define the same id twice and `url(#screenGlow)` resolves to whichever won. In light
+   * mode over dark, or across two glow variants, that is a visibly wrong background with
+   * nothing in the component to explain it.
+   *
+   * `useId` contains characters that are not safe in an SVG id reference, so it is
+   * stripped down to word characters.
+   */
+  const gradientId = `screenGlow${useId().replace(/[^a-zA-Z0-9]/g, '')}`
+
   return (
     <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
       <Defs>
-        <RadialGradient id="screenGlow" cx="50%" cy={spec.cy} rx={spec.rx} ry={spec.ry}>
+        <RadialGradient id={gradientId} cx="50%" cy={spec.cy} rx={spec.rx} ry={spec.ry}>
           <Stop offset="0" stopColor={`rgb(${c.glow.color})`} stopOpacity={c.glow.peakAlpha} />
           <Stop offset="0.72" stopColor={`rgb(${c.glow.color})`} stopOpacity={0} />
         </RadialGradient>
       </Defs>
-      <Rect width="100%" height="100%" fill="url(#screenGlow)" />
+      <Rect width="100%" height="100%" fill={`url(#${gradientId})`} />
     </Svg>
   )
 }

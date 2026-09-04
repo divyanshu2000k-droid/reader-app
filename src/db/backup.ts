@@ -46,6 +46,35 @@ export interface BackupInfo {
   readonly name: string
   readonly uri: string
   readonly createdAt: number
+  /**
+   * The schema version the database was on when this copy was taken. Parsed from the
+   * filename, and load-bearing: see `restoreNewestBackup`.
+   */
+  readonly schemaVersion: number
+}
+
+/**
+ * What a backup attempt did.
+ *
+ * This used to be `Result<BackupInfo>` with a `{ name: 'none', uri: '' }` sentinel for
+ * the fresh-install case, and `restoreNewestBackup` had a matching `!uri` check. A
+ * sentinel like that is a second outcome smuggled through the success branch: every
+ * caller has to know the magic value, and the one that forgets treats "no backup exists"
+ * as "a backup exists". Naming the two outcomes makes forgetting a compile error.
+ */
+export type BackupOutcome =
+  | { readonly kind: 'made'; readonly backup: BackupInfo }
+  | { readonly kind: 'skipped'; readonly reason: 'no database yet' }
+
+/** `reader-<schemaVersion>-<unixMs>.db`, and nothing else counts as a backup. */
+const BACKUP_NAME = /^reader-(\d+)-(\d+)\.db$/
+
+/** Narrows the regex result so the caller can index it without a cast. */
+function assertBackupName(
+  match: RegExpExecArray | null,
+  name: string,
+): asserts match is RegExpExecArray {
+  if (!match) throw new Error(`backup name does not match the naming contract: ${name}`)
 }
 
 export function listBackups(): BackupInfo[] {
@@ -53,13 +82,21 @@ export function listBackups(): BackupInfo[] {
   if (!dir.exists) return []
   return dir
     .list()
-    .filter((entry): entry is File => entry instanceof File && entry.name.endsWith('.db'))
-    .map((f) => ({
-      name: f.name,
-      uri: f.uri,
-      // reader-<version>-<unixMs>.db
-      createdAt: Number(f.name.replace(/\.db$/, '').split('-').pop() ?? 0),
-    }))
+    .filter((entry): entry is File => entry instanceof File)
+    .flatMap((f) => {
+      // Anything that does not match the naming contract is not a backup this code
+      // wrote, and guessing at its version or its age is worse than ignoring it.
+      const parts = BACKUP_NAME.exec(f.name)
+      if (!parts?.[1] || !parts[2]) return []
+      return [
+        {
+          name: f.name,
+          uri: f.uri,
+          schemaVersion: Number(parts[1]),
+          createdAt: Number(parts[2]),
+        },
+      ]
+    })
     .sort((a, b) => b.createdAt - a.createdAt)
 }
 
@@ -69,26 +106,25 @@ export function listBackups(): BackupInfo[] {
  * Returns an error rather than throwing so the caller can fail closed explicitly. There
  * is no path here that migrates anyway.
  */
-export async function backupBeforeMigration(schemaVersion: number): Promise<Result<BackupInfo>> {
+export async function backupBeforeMigration(
+  schemaVersion: number,
+): Promise<Result<BackupOutcome>> {
   const source = databaseFile()
 
   // A database that does not exist yet is a fresh install. Nothing to lose, nothing to
-  // back up, and blocking the first migration would be absurd.
+  // back up, and blocking the first migration would be absurd. Reported as its own
+  // outcome rather than as a fake backup.
   if (!source.exists) {
-    return ok({ name: 'none', uri: '', createdAt: Date.now() })
+    return ok({ kind: 'skipped', reason: 'no database yet' })
   }
 
   const dbSize = source.size ?? 0
   const free = Paths.availableDiskSpace
   if (free !== null && free < dbSize * FREE_SPACE_FACTOR) {
     return err(
-      appError(
-        'unrecoverable',
-        'Not enough free space to update safely',
-        {
-          safe: 'Your library has not been changed. Free up some space and reopen the app.',
-        },
-      ),
+      appError('unrecoverable', 'Not enough free space to update safely', {
+        safe: 'Your library has not been changed. Free up some space and reopen the app.',
+      }),
     )
   }
 
@@ -115,7 +151,16 @@ export async function backupBeforeMigration(schemaVersion: number): Promise<Resu
         if (sidecar.exists) sidecar.copy(new File(dir, `${name}${suffix}`))
       }
 
-      return { name, uri: target.uri, createdAt: Date.now() }
+      const made = BACKUP_NAME.exec(name)
+      // The name is built two lines up, so a mismatch means the naming contract and its
+      // parser have drifted apart — which would silently make every later backup
+      // invisible to listBackups. Fail here, where it is obvious.
+      assertBackupName(made, name)
+
+      return {
+        kind: 'made',
+        backup: { name, uri: target.uri, createdAt: Number(made[2]), schemaVersion },
+      }
     },
     (cause) =>
       appError('unrecoverable', 'Could not back up your library before updating', {
@@ -148,19 +193,34 @@ export function pruneBackups(): void {
 }
 
 /**
- * Restore the newest backup over the live database. Used when a migration fails.
+ * Restore the newest USABLE backup over the live database. Used when a migration fails.
+ *
+ * NEVER RESTORES A BACKUP FROM A NEWER SCHEMA THAN THE RUNNING CODE.
+ *
+ * The version has always been in the filename and used to be ignored: the newest file by
+ * timestamp won outright. After a rollback to an older build — a staged release halted,
+ * or a reader reinstalling an older APK — the newest backup on disk is from a schema this
+ * binary has never seen, and restoring it hands the app a database with columns it cannot
+ * read. That is a worse state than the failed migration it was rolling back, and it
+ * happens in exactly the situation where the reader is already having a bad day.
  *
  * Clears the live sidecars before copying: a stale `reader.db-wal` left beside a
  * restored database would be replayed on the next open and could reintroduce exactly
  * the half-migrated state being rolled back.
  */
-export function restoreNewestBackup(): Result<void> {
-  const newest = listBackups()[0]
-  if (!newest || !newest.uri) {
+export function restoreNewestBackup(currentSchemaVersion: number): Result<void> {
+  const all = listBackups()
+  const newest = all.find((b) => b.schemaVersion <= currentSchemaVersion)
+  if (!newest) {
+    const tooNew = all.length > 0
     return err(
-      appError('unrecoverable', 'No backup available to restore', {
-        safe: 'Your database was not modified.',
-      }),
+      appError(
+        'unrecoverable',
+        tooNew ? 'No backup this version can read' : 'No backup available to restore',
+        {
+          safe: 'Your database was not modified.',
+        },
+      ),
     )
   }
 

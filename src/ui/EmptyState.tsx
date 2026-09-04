@@ -11,7 +11,7 @@
 import { StyleSheet, Text, View } from 'react-native'
 
 import { Button } from './Button'
-import { font, space } from './theme'
+import { font, rules, space, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
 interface Props {
@@ -28,17 +28,14 @@ export function EmptyState({ title, body, actionLabel, onAction }: Props) {
     <View style={styles.wrap}>
       <Text
         accessibilityRole="header"
-        style={{ color: c.text, fontSize: font.heading.size, fontWeight: '600' }}
+        maxFontSizeMultiplier={rules.maxFontScale}
+        style={[typeStyle(font.heading), { color: c.text }]}
       >
         {title}
       </Text>
       <Text
-        style={{
-          color: c.textMuted,
-          fontSize: font.body.size,
-          lineHeight: font.body.lineHeight,
-          textAlign: 'center',
-        }}
+        maxFontSizeMultiplier={rules.maxFontScale}
+        style={[typeStyle(font.body), { color: c.textMuted, textAlign: 'center' }]}
       >
         {body}
       </Text>
@@ -54,7 +51,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: space.stackTight,
     paddingHorizontal: space.screen,
     paddingVertical: space.section,
   },
