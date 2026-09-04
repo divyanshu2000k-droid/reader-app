@@ -263,6 +263,21 @@ function cascadeRestore(
 // ─── THE PUBLIC API ──────────────────────────────────────────────────────────
 
 /**
+ * Whether the write actually altered a row.
+ *
+ * `ok` means "the operation completed without error", which is NOT the same as "something
+ * happened": deleting an already-deleted row, or one that never existed, succeeds and
+ * changes nothing. Returning `void` made those indistinguishable, so a caller would show
+ * "Session deleted · Undo" for a delete that did not occur — and rule 2 promises that
+ * every destructive action has an undo, not that every toast has one.
+ *
+ * Check `changed` before showing a confirmation or an undo.
+ */
+export interface WriteOutcome {
+  readonly changed: boolean
+}
+
+/**
  * Insert or update a row, and enqueue it for sync, atomically.
  *
  * `createdAt` is stamped on insert and NEVER touched by the update branch. It used to be
@@ -322,12 +337,16 @@ export async function writeRow<K extends SyncableTable>(
  * NOTHING. Enqueueing a delete for a row the server may never have seen is how a replay
  * ends up processing operations against rows that are not there.
  */
-export async function softDelete(table: SyncableTable, id: string): Promise<Result<void>> {
+export async function softDelete(
+  table: SyncableTable,
+  id: string,
+): Promise<Result<WriteOutcome>> {
   return attempt(
     async () => {
       const t = tableFor(table)
       const ts = now()
       const db = getDb()
+      let changed = false
 
       runInTransaction(() => {
         // `isNull(deletedAt)` in the predicate is what makes `changes` trustworthy: with
@@ -340,9 +359,12 @@ export async function softDelete(table: SyncableTable, id: string): Promise<Resu
           .run()
         if (res.changes === 0) return
 
+        changed = true
         enqueue(db, table, id, 'delete', ts)
         cascadeDelete(db, table, id, ts)
       })
+
+      return { changed }
     },
     (cause) =>
       appError('recoverable', 'Could not remove that', {
@@ -358,12 +380,16 @@ export async function softDelete(table: SyncableTable, id: string): Promise<Resu
  *
  * A row that is not deleted changes nothing and enqueues nothing.
  */
-export async function restoreRow(table: SyncableTable, id: string): Promise<Result<void>> {
+export async function restoreRow(
+  table: SyncableTable,
+  id: string,
+): Promise<Result<WriteOutcome>> {
   return attempt(
     async () => {
       const t = tableFor(table)
       const ts = now()
       const db = getDb()
+      let changed = false
 
       runInTransaction(() => {
         // Read the timestamp BEFORE clearing it: it is the key that identifies which
@@ -378,9 +404,12 @@ export async function restoreRow(table: SyncableTable, id: string): Promise<Resu
           .run()
         if (res.changes === 0) return
 
+        changed = true
         enqueue(db, table, id, 'upsert', ts)
         if (typeof deletedAt === 'number') cascadeRestore(db, table, id, deletedAt, ts)
       })
+
+      return { changed }
     },
     (cause) => appError('recoverable', 'Could not restore that', { cause }),
   )

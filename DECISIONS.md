@@ -202,6 +202,81 @@ and `eas.json` already carries a `development` profile.
 **Revisit:** as soon as the diagnostic prints ALL CHECKS PASSED, retry
 `npx expo run:android`. Everything else in the toolchain is verified working.
 
+## 2026-09-04 · Self-review of the review: four fixes in the never-lose-data path, three deferrals
+
+A code review of the fixes made earlier the same day. Three of the seven findings were in
+`backup.ts` and `client.ts` — the two files edited most, with the longest explanatory
+comments, under the most confidence. Same pattern as every previous entry.
+
+### Fixed now
+
+**1 · Restore no longer deletes the live database before the replacement exists.**
+It deleted `reader.db` and then copied the backup over it. A copy that throws — a full
+disk, which is exactly the situation people restore in — left the reader with **no
+database at all**, in the function whose only job is not losing data. It now copies to
+`reader.db.restoring` first; the live files are only touched once a complete copy is on
+disk beside them, and everything after that is delete-and-rename, which cannot run out of
+space halfway. Staging deliberately lives outside `backups/` so `listBackups` never sees a
+half-written file that looks like a backup.
+
+**2 · A failed WAL checkpoint is a logged warning, not an aborted backup.**
+`checkpointWal()` sat inside the fatal path, so any transient lock failed the backup, which
+blocked the migration, which meant the app could never upgrade. The sidecars are copied
+*precisely* so a partial checkpoint survives — the design was always "belt AND braces" and
+the code made the belt mandatory, throwing away the fallback that existed for this. This is
+why bug 3 that morning was catastrophic rather than a log line.
+
+**3 · `appliedMigrationCount` no longer reports 0 for every failure.**
+`catch { return 0 }` labels a full database as the oldest possible schema, so its backup is
+named `reader-0-*.db` and every future build considers it safe to restore. That is the
+identical bug this function was written to fix — reintroduced one function away, in the
+same session, having just documented why it was dangerous. Only `no such table` means a
+fresh install now; everything else throws, and `performMigrations` fails closed with a real
+message rather than letting the promise reject and leaving the app on "opening database"
+forever.
+
+**4 · `softDelete` and `restoreRow` report whether anything changed.**
+`Result<void>` made "deleted" and "there was nothing to delete" identical, so a caller
+would show "Session deleted · Undo" for a delete that never happened. They now return
+`Result<WriteOutcome>` with `changed`. Rule 2 promises an undo for every destructive
+action, not a toast for every call. The device pass asserts both directions: a live row
+reports `changed`, and restoring a live row or deleting a missing one reports no change and
+leaves the sync queue untouched.
+
+**Also, while in there:** `copy()` and `move()` return promises that this code never
+awaited, so the assertions that followed were racing them. Switched to `copySync` /
+`moveSync`, which is what the surrounding synchronous logic already assumed.
+
+### Deferred, deliberately
+
+**`writeRow` has no partial update → Slice 2, with the first edit screen.**
+`RowFor<K>` requires every non-null column and the conflict `set` writes everything passed,
+so changing a title means reconstructing the whole row, and omitting an optional field
+nulls it. The fix is an `updateRow(table, id, patch)` that touches only supplied columns.
+Deferred because the right shape is decided by the first real caller, and inventing it now
+means designing against an imagined one. **Slice 2 must not work around this with
+read-modify-write in a `queries.ts` file** — that reintroduces the lost-update race the
+single write path exists to prevent.
+**Revisit trigger:** the first edit screen.
+
+**The cascade's cost is unmeasured → measure it in Slice 2 before deciding.**
+`runInTransaction` is synchronous, so deleting a book with 500 sessions runs roughly a
+thousand statements plus a SELECT per level on the JS thread. Against "tap to saved under
+100ms" and 60fps scrolling that is a plausible jank source — but it is a guess, and the
+2000-book seed lands in Slice 2 anyway. **Measure a 500-session delete there before
+changing anything.** Optimising on suspicion would trade the cascade's per-row queue
+entries, which sync genuinely needs, for a number nobody has looked at.
+**Revisit trigger:** the Slice 2 scale pass.
+
+**`cascadeRestore` keys on exact `deleted_at` equality → accepted, revisit if it fires.**
+Two cascades within the same millisecond would cross-restore each other's children. Real,
+and vanishingly rare: it needs two soft deletes of different parents in the same tick, which
+the UI has no path to produce. The alternatives — a cascade id column, or a delete-batch
+table — add a column and a concept to every syncable table to fix something no user can
+currently trigger.
+**Revisit if:** a bulk-delete path is ever added (Recently Deleted "empty all", an import
+rollback), which would produce exactly that pattern.
+
 ## 2026-09-04 · The device pass caught three upgrade-breaking bugs. A fresh install tests nothing.
 
 Migration `0001` had never run on a device. Run it did — first against a **populated v1

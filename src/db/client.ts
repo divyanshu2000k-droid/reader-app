@@ -88,8 +88,17 @@ export function appliedMigrationCount(): number {
       'select count(*) as n from __drizzle_migrations',
     )
     return rows[0]?.n ?? 0
-  } catch {
-    return 0
+  } catch (cause) {
+    // ONLY a missing table means "fresh install". Every other failure — locked, corrupt,
+    // I/O — must surface.
+    //
+    // This used to be a bare `catch { return 0 }`, which is the same bug the caller
+    // exists to fix: 0 labels a full database as the oldest possible schema, so the
+    // backup taken from it is named `reader-0-*.db` and every future build will consider
+    // it safe to restore. Swallowing an error to produce a plausible number is how a
+    // version stops describing a fact.
+    if (cause instanceof Error && /no such table/i.test(cause.message)) return 0
+    throw cause
   }
 }
 

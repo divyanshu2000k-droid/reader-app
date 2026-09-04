@@ -105,6 +105,11 @@ export async function createSession(input: NewSession): Promise<Result<Session>>
 }
 ```
 
+`softDelete` and `restoreRow` return `Result<WriteOutcome>`, and **`ok` is not the same as
+"something happened"**: deleting an already-deleted or nonexistent row succeeds and changes
+nothing. Check `changed` before showing a confirmation or an undo — rule 2 promises an undo
+for every destructive action, not a toast for every call.
+
 `writeRow` stamps `created_at`, `updated_at` and `deleted_at` itself, so `RowFor<K>` omits
 all three and a caller cannot pass them. An update that rewrites a row's creation date, or
 a delete performed by setting `deleted_at` through `writeRow` — which would enqueue an

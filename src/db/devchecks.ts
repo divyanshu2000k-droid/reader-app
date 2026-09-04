@@ -106,6 +106,7 @@ async function checkEnqueueOnWrite() {
     })
     const del = await softDelete('books', id)
     assert(del.ok, 'softDelete returned an error')
+    assert(del.value.changed, 'softDelete reported no change for a live row')
 
     const rows = await queueRowsFor('books', id)
     assert(rows.length === 2, `expected 2 queue rows, got ${rows.length}`)
@@ -122,9 +123,27 @@ async function checkEnqueueOnWrite() {
     // And restore must bring it back and enqueue an upsert.
     const res = await restoreRow('books', id)
     assert(res.ok, 'restoreRow failed')
+    assert(res.value.changed, 'restoreRow reported no change for a deleted row')
     const after = await getDb().select().from(books).where(eq(books.id, id))
     assert(after[0]?.deletedAt === null, 'restore did not clear deleted_at')
-    return 'delete is soft, row survives, restore clears deleted_at'
+
+    // A no-op must SAY it did nothing. `ok` only means "no error"; a caller that shows an
+    // undo toast on `ok` would offer to undo a delete that never happened.
+    const again = await restoreRow('books', id)
+    assert(again.ok, 'restoring a live row should not be an error')
+    assert(!again.value.changed, 'restoring a LIVE row reported a change')
+
+    const queueAfter = await queueRowsFor('books', id)
+    const noopDelete = await softDelete('books', 'no-such-book-' + newId())
+    assert(noopDelete.ok, 'deleting a missing row should not be an error')
+    assert(!noopDelete.value.changed, 'deleting a MISSING row reported a change')
+    const queueAfterNoop = await queueRowsFor('books', id)
+    assert(
+      queueAfter.length === queueAfterNoop.length,
+      'a no-op write still touched the sync queue',
+    )
+
+    return 'delete is soft, row survives, restore clears deleted_at, no-ops report no change'
   })
 }
 

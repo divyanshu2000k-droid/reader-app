@@ -29,6 +29,14 @@ const FREE_SPACE_FACTOR = 3
  */
 const WAL_SUFFIXES = ['-wal', '-shm'] as const
 
+/**
+ * Where a restore assembles the replacement database before it displaces the live one.
+ * Deliberately not inside `backups/`: `listBackups` would otherwise have to know to
+ * ignore it, and a half-written file that looks like a backup is exactly the thing this
+ * module must never produce.
+ */
+const STAGING_SUFFIX = '.restoring'
+
 function backupsDirectory(): Directory {
   return new Directory(Paths.document, BACKUP_DIR)
 }
@@ -137,18 +145,30 @@ export async function backupBeforeMigration(
 
       // BELT. Fold the write-ahead log into the main file first. Without this, a copy of
       // `reader.db` alone can be missing every transaction still sitting in
-      // `reader.db-wal` — plausibly the reader's most recent sessions. Copying an
-      // incomplete backup is worse than not backing up, because it looks like success.
-      checkpointWal()
+      // `reader.db-wal` — plausibly the reader's most recent sessions.
+      //
+      // A FAILURE HERE IS A WARNING, NOT AN ABORT, and that is the whole point of also
+      // copying the sidecars below. A checkpoint cannot truncate the WAL while any
+      // reader holds a lock, so it can fail for reasons that have nothing to do with the
+      // backup's integrity — and when it did, this being inside the fatal path meant the
+      // backup failed, so the migration refused to run, so the app could never upgrade.
+      // The design was always "belt AND braces"; the code made the belt mandatory.
+      try {
+        checkpointWal()
+      } catch (cause) {
+        console.warn('[backup] WAL checkpoint failed, relying on the sidecars:', cause)
+      }
 
-      source.copy(target)
+      // Explicitly synchronous. `copy()` returns a promise that this code never awaited,
+      // so the assertions that followed were racing it.
+      source.copySync(target)
 
       // BRACES. A checkpoint can be partial if another connection holds a read lock, so
       // copy the sidecars too. If they are present at restore time SQLite replays them;
       // if the checkpoint was clean they are empty and harmless.
       for (const suffix of WAL_SUFFIXES) {
         const sidecar = sidecarFile(suffix)
-        if (sidecar.exists) sidecar.copy(new File(dir, `${name}${suffix}`))
+        if (sidecar.exists) sidecar.copySync(new File(dir, `${name}${suffix}`))
       }
 
       const made = BACKUP_NAME.exec(name)
@@ -232,17 +252,30 @@ export function restoreNewestBackup(currentSchemaVersion: number): Result<void> 
     closeDatabase()
 
     const target = databaseFile()
+    const staging = new File(Paths.document, 'SQLite', `${DATABASE_NAME}${STAGING_SUFFIX}`)
+
+    // STAGE FIRST. The live database is not touched until a complete copy of the backup
+    // exists on disk beside it.
+    //
+    // This used to delete the live database and then copy the backup over it. If that
+    // copy threw — and running out of disk space is most likely at exactly the moment
+    // someone is restoring — the reader was left with NO DATABASE AT ALL, in the one
+    // function whose entire job is not losing data. Everything after this copy is a
+    // metadata operation: delete and rename, which do not run out of space halfway.
+    if (staging.exists) staging.delete()
+    new File(newest.uri).copySync(staging)
+
     if (target.exists) target.delete()
     for (const suffix of WAL_SUFFIXES) {
       const live = sidecarFile(suffix)
       if (live.exists) live.delete()
     }
 
-    new File(newest.uri).copy(target)
+    staging.moveSync(target)
 
     for (const suffix of WAL_SUFFIXES) {
       const saved = new File(`${newest.uri}${suffix}`)
-      if (saved.exists) saved.copy(sidecarFile(suffix))
+      if (saved.exists) saved.copySync(sidecarFile(suffix))
     }
 
     return ok(undefined)

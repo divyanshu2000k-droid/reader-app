@@ -380,6 +380,15 @@ losing data.
 3. **Clear the live sidecars before copying the backup's in.** A stale `reader.db-wal`
    beside a restored database is replayed on next open and can reintroduce exactly the
    half-migrated state being rolled back.
+4. **A failed checkpoint is a WARNING, not an aborted backup.** The sidecars are copied
+   precisely so a partial checkpoint survives, so treating the checkpoint as mandatory
+   throws away the fallback that exists for it. It also turns any transient lock into a
+   blocked migration — which is exactly what happened once.
+5. **Restore stages the replacement before displacing the live database.** Copy the
+   backup to `reader.db.restoring`, and only then delete the live files and rename it
+   into place. Deleting first and copying over means a copy that fails halfway — most
+   likely on a full disk, which is when people restore — leaves no database at all.
+   Everything after the staged copy is a metadata operation.
 
 **A migration that ADDS A CONSTRAINT must repair the data that violates it, first, in
 the same migration.** Migration `0001` adds `UNIQUE (book_id, read_number) WHERE

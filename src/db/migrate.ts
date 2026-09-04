@@ -56,7 +56,26 @@ let inFlight: Promise<MigrationStatus> | null = null
  */
 async function performMigrations(): Promise<MigrationStatus> {
   // Named for the version of the data being copied, NOT the version being migrated to.
-  const backup = await backupBeforeMigration(appliedMigrationCount())
+  //
+  // `appliedMigrationCount` now throws rather than guessing 0 when it cannot read the
+  // table, so this fails closed with a real message instead of backing up a full
+  // database under a name that says it is empty. Letting it propagate is not an option:
+  // `runMigrations()`'s promise would reject, `useMigrationStatus` would never resolve,
+  // and the app would sit on "opening database" forever.
+  let dataVersion: number
+  try {
+    dataVersion = appliedMigrationCount()
+  } catch (cause) {
+    console.error('[migrate] could not read the schema version:', cause)
+    cached = {
+      ok: false,
+      state: 'failed',
+      error: 'Could not read your library',
+    }
+    return cached
+  }
+
+  const backup = await backupBeforeMigration(dataVersion)
   if (!backup.ok) {
     // Fail closed. An app on an old schema still works; a half-migrated one may not.
     //
