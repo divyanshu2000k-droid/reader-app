@@ -18,7 +18,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 
-import { font, motion, radius, rules, size, space } from './theme'
+import { font, motion, opacity, radius, rules, size, space } from './theme'
 import { useColors } from './useTheme'
 
 interface SkeletonProps {
@@ -27,7 +27,7 @@ interface SkeletonProps {
   style?: StyleProp<ViewStyle>
 }
 
-export function Skeleton({ width = '100%', height = 12, style }: SkeletonProps) {
+export function Skeleton({ width = '100%', height = size.skeletonLine, style }: SkeletonProps) {
   const c = useColors()
   const shimmer = useSharedValue(0)
 
@@ -35,7 +35,9 @@ export function Skeleton({ width = '100%', height = 12, style }: SkeletonProps) 
     shimmer.value = withRepeat(withTiming(1, { duration: motion.shimmer.duration }), -1, false)
   }, [shimmer])
 
-  const sweep = useAnimatedStyle(() => ({ opacity: 0.35 + shimmer.value * 0.35 }))
+  const sweep = useAnimatedStyle(() => ({
+    opacity: opacity.shimmerFloor + shimmer.value * opacity.shimmerRange,
+  }))
 
   return (
     <Animated.View

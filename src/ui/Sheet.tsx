@@ -14,6 +14,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import {
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -31,7 +32,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { font, motion, radius, rules, scrim, size, space, typeStyle } from './theme'
+import { font, motion, opacity, radius, rules, scrim, size, space, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
 interface Props {
@@ -83,6 +84,28 @@ export function Sheet({ visible, onClose, title, children, dismissable = true }:
     transform: [{ translateY: (1 - progress.value) * height }],
   }))
 
+  /**
+   * THE SHEET RISES ABOVE THE KEYBOARD ITSELF.
+   *
+   * Found on a phone: the recovery sheet's minutes field, its error and its Save button
+   * were all hidden behind the keyboard, so the reader typed blind and could not reach
+   * Save. The Modal is `statusBarTranslucent` and the app is edge-to-edge, so Android does
+   * not resize the dialog for the keyboard at all. The sheet is absolutely positioned at
+   * the bottom, so it is lifted by the keyboard's height instead. While the keyboard is up
+   * it also covers the navigation bar, so that inset is dropped from the padding.
+   */
+  const [keyboard, setKeyboard] = useState(0)
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', (e) =>
+      setKeyboard(e.endCoordinates.height),
+    )
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboard(0))
+    return () => {
+      shown.remove()
+      hidden.remove()
+    }
+  }, [])
+
   if (!mounted) return null
 
   return (
@@ -108,8 +131,9 @@ export function Sheet({ visible, onClose, title, children, dismissable = true }:
           {
             backgroundColor: c.ground,
             borderColor: c.border,
-            maxHeight: height * 0.9,
-            paddingBottom: insets.bottom + space.bottomSafe,
+            bottom: keyboard,
+            maxHeight: (height - keyboard) * 0.9,
+            paddingBottom: (keyboard > 0 ? 0 : insets.bottom) + space.bottomSafe,
           },
         ]}
       >
@@ -166,6 +190,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.grabber,
     alignSelf: 'center',
     marginBottom: space.rowWide,
-    opacity: 0.6,
+    opacity: opacity.grabber,
   },
 })

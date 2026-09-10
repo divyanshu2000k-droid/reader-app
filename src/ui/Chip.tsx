@@ -48,7 +48,7 @@ export function Chip({ label, selected = false, onPress, accessibilityLabel, sty
         numberOfLines={2}
         maxFontSizeMultiplier={rules.maxFontScale}
         style={[
-          typeStyle(font.chip, { weight: selected ? '600' : '500' }),
+          typeStyle(selected ? font.chipSelected : font.chip),
           { color: selected ? c.ground : c.textMuted },
         ]}
       >

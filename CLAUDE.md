@@ -54,13 +54,31 @@ The four, as evidence:
    library". **The device pass stayed at 14/14 throughout**, because it calls
    `checkpointWal()` in isolation and never executes the failing sequence. A suite of
    green checks over the parts of a startup path says nothing about the path.
-
 7. **The kill switch could not be switched on.** Its URL was read from `expo-constants`,
    which serves the `app.config` embedded in the APK at native build time — not the
    manifest Metro serves. Setting the key and restarting Metro did nothing, silently; the
    manifest looked right and the app logged "no URL configured". Found only by flipping
    the flag and watching a device ignore it. Public keys are now literal
    `process.env.EXPO_PUBLIC_*` reads, inlined at bundle time.
+
+8. **The typeface, the splash and the Sentry plugin were in the config and in no build.**
+   `android/` was generated once and never regenerated; `run:android` does not re-run
+   prebuild when the config changes. Everything typechecked, the config evaluated
+   correctly, the font files existed, and the app rendered in Roboto for a week. Found only
+   by looking at a real phone's screen.
+
+9. **The session-recovery sheet saved nine hours of reading for a phone left overnight.**
+   It wrote `now - startedAt` as the duration: the time the app was CLOSED, recorded as
+   reading, in the core metric, under a title that said "You were reading for 9h". It
+   worked exactly as written; the question it answered was the wrong one. The app never
+   records a number on the reader's behalf that it does not actually know. It bounds it
+   and asks.
+
+10. **The design sheet's own light-mode text colours failed WCAG AA,** and the app used
+   them for two slices. The gold on the focused tab label and Undo measured 4.26:1, and the
+   placeholder and idle tab labels 2.41:1. Nothing looked wrong on a dark-mode test phone
+   and nothing measured it. `contrast.test.ts` now computes every text/background pair in
+   both schemes.
 
 Add another if the theme counts: `font.family` was declared from the first commit and
 applied by nothing, so the entire app rendered in the wrong typeface without a single
@@ -167,35 +185,52 @@ so Node globals are not in scope for code that runs on a phone, and the test fil
 separately under `tsconfig.test.json` where `node:test` and `node:fs` are legitimate. The
 bare command only checks half of it.
 
-**A native rebuild is required** after changing `app.config.ts` — the embedded fonts live
-there. Metro alone will not pick it up.
+**After changing `app.config.ts` plugins or native config: `npm run prebuild`, THEN
+`npx expo run:android`.** A rebuild alone reuses the existing `android/`, which
+`run:android` only generates when it is missing. For a week, fonts, the splash config and
+the Sentry plugin existed in config and in no build, silently. Metro alone picks up
+neither.
 
 Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
-**Slice 1 built; three of its four done conditions verified on the emulator, one blocked
-by tooling.** Typecheck, lint and Prettier clean; 72 tests pass, including 35 asserting
-that the force-update kill switch cannot lock anyone out.
+**Slice 1 is verified on a physical phone** (Nothing Phone 2a, Android 16, arm64 — the first
+arm64 build, earlier than Slice 6 planned). Typecheck, lint, Prettier clean; 106 tests pass,
+27 of them in each of UTC, IST and US Central.
 
-**Verified on device:** launches to the empty Library with the tab bar and a Settings
-button; the remote flag shows the update screen, and wins over a pending session
-recovery; a corrupted migration shows "Could not open your library" with Try again,
-reports the real error, and leaves the database intact; an open timed session shows the
-recovery sheet.
+**Post-review fixes, 2026-09-10, verified on the phone:**
+- **The recovery sheet no longer invents a duration.** A 9h-old session shows an empty
+  field and asks. A 41m one pre-fills 41. 600 is refused. 25 saved as 1500 s with one
+  upsert. Discard soft-deleted with one delete.
+- **`Sheet` now rises above the keyboard.** It was hidden behind it, which the phone
+  showed.
+- **Try again keeps the notice on screen while it retries.** The retry ran, as a third
+  report, and no blank screen appeared. The busy label was too brief to screenshot.
+- **Brand identity is one file**, `src/ui/brand.json`: accent, grounds, typeface. Every
+  accent variant is derived; the font name is shared with app.config.ts, and a test fails
+  if they diverge.
+- **Every new guard was watched to fail:** 13 of 13 mutations went red, and a lint probe
+  raised all five new rules.
 
-**Not verified by me — needs a human at the emulator:** tabs switching, the recovery
-sheet's buttons, Settings navigation, and Try again. `adb shell input` taps do not reach
-the app on this emulator (the same failure the Slice 0 pass hit), and both `adb
-screencap` and the emulator's framebuffer capture return black while the view tree holds
-the right content, so no screen has been seen by eye either.
+**Seen on the phone, by screenshot and by behaviour:** cold start to the empty Library in
+Plus Jakarta Sans; tabs switch; Settings opens and closes; the recovery sheet appears for an
+open session, Save writes the duration and queues one upsert, Discard soft-deletes and
+queues one delete, and neither brings the sheet back; the live Cloudflare flag is fetched;
+a blocking flag shows the update screen and Update now opens the Play Store; a corrupted
+migration shows the failure notice, Try again genuinely retries, and the database survives.
+(The update screen and failure notice are confirmed by view tree and behaviour; their two
+screenshots were corrupted by a PowerShell redirect.)
 
-**One open item:** a single native SIGSEGV inside React Native's Fabric renderer on one
-cold start, not reproduced in four more. See `DECISIONS.md`, 2026-09-10.
+**Fixed today because the phone showed them:** `android/` was a week stale, so fonts, the
+splash config and the Sentry plugin were in no build — now `npm run prebuild` before any
+native rebuild after a config change. LogBox's dev-only toast swallowed taps in Modals and
+over the tab bar, and a routine warn of mine raised it every launch. Metro crashed when
+started during a Gradle build — Gradle output is now blocked from its watcher.
 
-**Needs the owner:** a Sentry DSN and a deployed kill-switch URL, both optional. See
-`docs/09-ENVIRONMENT.md`. Gate 3 (restore) is a slot until Slice 8 adds sign-in.
-Everything to date is x86_64 emulator only.
+**Open:** one unreproduced native SIGSEGV in React Native's Fabric renderer (plan in
+`DECISIONS.md`). Gate 3 (restore) waits for sign-in in Slice 8. Settings holds only the
+version and the dev device-pass button.
 
 See `docs/05-BUILD-PLAN.md`.
 
@@ -212,3 +247,9 @@ every source change needs `npx expo start --dev-client --clear` or you are testi
 code that looks like a pass; and **a dependency named in `app.config.ts` or
 `babel.config.js` is used even though nothing imports it** — `src/__tests__/config-deps.test.ts`
 guards that.
+
+**Any input in a sheet must be checked on a phone with the keyboard open.** Android does
+not resize an edge-to-edge Modal for the keyboard. `Sheet` handles it, but a hand-rolled
+`Modal` or a full-screen form does not. This will recur in most of Slices 3, 4, 5 and 5b.
+`09-ENVIRONMENT.md` has how to drive and inspect a phone from a script, and how to edit its
+database when it has no `sqlite3`.

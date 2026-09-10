@@ -86,10 +86,11 @@ boundary with a working restart rather than grey text.
 > screen. The root boundary exists and reports render errors. Gate 3 (restore) is a slot
 > that passes through until Slice 8 adds sign-in. See `DECISIONS.md`, 2026-09-10.
 >
-> **Device status, 2026-09-10:** empty Library, the update screen from the flag, the
-> migration-failure notice and the recovery sheet verified on the emulator. Tab
-> switching and every button tap are **not yet verified** — `adb` input does not reach the
-> app on this emulator — and need checking by hand before this slice is called done.
+> **Device status, 2026-09-10:** every done condition verified on a physical phone
+> (Android 16, arm64): empty Library, tabs switch, the flag shows the update screen, a
+> corrupted migration shows the failure notice with a working Try again. The recovery
+> sheet's Save and Discard also verified against the database. The emulator's "taps don't
+> reach the app" was LogBox's dev-only toast covering the tab bar, not the app.
 
 ---
 
@@ -126,6 +127,13 @@ restore it — and a 2000-book library migrates cleanly and scrolls at 60fps.
 - Session complete screen
 - Session edit and delete from book detail
 - Streak and goal calculation
+- **Every input inside a sheet, checked on a phone with the keyboard open:** the field,
+  its error line and the primary button must all be visible above the keyboard. Android
+  does not resize the edge-to-edge Modal; `Sheet` lifts itself by the keyboard height
+  (`DECISIONS.md`, 2026-09-10). What `Sheet` does NOT yet do is scroll the focused field
+  into view in a sheet taller than the space left above the keyboard. The log-session sheet
+  has several fields, so decide here whether that needs `react-native-keyboard-controller`.
+  How to check it from a script: `09-ENVIRONMENT.md`, "Driving a phone from a script"
 
 **Done when:** you can log a session for last Tuesday, edit its date afterwards, and see a
 correct daily pace chart. **Test this specific case, it is the whole thesis.** Test it with
@@ -139,9 +147,17 @@ the day the reader thinks it did, which is what `local_day` exists for.
 **Stop and decide whether to continue.** The core loop works now, which makes this the
 cheapest honest test you will get.
 
+**This gate is the project's real decision point, not a formality.** Everything before it
+tests whether the app works. This is the first test of whether anyone wants it. The product
+research shows what goes wrong in competing apps; it does not show that readers will
+switch, and there is no Android gap to fall back on (`01-PRODUCT.md`, corrected 2026-09-10).
+
 - Put it in front of ten real readers from r/books or bookstagram
 - Watch them log a session without narrating
 - Ask the only question that matters: would you be annoyed if this disappeared tomorrow
+- *Added 2026-09-10:* **record which app each reader logs in today, and include audiobook
+  listeners.** Switching is the unproven part. Format-aware counting is the one
+  differentiator with demand evidence, so it is the one this test can confirm or kill.
 
 **Continue if** at least four say yes **and** you have been logging your own real reading
 in it daily for two weeks.
@@ -157,7 +173,10 @@ launch costs five months.
 - Search hitting Google Books and Open Library in parallel, merged and deduped
 - Permanent caching in `metadata_cache`
 - Shelf picker sheet after selecting a result
-- Add manually, doubling as the edit form
+- Add manually, doubling as the edit form. **A full-screen form, not a sheet, so `Sheet`'s
+  keyboard handling does not apply.** Whether an edge-to-edge screen resizes for the
+  keyboard has not been checked on this app. Check it on a phone with the keyboard open on
+  the last field
 - Search your library, separate from search the internet
 - Error and offline states from the States sheet
 
@@ -172,6 +191,7 @@ a searched book stays fully usable offline afterwards.
 - Finish flow with half star rating, optional note, editable finish date
 - Auto move off Currently Reading, which Fable users complain it does not do
 - Re-read creating a new `reads` row that leaves the old one intact
+- The finish note and finish date are inputs: same keyboard check as Slice 3
 
 **Done when:** finishing then re-reading a book produces two reads with separate ratings
 and dates, and both count in their own years.
@@ -185,7 +205,9 @@ The actions sheet links here from Slice 2 and the screens exist in `design/`. Wi
 slice that link is a dead end.
 
 - Notes list per book, filtered by all, quotes, notes
-- Note editor: quote or note toggle, page defaulting to current page, autosaved draft
+- Note editor: quote or note toggle, page defaulting to current page, autosaved draft.
+  A multiline editor is the worst case for the keyboard covering input: same check as
+  Slice 3, typing past the visible height
 - Notes attach to the **book**, not the read, so they survive re-reads
 - Export notes for a single book
 
@@ -318,6 +340,20 @@ every book and statistic untouched.
   by name
 - **`Sheet` scrim double-timing**: it runs `withTiming` on an already-animated value, so
   reduce-motion only half applies. Cosmetic, deferred here from the Slice 0 review
+- **The toast's offset from the real tab-bar height.** `space.toastLift` is a static
+  tabBar + row, so on a screen without the bar the toast sits higher than it needs to.
+  Read `BottomTabBarHeightContext`, which the custom tab bar already reports to. Cosmetic,
+  deferred from the Slice 1 review
+- **On the release build, prove the third error tier end to end.** Throw deliberately in a
+  release build: the error boundary must render its restart screen, not a white screen, and
+  the event must arrive in Sentry with a readable, source-mapped stack. Neither can be
+  proven in development: Sentry is `enabled: !__DEV__`, and dev builds show the red box
+  first. Deferred from the Slice 1 review
+- **Light-mode contrast is fixed; the design sheets still show faint text.** The theme's
+  light values were corrected on 2026-09-10 and are held by `contrast.test.ts`, and the
+  corrected hexes were written into `design/`. But the sheets still draw some placeholder
+  and idle-tab text in the faint colour, which the code no longer does. When the design is
+  next revised, bring the sheets' usage in line
 
 **Done when:** a fresh install walks a stranger from launch to logging their first session
 without confusion.
@@ -353,6 +389,15 @@ demoralising in a way that compounds.
 - [ ] Crash free above 99.5% across a week of your own use
 - [ ] Every string checked for a stray em dash
 - [ ] **Every screen walked at 200% system font scale**, nothing clipped or overlapping
+- [ ] **The splash and all five icon layers are still Expo's placeholders and must be
+      replaced.** `assets/splash-icon.png` (Expo's grey target), `assets/icon.png`,
+      `assets/android-icon-foreground.png` (Expo's blue "A"),
+      `assets/android-icon-background.png`, `assets/android-icon-monochrome.png`, plus
+      `assets/favicon.png`. The artwork is being handled separately. Nothing in code blocks
+      on it and **nothing in code will notice it is missing**, which is why it is here.
+      Replace the files, `npm run prebuild`, rebuild, then look at the launcher icon
+      (including a themed-icon launcher, for the monochrome layer) and the splash in both
+      light and dark
 - [ ] **The dev-only device-check trigger is absent from the release bundle.** `src/db/devchecks.ts`
       is reached only through a `require()` inside an `if (__DEV__)` block in
       `src/app/index.tsx`, which Metro should drop from a production build. Verify it,

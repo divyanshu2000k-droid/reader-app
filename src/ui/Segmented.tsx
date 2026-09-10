@@ -59,7 +59,7 @@ export function Segmented<T extends string>({
               numberOfLines={2}
               maxFontSizeMultiplier={rules.maxFontScale}
               style={[
-                typeStyle(font.body, { weight: selected ? '600' : '500' }),
+                typeStyle(selected ? font.segmentSelected : font.segment),
                 { color: selected ? c.text : c.textMuted },
               ]}
             >

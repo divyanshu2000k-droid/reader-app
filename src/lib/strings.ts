@@ -103,6 +103,18 @@ export const confirm = {
   },
 } as const
 
+/**
+ * Tab labels and screen titles. Each name appears in more than one place (a tab, its
+ * screen's header, an accessibility label on the button that opens it), so a rename made
+ * in one of them used to leave the others behind.
+ */
+export const nav = {
+  library: { tab: 'Library', title: 'The library' },
+  add: { tab: 'Add', title: 'Add a book' },
+  stats: { tab: 'Stats', title: 'Stats' },
+  settings: { title: 'Settings' },
+} as const
+
 export const toasts = {
   sessionDeleted: 'Session deleted',
   bookRemoved: 'Book removed',
@@ -133,10 +145,28 @@ export const launch = {
     action: actions.tryAgain,
     busy: 'Trying again',
   },
+  /**
+   * The app only knows when a timed session STARTED. It never claims to know how long the
+   * reader read: the old title, "You were reading for 9h", was the app closing overnight
+   * dressed up as reading. See recoveryPolicy.ts and DECISIONS.md, 2026-09-10.
+   */
   sessionRecovery: {
-    /** e.g. "You were reading for 41 minutes". The duration comes from lib/dates. */
-    title: (duration: string) => `You were reading for ${duration}`,
-    body: 'The app closed before you finished. Keep the time and tell us where you got to, or throw it away.',
+    title: 'A session was still running',
+    /** e.g. "You started timing it 41m ago". The duration comes from lib/dates. */
+    started: (ago: string) =>
+      `You started timing it ${ago} ago, and the app closed before you stopped it.`,
+    /** Within the cap: the elapsed time is pre-filled, as the most it could have been. */
+    offered:
+      'We cannot tell when you stopped reading, so this is the most it could have been. Change it if you read for less.',
+    /** Past the cap: nothing is pre-filled. */
+    asked:
+      'That is too long ago for us to guess when you stopped. How long did you actually read?',
+    field: 'Minutes you read',
+    invalid: {
+      notWhole: 'Whole minutes only',
+      tooShort: 'At least one minute',
+      tooLong: (max: number) => `It started ${max} minutes ago, so no more than that`,
+    },
     save: 'Save this session',
     discard: 'Discard it',
   },

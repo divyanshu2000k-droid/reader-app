@@ -86,7 +86,7 @@ export function BookCover({
           numberOfLines={1}
           maxFontSizeMultiplier={rules.maxFontScale}
           style={[
-            typeStyle(variant === 'hero' ? font.title : font.bodyStrong, { weight: '700' }),
+            typeStyle(variant === 'hero' ? font.coverInitialHero : font.coverInitial),
             { color: c.textSecondary },
           ]}
         >

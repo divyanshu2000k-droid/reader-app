@@ -6,7 +6,7 @@
  * pretends to have content it does not.
  */
 
-import { empty } from '@/lib/strings'
+import { empty, nav } from '@/lib/strings'
 import { EmptyState } from '@/ui/EmptyState'
 import { Header } from '@/ui/Header'
 import { Screen } from '@/ui/Screen'
@@ -14,7 +14,7 @@ import { Screen } from '@/ui/Screen'
 export function AddScreen() {
   return (
     <Screen>
-      <Header title="Add a book" />
+      <Header title={nav.add.title} />
       <EmptyState
         title="Search, scan or type it in"
         body="Finding books by title, ISBN or barcode arrives in the next update. Everything you add stays on this phone."
@@ -26,7 +26,7 @@ export function AddScreen() {
 export function StatsScreen() {
   return (
     <Screen>
-      <Header title="Stats" />
+      <Header title={nav.stats.title} />
       <EmptyState title={empty.stats.title} body={empty.stats.body} />
     </Screen>
   )

@@ -13,7 +13,7 @@ import { StyleSheet, Text, View } from 'react-native'
 
 import { runDevicePass } from '@/db/devPass'
 import { appVersion } from '@/lib/config'
-import { actions } from '@/lib/strings'
+import { actions, nav } from '@/lib/strings'
 import { Button } from '@/ui/Button'
 import { Header } from '@/ui/Header'
 import { Screen } from '@/ui/Screen'
@@ -40,7 +40,7 @@ export function SettingsScreen() {
   return (
     <Screen>
       <Header
-        title="Settings"
+        title={nav.settings.title}
         right={<Button label={actions.done} variant="ghost" onPress={() => router.back()} />}
       />
       <View style={styles.body}>

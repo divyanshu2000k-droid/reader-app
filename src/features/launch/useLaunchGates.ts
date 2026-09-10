@@ -36,23 +36,27 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { LogBox } from 'react-native'
 
 import { checkForceUpdate } from './forceUpdate'
 import type { UpdateRequirement } from './forceUpdatePolicy'
+import { evaluate, type LaunchGate } from './gateOrder'
 import { getOpenSession, type OpenSession } from './queries'
 import { useMigrationStatus, type MigrationState } from '@/db/migrate'
 
-export type LaunchGate =
-  /** Nothing has been decided yet. The splash is still up. */
-  | { readonly gate: 'booting' }
-  /** Gate 1. No dismiss, by design. */
-  | { readonly gate: 'update'; readonly requirement: UpdateRequirement }
-  /** Underneath every gate: the database could not be opened or migrated. */
-  | { readonly gate: 'migrationFailed'; readonly message: string }
-  /** Gate 2. */
-  | { readonly gate: 'recoverSession'; readonly session: OpenSession }
-  /** Gate 4. Show the app. */
-  | { readonly gate: 'ready' }
+export type { LaunchGate }
+
+/**
+ * The `[launch]` line stays in logcat and never raises a LogBox toast.
+ *
+ * In development every `console.warn` raises LogBox's toast, and on Android that toast sits
+ * in a window ABOVE a Modal and swallows every touch beneath it. Found on a phone: the
+ * session-recovery sheet's buttons did nothing at all — the press never reached JS — until
+ * the toast was dismissed, after which Save worked on the first tap. The toast also covers
+ * the tab bar. This warn fires on every launch, so it raised that toast on every launch.
+ * Dev-only: release builds have no LogBox. See DECISIONS.md, 2026-09-10.
+ */
+if (__DEV__) LogBox.ignoreLogs([/^\[launch\]/])
 
 export interface LaunchState {
   readonly state: LaunchGate
@@ -125,43 +129,11 @@ export function useLaunchGates(): LaunchState {
   /** The reader answered the recovery sheet. Nothing left to recover. */
   const resolveSession = useCallback(() => setOpenSession(null), [])
 
-  return { state: evaluate(requirement, migration, openSession), migration, resolveSession }
-}
-
-/**
- * The gate order, in one readable place.
- *
- * Deliberately a pure function of the three inputs rather than a chain of early returns
- * spread through the hook: the order IS the specification, and it should be possible to
- * check it against Journey A by reading twelve lines.
- */
-function evaluate(
-  requirement: UpdateRequirement | null | undefined,
-  migration: MigrationState,
-  openSession: OpenSession | null | undefined,
-): LaunchGate {
-  // 1 · Force update. Still checking means still booting: a retired build must not get a
-  // glimpse of the library first.
-  if (requirement === undefined) return { gate: 'booting' }
-  if (requirement) return { gate: 'update', requirement }
-
-  // 0 · The database, underneath everything. A failure here takes over the screen.
-  if (migration.status.state === 'pending') return { gate: 'booting' }
-  if (migration.status.state === 'failed') {
-    return { gate: 'migrationFailed', message: migration.status.error }
+  // The order itself lives in gateOrder.ts, a pure function with a node test. It was here,
+  // untested, until a review asked what would catch a refactor that reordered it.
+  return {
+    state: evaluate(requirement, migration.status, openSession),
+    migration,
+    resolveSession,
   }
-
-  // 2 · A session was still running.
-  if (openSession === undefined) return { gate: 'booting' }
-  if (openSession) return { gate: 'recoverSession', session: openSession }
-
-  // 3 · Restore. Deliberately not implemented: it triggers on "signed in AND the local
-  // database is empty", and there is no sign-in until Slice 8, so the condition cannot be
-  // true. The slot is here, in order, so that Slice 8 adds a branch rather than
-  // retrofitting a sequencer — `isLibraryEmpty()` in queries.ts is the half that can be
-  // written without auth and is already there. Building the screen now would mean
-  // inventing a book count to display. See DECISIONS.md, 2026-09-10.
-
-  // 4 · Library.
-  return { gate: 'ready' }
 }

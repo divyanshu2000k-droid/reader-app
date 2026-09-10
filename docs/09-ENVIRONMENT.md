@@ -27,6 +27,7 @@ similar.
 | NDK | **27.1.12297006** (~1 GB, installed automatically by the first Gradle build) |
 | Emulator AVD | **`Pixel_7_API_36`**, system image `system-images;android-36.1;google_apis;x86_64` |
 | Node / npm | Node 24, npm 11 |
+| Test phone | Nothing Phone 2a (A142), Android 16, arm64, 1084×2412 with a display density override of 375, dark mode, IST. The device Slice 1 was verified on |
 
 **JDK 17, not 21.** Android Studio bundles a JBR 21 at `…\Android Studio\jbr`. Expo SDK 57
 documents 17, and a mismatch surfaces as a Gradle
@@ -124,6 +125,51 @@ npx expo run:android
 
 First build takes 10–20 minutes and installs the NDK. Subsequent builds are minutes.
 
+**From the assistant's own shell, Gradle needs a real temp directory:** set
+`TEMP=C:\Temp`, `TMP=C:\Temp` and `JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=C:\Temp` for the
+build. That shell inherits a short 8.3-form `TEMP` (`C:\Users\DIVYAN~1\…`) under which
+Java's NIO selector cannot start, so no Gradle build can start. The user's own terminal
+does not have this problem. `DECISIONS.md`, 2026-09-03, has the investigation and its
+correction: a failure seen only in the assistant's shell is a claim about that shell.
+
+**After any change to `app.config.ts` plugins or native config, regenerate first:**
+
+```
+npm run prebuild          # expo prebuild --platform android --clean
+npx expo run:android
+```
+
+`run:android` only generates `android/` when the directory is missing; it does not
+regenerate it when the config changes. Skipping this step is how Plus Jakarta Sans, the
+splash config and the Sentry plugin sat in the config for a week without reaching a single
+build. `android/` is generated, gitignored and never hand-edited, so `--clean` loses nothing.
+
+**`npm test` now catches a stale `android/`.** `src/__tests__/native-fonts.test.ts` compares
+`android/app/src/main/res/font` with the fonts in `src/ui/brand.json`, then checks that the
+built debug APK contains every font resource the native project declares. It fails with the
+command to run. Both halves **skip**, visibly, when there is no `android/` or no APK yet.
+`app.config.ts` also throws if a font file named in brand.json is missing, so a typo fails
+`npm run prebuild` instead of producing a build without that weight.
+
+**Before driving the app with `adb` taps, make sure no LogBox toast is showing.** In a
+development build, any `console.warn` raises LogBox's "Open debugger to view warnings" toast.
+On Android it sits above Modals and over the tab bar and swallows the taps beneath it, so a
+button that "does nothing" may never have been touched. Dismiss it with its X first. The
+app's own routine diagnostics are routed away from LogBox; a toast that still appears means
+something genuinely warned. **`console.error` raises a red error toast the same way.** A
+failed migration raises one by design (the `[unrecoverable]` report), bottom of the screen.
+It does not cover Try again, but it covers anything drawn at the bottom.
+
+**Let a native build finish before starting Metro.** Gradle creates and deletes files in
+`node_modules/*/android/build` throughout a build. `metro.config.js` now blocks those paths,
+but before it did, a Metro started mid-build either crashed on start or hung without ever
+serving a bundle. If Metro sits at "Bundler cache is empty, rebuilding" for more than a
+couple of minutes, restart it with `--clear`.
+
+**On a phone over USB:** run `adb reverse tcp:8081 tcp:8081` so the dev build reaches Metro
+on `localhost`. If `expo run:android` cannot find the phone, set `ANDROID_SERIAL` to its
+serial from `adb devices` rather than passing `--device`, which expects a device name.
+
 **The debug APK is around 80 MB and that is expected.** It carries an unminified JS
 bundle, source maps, the dev client and Hermes debugger, and every ABI, with no R8
 shrinking. The `< 15 MB` budget in `06-CONVENTIONS.md` is a **release** budget and is
@@ -192,6 +238,17 @@ EXPO_PUBLIC_FORCE_UPDATE_URL=http://10.0.2.2:8787/v1/kill-switch.json
 
 Plain `http` works in debug builds only. Release builds require `https`, which is correct.
 
+**On a physical phone, `10.0.2.2` does not exist.** Reverse the port instead and use
+`localhost`:
+
+```
+adb reverse tcp:8787 tcp:8787
+EXPO_PUBLIC_FORCE_UPDATE_URL=http://localhost:8787/v1/kill-switch.json
+```
+
+Remove it afterwards with `adb reverse --remove tcp:8787`, and put `.env` back. Restart
+Metro with `--clear` after each change: the URL is inlined at bundle time.
+
 ---
 
 ## Metro, and the two things that will waste your time
@@ -210,6 +267,34 @@ bundle for something you just wrote:
 ```
 curl -s "http://127.0.0.1:8081/.expo/.virtual-metro-entry.bundle?platform=android&dev=true" | grep -c "some new string"
 ```
+
+**Use exactly that URL.** `node_modules/expo-router/entry.bundle?platform=android&dev=true`
+also returns a full-sized bundle (about 6 MB, 2875 modules) with **none of the app's code in
+it**. Grepping it for a string you just wrote returns 0 whether or not the change is live,
+which reads as "stale" when it isn't. That cost a Metro restart on 2026-09-10.
+
+**Starting Metro in the background, from the assistant's shell on Windows.** Bash
+`cmd //c start …` hangs. Start it from PowerShell instead, logging to a file:
+
+```powershell
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = 'cmd.exe'
+$psi.Arguments = '/c npx expo start --dev-client --clear > C:\Temp\metro-a.log 2>&1'
+$psi.WorkingDirectory = '<repo>'
+$psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+[System.Diagnostics.Process]::Start($psi) | Out-Null
+```
+
+- **To stop it, stop only the process listening on 8081:**
+  `Stop-Process -Id (Get-NetTCPConnection -LocalPort 8081 -State Listen).OwningProcess`.
+  Never kill every `node` process: the user's other tools are node too.
+- **Use a new log file name on each restart.** Stopping the node process can leave its
+  parent `cmd.exe` holding the old log open. A restart that redirects to the same file then
+  fails to start, silently, and the old log still ends in a healthy-looking "Bundled" line.
+- **Confirm it is listening** with `Get-NetTCPConnection -LocalPort 8081 -State Listen`
+  before launching the app.
+- **A cold start after `--clear` spends 13–16 s bundling.** A screenshot taken before
+  "Android Bundled" appears in the log shows the splash screen, which is not a bug.
 
 **When a bundle fails with a confusing internal Metro error** — `Cannot read properties of
 undefined (reading 'transformFile')` and similar — run `npx expo export --platform android`.
@@ -246,14 +331,16 @@ connection or a real filesystem runs on a device instead, from a `__DEV__`-only 
 adb logcat -d | grep devcheck
 ```
 
-**Why a flag and not the button.** The `__DEV__` button still exists and still works for a
-human finger, but `adb shell input tap` does **not** reach the JS handler — not with
-`tap`, `touchscreen tap`, or a zero-length `swipe`, and not with the window focused. Two
-ANR dialogs appeared during that attempt ("Input dispatching timed out (Application does
-not have a focused window)"), though thread dumps taken at the time showed both the main
-thread and `mqt_v_js` idle, so there was no app-level hang. A suite that can only be
-started by a finger also cannot be run from a script, and Slice 2 has to re-run this
-against 2000 books.
+**Why a flag and not the button.** A suite that can only be started by a finger cannot be
+run from a script, and Slice 2 has to re-run this against 2000 books.
+
+> **Correction, 2026-09-10.** This paragraph used to say `adb shell input tap` never
+> reaches the JS handler. On the Slice 0 emulator it didn't, and two ANR dialogs appeared
+> ("Application does not have a focused window"). **On the Slice 1 phone, taps reach JS
+> reliably** once no LogBox toast is showing: Save, Discard, Try again and text fields were
+> all driven by `input tap` and confirmed in the database. The LogBox toast, which swallows
+> taps and was only identified in Slice 1, may have been the Slice 0 cause too. That was
+> never re-tested on the emulator. If a tap seems to do nothing, check for a toast first.
 
 **On Windows, set the flag through the process environment, not `set VAR=1 && cmd`.** In
 `cmd.exe` that form puts the trailing space *into the value*, so the flag arrives as
@@ -281,12 +368,81 @@ still could not run on a real database. To exercise the upgrade path properly:
    migration's SQL.
 3. Launch, letting the app build the old schema, then populate it — through the app, or
    directly with `adb shell run-as com.example.reader sqlite3 files/SQLite/reader.db`.
+   **That works on the emulator only: physical phones ship no `sqlite3`.** On a phone, use
+   the pull, edit and push recipe below.
    Include the shapes that violate whatever the new migration adds.
 4. **Fingerprint the data before upgrading**, so "nothing was lost" is checkable rather
    than asserted.
 5. Restore `migrations.js` and `_journal.json`, restart Metro with `--clear`, relaunch.
 6. Compare the fingerprint, check `select count(*) from __drizzle_migrations`, and inspect
    the indexes actually present in `sqlite_master`.
+
+---
+
+## Driving a phone from a script
+
+How Slice 1 was verified on the phone without a human tapping. From Git Bash, with
+`export MSYS_NO_PATHCONV=1 ANDROID_SERIAL=<serial>`. Without the first, Git Bash rewrites
+`/sdcard/...` into a Windows path and adb fails confusingly.
+
+- **Screenshots: `adb exec-out screencap -p > shot.png`, from Bash.** PowerShell's `>`
+  re-encodes the stream and corrupts the PNG. That happened twice in Slice 1.
+- **Read the screen as data, not pixels:**
+  `adb shell uiautomator dump /sdcard/ui.xml` then `adb exec-out cat /sdcard/ui.xml`. Each
+  node carries `text` or `content-desc`, `enabled` and `bounds`. This is how "Save is
+  disabled" or "the field shows 41" is proven rather than eyeballed. A Pressable's
+  `enabled` reflects its `disabled` prop.
+- **Tap using the dump's `bounds`, which are device pixels.** A screenshot shown to an
+  assistant is usually scaled, so its coordinates are not the phone's.
+  `adb shell input tap X Y` for a tap, and `adb shell input text 25` to type into the
+  focused field.
+- **Launch:** `adb shell am start -n com.example.reader/.MainActivity`. The debug build has
+  no dev-client deep-link scheme; it loads from `localhost:8081` through `adb reverse`.
+- **Anything shorter than about half a second cannot be screenshotted.** A screencap takes
+  that long, and there's no video decoder on this machine to read a `screenrecord`.
+  Examples: a busy label during a fast retry, or a one-frame blank. Prove those states by
+  behaviour instead. Logcat is the usual witness: count `[unrecoverable]` reports before
+  and after a tap to show a retry ran.
+  - A tap followed by a screencap inside one `adb shell "…; …"` call is the fastest
+    capture available, and it still missed the retry's busy label.
+  - It did catch Save's and Discard's busy states, which last longer.
+- **The keyboard check** (`06-CONVENTIONS.md`): tap the field, `input text`, then screenshot
+  and dump. The field's, the error's and the button's `bounds` must all sit above the
+  keyboard's top edge.
+
+## Editing the app's database on a phone
+
+Phones have no `sqlite3`, so the database is edited on the host. Every step below exists
+because skipping it broke something in Slice 1.
+
+1. `adb shell am force-stop com.example.reader` first. An open connection keeps writing to
+   the WAL.
+2. Pull all three files:
+   `adb exec-out run-as com.example.reader cat files/SQLite/reader.db > reader.db`, then the
+   same for `reader.db-wal` and `reader.db-shm`. Without the WAL you edit a stale database.
+3. Edit with Python's `sqlite3`. Then `PRAGMA wal_checkpoint(TRUNCATE)` and
+   `PRAGMA journal_mode=DELETE`, so the result is one self-contained file.
+4. Push through `/data/local/tmp`, since `run-as` cannot read your host.
+   - `adb push reader.db /data/local/tmp/reader.db`, then `adb shell chmod 644` it.
+   - `adb shell run-as com.example.reader cp /data/local/tmp/reader.db files/SQLite/reader.db`
+     as **separate arguments**. `run-as … sh -c '…'` loses its quoting through
+     `adb shell`, and `cp` receives one argument.
+   - `adb shell run-as com.example.reader rm -f files/SQLite/reader.db-wal files/SQLite/reader.db-shm`,
+     or SQLite replays the old WAL over your edit.
+   - Delete the `/data/local/tmp` copy.
+5. Keep a clean copy of the pulled database, and push it back when done.
+
+**Rows planted this way bypass `sync_queue`.** That's fine for testing screens. It is
+invalid for testing sync, which must go through `write.ts`.
+
+**Recipes used in Slice 1:**
+- **An unfinished timed session (recovery gate):** insert into `sessions` with
+  `is_timed = 1`, `duration_seconds` NULL, and `occurred_at` set to the elapsed time you
+  want. 9 h exercises the "ask" path; 41 min exercises the pre-filled one.
+- **A migration that fails on every attempt (failure notice, Try again):** delete the last
+  row of `__drizzle_migrations`. Drizzle re-runs that migration against a schema that
+  already has it, and it fails every time, retries included. Restore the clean copy
+  afterwards.
 
 ---
 

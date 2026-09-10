@@ -13,9 +13,11 @@ because the choice was wrong or because the thing is just hard.
    assistant is mediocre at means a project that stalls.
 2. **Solo developer, nights and weekends.** Roughly 15 hours a week. Anything requiring a
    specialist or a long ramp is out.
-3. **Android only for v1.** This is strategy, not compromise. Every well designed
-   competitor is iOS first or iOS only, which leaves the platform 72% of the world uses
-   underserved.
+3. **Android only for v1.** A scope decision: one platform is what one part-time developer
+   can build, test on real devices and support. It is **not** a market gap. This line
+   used to say every well-designed competitor is iOS only; that was false, and the
+   category's leading apps are on Android too (`01-PRODUCT.md`, Positioning, corrected
+   2026-09-10).
 4. **Effectively zero budget.** Total spend must be a $25 one time Play Store fee plus
    nothing recurring until there is revenue.
 5. **Must work fully offline.** Reading happens on planes, in bed, on the metro.
@@ -250,7 +252,7 @@ counts break progress and statistics silently, which is worse than an obvious er
 | State | Zustand | Minimal, no boilerplate, assistant writes it well |
 | Server state | TanStack Query | Only for the two search APIs, not for local data |
 | Styling | StyleSheet plus a typed theme object | No extra runtime; theme file mirrors the design system sheet exactly. Every colour, spacing, radius and type size is lint-enforced to come from it |
-| Fonts | Plus Jakarta Sans, embedded at build time via the `expo-font` config plugin | Five weights linked as an Android XML font family, so one `fontFamily` plus a `fontWeight` resolves correctly. Runtime `useFonts()` would mean a blocked splash or a visible reflow against a sub-2s cold start. Applied only through `typeStyle()` in `theme.ts` |
+| Fonts | Plus Jakarta Sans, embedded at build time via the `expo-font` config plugin | Five weights linked as an Android XML font family, so one `fontFamily` plus a `fontWeight` resolves correctly. Runtime `useFonts()` would mean a blocked splash or a visible reflow against a sub-2s cold start. Applied only through `typeStyle()` in `theme.ts`. The family, package and files are named once in `src/ui/brand.json`, read by both `theme.ts` and `app.config.ts`; `brand-font.test.ts` fails if they diverge, and `native-fonts.test.ts` fails if `android/` or the APK lacks them |
 | Lists | FlashList | FlatList will not survive a 2000 book import |
 | Payments | RevenueCat | Free under $2500 monthly tracked revenue, handles Play billing edge cases you should not hand write |
 | Strings | One flat `src/lib/strings.ts` | No i18n library. Costs nothing now, saves the India localisation later. See `06-CONVENTIONS.md` |

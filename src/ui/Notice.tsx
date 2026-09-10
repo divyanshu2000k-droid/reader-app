@@ -20,7 +20,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { Button } from './Button'
 import { Icon, type IconName } from './Icon'
 import { Screen } from './Screen'
-import { font, radius, rules, size, space, typeStyle } from './theme'
+import { font, iconSize, iconStroke, radius, rules, size, space, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
 interface Props {
@@ -62,7 +62,12 @@ export function Notice({
         <View
           style={[styles.iconBox, { backgroundColor: c.surface, borderColor: c.borderStrong }]}
         >
-          <Icon name={icon} size={27} color={c.accentInk} strokeWidth={1.8} />
+          <Icon
+            name={icon}
+            size={iconSize.notice}
+            color={c.accentInk}
+            strokeWidth={iconStroke.notice}
+          />
         </View>
 
         <Text
@@ -104,7 +109,7 @@ export function Notice({
       {footer ? (
         <Text
           maxFontSizeMultiplier={rules.maxFontScale}
-          style={[typeStyle(font.caption), styles.centred, { color: c.textGhost }]}
+          style={[typeStyle(font.caption), styles.centred, { color: c.textMuted }]}
         >
           {footer}
         </Text>

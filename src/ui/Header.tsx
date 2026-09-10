@@ -12,7 +12,17 @@ import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 
 import { Icon, type IconName } from './Icon'
-import { font, motion, radius, rules, size, space, typeStyle } from './theme'
+import {
+  font,
+  iconSize,
+  iconStroke,
+  motion,
+  radius,
+  rules,
+  size,
+  space,
+  typeStyle,
+} from './theme'
 import { useColors } from './useTheme'
 
 export function Header({ title, right }: { title: string; right?: ReactNode }) {
@@ -52,7 +62,12 @@ export function HeaderIconButton({ icon, accessibilityLabel, onPress }: IconButt
         pressed && styles.pressed,
       ]}
     >
-      <Icon name={icon} size={17} color={c.textSecondary} strokeWidth={2} />
+      <Icon
+        name={icon}
+        size={iconSize.header}
+        color={c.textSecondary}
+        strokeWidth={iconStroke.header}
+      />
     </Pressable>
   )
 }

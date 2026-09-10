@@ -17,6 +17,8 @@ import Svg, { Path, Circle } from 'react-native-svg'
 
 import type { ColorValue } from 'react-native'
 
+import { iconSize, iconStroke } from './theme'
+
 export type IconName =
   'book' | 'plus' | 'chart' | 'settings' | 'download' | 'restore' | 'alert' | 'clock'
 
@@ -28,7 +30,12 @@ interface Props {
   strokeWidth?: number
 }
 
-export function Icon({ name, size = 21, color, strokeWidth = 1.9 }: Props) {
+export function Icon({
+  name,
+  size = iconSize.base,
+  color,
+  strokeWidth = iconStroke.base,
+}: Props) {
   return (
     <Svg
       width={size}

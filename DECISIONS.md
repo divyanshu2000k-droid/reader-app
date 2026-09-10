@@ -630,6 +630,303 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-10 · CORRECTION to the product research: there is no Android whitespace
+**The error:** `01-PRODUCT.md` (Positioning) and `02-ARCHITECTURE.md` (constraint 3) claimed
+Android-first was a structural advantage because the best competitors are iOS only, and
+that the best-designed apps were "invisible to 72% of the world's phones". That is false.
+On the Play Store, as checked by the project owner on 2026-09-10:
+- Bookmory has over 1M installs, rated 4.8.
+- Bookly (listed in the doc as iOS only) has over 500k.
+- StoryGraph, Fable, Book Towers, Bookshelf, Yuuna, Leero and Seekquel are all on Android.
+
+**What the research does and does not support, recorded so it is not re-derived wrongly:**
+- **The nine complaints are real and sourced.** But a complaint comes from a retained user.
+  It is evidence of a retention problem for *that* app, not evidence of unmet demand for
+  this one.
+- **Data integrity is a retention feature, not an acquisition feature.** Never losing
+  sessions, editable dates and safe import keep readers who have already chosen the app.
+  They win no one.
+- **The only differentiator with genuine demand evidence is format-aware counting for
+  audiobooks,** because it is the top-voted item on StoryGraph's public roadmap, not a
+  review complaint. It is also on the best-known competitor's own roadmap, so the window
+  closes when they ship it.
+- **The Slice 3 gate is therefore the real decision point for the project, not a
+  formality.** Nothing before it tests whether readers will switch.
+
+**Changed:**
+- `01-PRODUCT.md`: Positioning, the store-listing claim that "no competitor can currently
+  write" those sentences (never verified on Android), finding 5, and a new section, "What
+  the research shows, and what it does not".
+- `02-ARCHITECTURE.md`: constraint 3.
+- `05-BUILD-PLAN.md`: the gate now says why it matters. **I added one gate step:** record
+  each reader's current app and include audiobook listeners. The owner may strike it.
+
+**Android-only for v1 stands, as a scope decision.** One platform is what a solo
+part-time developer can build and support. That was always the real reason, and it does
+not depend on a market gap.
+**Revisit if:** the gate passes. Re-check the competitor list then, before writing a store
+listing.
+
+## 2026-09-10 · CORRECTION to the design sheet: five light-mode colours failed WCAG AA
+**Chose:** darken each by the least that clears the threshold, keeping hue and saturation.
+Every ratio is computed by `contrastRatio()` in `src/ui/color.ts` (WCAG 2.x relative
+luminance), with translucent surfaces composited over the ground first.
+
+| Token (light) | Sheet value | Worst real pair, before | New value | After |
+|---|---|---|---|---|
+| `accentInk` | `#A4681A` | 3.89:1 on the pill background; 4.26:1 on ground | `#965F18` (offset l −23.5 → −26.6) | 4.51:1 pill; 4.94:1 ground; 5.32:1 white |
+| `textMuted` | `#7D7462` | 4.28:1 on ground | `#79705F` (l −1.4) | 4.54:1 |
+| `success` | `#3D8B5E` | 3.86:1 on ground | `#377E55` (l −3.6) | 4.55:1 |
+| `textFaint` | `#A8A08E` | 2.41:1, used as text | `#988E79` (l −7.3), **non-text only** | 3.01:1, meets 3:1 for icons |
+| `textGhost` | `#C5BDA9` | 1.74:1, used as a Notice footer's text | unchanged, **decoration only** | n/a |
+
+**What the owner asked for:** `accentInk` darkened until it clears 4.5:1 on the light
+background while staying recognisably the same gold. That's 3.1 lightness points, same hue
+offset. It was measured against the pill button's background as well as the ground, because
+the pill draws `accentInk` on `accentSurface`. Also asked for: a test that fails on any
+text pair below 4.5:1.
+
+**What the test then found**, and why each was fixed rather than exempted. The owner asked
+for every text pair to be covered, so exempting any would have made the test lie.
+- `textMuted` and `success` were darkened by the minimum.
+- `textFaint` could not become a 4.5:1 text colour without collapsing into `textMuted`. So
+  it became icon-only: the placeholder and the idle tab label moved to `textMuted`, and the
+  idle tab icon keeps `textFaint` at 3:1. Idle and raised tab labels now differ by weight
+  alone.
+- The Notice footer moved from `textGhost` to `textMuted`.
+
+**Dark mode passed everywhere** and is unchanged.
+
+**Guard:** `src/ui/__tests__/contrast.test.ts`.
+- Every text token on ground, surface and raised surface.
+- Six component-specific pairs.
+- `textFaint` at 3:1.
+- A source scan that fails if `textFaint` or `textGhost` is used anywhere except an
+  `<Icon>`, `backgroundColor` or `borderColor`.
+
+**Design sheets:** the three changed hexes were replaced in `design/*.dc.html`. The sheets
+still draw some placeholder and idle-tab text in the faint colour, which the code no longer
+does. That is noted for the next design revision (`05-BUILD-PLAN.md`, Slice 11).
+**Revisit if:** a component draws text on a new background. Add the pair to the test's
+`SPECIAL` list, or it is unguarded.
+
+## 2026-09-10 · `09-ENVIRONMENT.md` said taps never reach JS; on the phone they do
+The Slice 0 note said `adb shell input tap` does not reach the JS handler. Slice 1 drove
+Save, Discard, Try again and text fields by `input tap` on the phone, confirmed in the
+database, once no LogBox toast was showing. The toast may have been the Slice 0 cause as
+well; that was never re-tested on the emulator. The doc now says so rather than stating
+either as fact. It also gained what Slice 1 learned about driving a phone from a script and
+editing its database without `sqlite3`, which until now lived only in one conversation.
+
+## 2026-09-10 · `Sheet` lifts itself above the keyboard
+**Found on the phone** while retesting the recovery sheet: the keyboard covered the minutes
+field, its error line and Save. The reader typed blind and could not reach the button.
+**Cause:** the Modal is `statusBarTranslucent` and the app is edge-to-edge, so Android does
+not resize the dialog window for the IME. The UI dump confirmed there was no resize at all;
+the only movement was the error line growing the content.
+**Chose:** `Sheet` listens to `Keyboard` show/hide and offsets its absolute `bottom` by the
+keyboard's height. While the keyboard is up it also drops the navigation-bar inset from its
+padding, since the keyboard covers that bar.
+**Over:**
+- Dropping `statusBarTranslucent`, which would bring back a scrim that stops at the
+  status bar.
+- Reanimated's `useAnimatedKeyboard`, which watches the activity window, not the Modal's
+  dialog window.
+- Adding react-native-keyboard-controller. That is a new native dependency for one sheet.
+**Revisit if:** Slice 3's session logger puts several fields in a sheet. At that point
+`keyboard-controller`'s focused-input scrolling would earn its place.
+**This will recur.** Nearly every input still to be built sits in a sheet or a form:
+- Slice 3: log session.
+- Slice 4: add manually. That's a full-screen form, a different case, still unverified.
+- Slice 5: finish note and date.
+- Slice 5b: note editor.
+
+What protects each of them:
+- The rule in `06-CONVENTIONS.md` (Styling).
+- A check written into each of those slices in `05-BUILD-PLAN.md`.
+- A line in `CLAUDE.md`.
+- The how-to in `09-ENVIRONMENT.md`.
+
+**Known gap:** `Sheet` lifts itself as a whole, but in a sheet taller than the space
+above the keyboard it does not scroll the focused field into view. Keyboard events were
+confirmed to fire inside the RN Modal on Android 16. Neither Reanimated's keyboard hook nor
+dialog resizing was needed.
+
+## 2026-09-10 · Session recovery never invents a duration
+**The bug:** "Save this session" wrote `now - startedAt`. A session killed at 23:00 and
+reopened at 08:00 saved nine hours of reading, silently, into the statistics that are the
+product's core metric, under a title that said "You were reading for 9h".
+**Chose:** the elapsed time is treated as what it is, an **upper bound**. Within 180 minutes
+it is pre-filled as editable minutes, with copy saying it is the most it could have been.
+Past 180 minutes the field starts **empty** and the sheet asks. Save is disabled until the
+value is a whole number from 1 to the elapsed minutes. The title no longer claims a
+reading time at all. The rule is `src/features/launch/recoveryPolicy.ts`, with tests.
+**Over:**
+- Saving the elapsed time silently. That was the bug.
+- Capping it silently at 3h. That still writes a number nobody read.
+- Always asking, with an empty field. For the common case (an OEM kills a 25-minute
+  session) the bound is a good answer, and making the reader type it is friction for nothing.
+- Discarding by default. That loses real reading, which rule 2 forbids.
+**Because:** the app knows when the session started and nothing about when the reader
+stopped. Any duration it writes without the reader seeing and accepting it is fabricated.
+**Accepted cost:** within the cap, a reader who taps Save without reading the number still
+over-records if they stopped early. They have seen the number and the sentence that
+qualifies it; that is the line between asking and assuming.
+**Revisit if:** Slice 6's timer writes a heartbeat while running. `lastAlive - startedAt`
+is a far tighter bound than `now - startedAt`, and should replace it. It still will not
+know when the reader stopped reading, so the reader still confirms. Also revisit the
+180-minute cap if real sessions longer than three hours turn out to be common.
+
+## 2026-09-10 · Try again blanked the screen; the busy state it already had was never shown
+**Cause:** the retry reset the migration status to `pending`, which the gate order reads as
+"still booting", which renders nothing once the splash has gone. The notice, and the
+"Trying again" label wired to `retrying`, vanished for the length of the retry.
+**Chose:** the status stays `failed` until the retry resolves, and `retrying` alone carries
+the in-progress state. `gateOrder.test.ts` pins that `failed` renders the notice and never
+`booting`. **What it does not pin:** the hook's own state transition, which needs React and
+expo-sqlite and cannot run under node. That half was verified on the phone.
+
+## 2026-09-10 · The gate order is a pure module with a test
+`evaluate()` moved from `useLaunchGates.ts` to `gateOrder.ts`, with type-only imports so it
+loads under node. It takes `MigrationStatus` rather than the hook's whole state, since
+the retry flag is a rendering concern, not a gate. The test covers the precedence matrix:
+force update beats everything; "still checking" shows nothing; a failed migration beats
+session recovery; unanswered is not "none". Each was watched to fail by breaking it.
+
+## 2026-09-10 · The Metro and native-font checks are in the suite, not a scratch folder
+**Chose:** `src/__tests__/metro-blocklist.test.ts` (the block-list check that caught two
+wrong versions, previously in a scratch directory) and `src/__tests__/native-fonts.test.ts`,
+which reads `android/app/src/main/res/font` and the built debug APK and compares them
+with brand.json. A stale `android/` fails with the instruction to `npm run prebuild`.
+The APK half searches the zip's central directory for `res/font/<file>` as plain bytes,
+with no zip dependency. Font names are compared on letters and digits only, rather than
+reimplementing expo-font's renaming rule, which would itself drift.
+**Both halves SKIP, loudly, when there is nothing to inspect.** A fresh clone has no
+`android/`. A skip is visible in the test output; a pass there would be a lie.
+**Also:** `app.config.ts` now throws if a font file named in brand.json is missing, which
+fails `expo prebuild` outright. That needed `node:fs` and `__dirname`, so `app.config.ts`
+moved from the app tsconfig (`types: []`) to `tsconfig.test.json`, which is now described
+as "the files that run under Node". It never ran on the phone anyway.
+**Revisit if:** EAS release builds become the norm. The APK check reads the local debug
+APK only.
+
+## 2026-09-10 · Rebrand drift closed: one accent, one font source, computed tokens, wider lint
+**Chose:**
+- **The accent is one hex in brand.json.** Every variant in both schemes is derived in
+  theme.ts by `accentVariants()`, as fixed HSL offsets fitted to the design sheet: each
+  reproduces the sheet within one channel step. That includes the lighter accent, the
+  light-mode ink, both on-accent near-blacks, the light hairline, every rgba and the
+  glow triplet. Offsets rather than absolutes, because "lighter and warmer" survives a
+  rebrand and `#FFD173` does not.
+- **The font is named once.** brand.json holds the family, the package and the five
+  files. theme.ts applies the family, and app.config.ts embeds exactly those files under
+  exactly that name. `brand-font.test.ts` evaluates the real config through
+  `@expo/config` and fails if the two diverge, or if the scale uses a weight with no file.
+- **Arithmetic tokens are computed.** `tabRaised` (fab + 2 × ring), `iconButtonHitSlop`
+  ((minTouch − iconButton) / 2) and `toastLift` (tabBar + row) were stored as 62, 3 and 66.
+- **`typeStyle` takes one argument.** Six call sites passed a weight override; each is now
+  a named variant built from its base with a spread (`chipSelected`, `tabFocused`,
+  `pillLabel`…), so the size is shared by construction.
+- **The lint now sees opacity, JSX `size`/`strokeWidth`/`width`/`height`, numeric
+  defaults on visual props, and a second `typeStyle` argument.** A probe file violating
+  each raised all five. Test files are exempt from `no-restricted-syntax`: their job is to
+  state the expected value literally.
+- **Tab labels and screen titles** live in `strings.ts` as `nav`.
+**Over:** deriving with a colour library (chroma-js and similar): about 60 lines of HSL
+did it, and the test pins the output.
+**What derivation cannot promise is contrast.** `theme.test.ts` asserts it: on-accent text
+must reach 4.5:1 in both schemes. A rebrand to `#4040C0` was watched to fail it.
+> **Superseded the same day:** the owner ruled this theirs to fix now. Fixed, with four
+> more failures the new contrast test found. See "CORRECTION to the design sheet" above.
+
+**FOUND, NOT FIXED, a design question:** light-mode `accentInk` (`#A4681A`, the sheet's own
+value) is **4.26:1** on the light ground. That clears WCAG's 3:1 for icons, hairlines and
+large text, but it is also used for small text: the focused tab label at 10px, Undo, and
+the pill button's label. Those would need 4.5:1. The test holds it to 3 and says why.
+Darkening it is a one-number change to the offset, but it is the designer's colour to move.
+**The rebrand touch count is now:** brand.json, and the artwork (below).
+
+## 2026-09-10 · Deferred, each with an owner
+- **The error-boundary test and Sentry end to end → Slice 11, on the release build.** Both
+  need a release bundle: `enabled: !__DEV__` keeps Sentry off in development, and dev
+  builds show the red box before the boundary. Proving it means a deliberate crash in a
+  release build and the event arriving in Sentry with a readable, source-mapped stack.
+- **The toast's offset from the real tab-bar height → Slice 11 polish.** `toastLift` is a
+  static tabBar + row, so on a screen without the bar (Settings) the toast sits higher
+  than it needs to. Cosmetic. The fix is to read `BottomTabBarHeightContext`, which the
+  custom tab bar already reports to.
+- **The restore gate → Slice 8.** It needs sign-in to be true. The slot is in
+  `gateOrder.ts`, in order, and `isLibraryEmpty()` already exists.
+- **Brand artwork → before submission.** The splash and all five icon layers are still
+  Expo's placeholders. Recorded in the build plan's submit checklist, because nothing in
+  code will notice they are missing.
+
+## 2026-09-10 · The LogBox toast blocked every tap in the recovery sheet — and I was raising it
+**Symptom, on the phone:** "Save this session" and "Discard it" did nothing. No busy state,
+no error, no log, database unchanged. The tap landed inside the button's clickable bounds.
+**Two hypotheses killed first.** `statusBarTranslucent` on the Modal (removed: no change,
+reverted). A hung write (a spinner would have shown; none did).
+**Proven cause, in both directions.** Temporary logging at the entry and exit of the sheet's
+handler. With LogBox's "Open debugger to view warnings" toast visible: no log line at all —
+the press never reached JS. Toast dismissed: Save fired on the first tap, the sheet closed,
+`duration_seconds` was written and exactly one `upsert` was queued.
+**Why:** in development, every `console.warn` raises LogBox's toast, and on Android it sits in
+a window above a Modal and swallows the touches beneath it. Its bounds (y 2186–2297 on this
+phone) also cover the tab bar, which very likely explains the emulator's "taps don't reach
+the app" — plausible, not proven.
+**And the warn raising it was mine:** `[launch] force update: proceeding` fires on every dev
+launch. It now goes to logcat only, via `LogBox.ignoreLogs`; the line stays because it is
+what proved the real Cloudflare flag was being fetched.
+**Scope:** development builds only. Release builds have no LogBox, so no reader can hit this.
+**The rule this adds:** a `console.warn` on a normal path is not free in development. Warn
+for what is actually wrong; route diagnostics that fire routinely away from LogBox.
+
+## 2026-09-10 · Metro crashed when started during a Gradle build; Gradle output is now blocked
+**Observed twice in one afternoon.** Once Metro sat "running" for over ten minutes without
+finishing a single bundle, so the phone received no JS. Once it died on start with
+`ENOENT ... watch ... node_modules/expo/android/build/kotlin/.../local-state`.
+**Cause:** Metro's fallback file watcher crawls `node_modules`, including every native
+library's `android/build` and `.cxx` directories. Gradle creates and deletes files there
+throughout a build, so a directory can vanish between Metro's walk and its watch call.
+Both incidents happened with a Gradle build running at the same time.
+**Fix:** `resolver.blockList` in `metro.config.js` excludes `android/build`,
+`android/app/build`, `android/.cxx` and `android/.gradle` at any depth. The block list also
+feeds the file map's ignore pattern, so these paths are neither resolved nor watched.
+**Two bugs in the fix, both caught by a test before Metro ever ran with them.** First,
+a shell-escaping slip wrote the separator class so that it matched only `/`, which blocks
+nothing on Windows. Second, and worse: metro-config's own `exclusionList` helper re-escapes
+`/` inside each pattern, which turned the corrected class into an unterminated one — Metro
+would have thrown on every start. The patterns are now plain RegExps appended to Expo's
+default block list. The test runs Windows and POSIX Gradle paths that must be blocked, and
+app files — migrations, route files, Sentry, expo-router — that must not be.
+**Revisit if** Metro still stalls with no build running, which would point at the watcher
+problem already recorded for this machine rather than at this collision.
+
+## 2026-09-10 · `android/` was a week stale: no config plugin since Slice 0 had reached a build
+**Found on the first physical-device run.** The app rendered entirely in Roboto. The APK
+contained no font files; `android/app/src/main/res` had no `font/` directory at all.
+**Cause:** `android/` was generated once, on 2026-09-03, and never again. `npx expo
+run:android` only runs prebuild when `android/` is MISSING — it does not regenerate it when
+`app.config.ts` changes. So every config-plugin change since then existed in the config and
+nowhere in the binary:
+- **Plus Jakarta Sans** (Slice 0 review): declared, embedded in config, absent from every
+  build since. The "font.family applied by nothing" fix never actually shipped.
+- **The Slice 1 splash config** (colours, dark variant): the build carried Expo's template
+  splash from the original generation instead.
+- **The Sentry plugin**: no `sentry.properties`, no Gradle wiring. Crash capture still works
+  through autolinking; the plugin's build-time half did not exist.
+**Why nothing caught it:** the config typechecks, `getConfig` evaluates it correctly, the
+fonts exist in `node_modules`, and Roboto renders without complaint. Only looking at the
+screen — impossible on the emulator, where every capture was black — showed it.
+**Fix:** `npm run prebuild` (`expo prebuild --platform android --clean`) regenerates
+`android/` from config. That was always the sanctioned path — `android/` is continuous native
+generation and never hand-edited — it simply was not being run.
+**The rule this adds:** **any change to `app.config.ts` plugins or native config means
+`npm run prebuild` and then `npx expo run:android`.** A rebuild alone reuses the stale
+native project. Recorded in `CLAUDE.md` and `docs/09-ENVIRONMENT.md`.
+**Revisit if:** a check can assert the native project matches the config — e.g. the device
+pass asserting a font file exists in the installed APK — so this cannot silently recur.
+
 ## 2026-09-10 · OPEN: one native crash in React Native Fabric, not reproduced
 **Observed:** one cold start during the Slice 1 device pass died in the foreground with no
 Java exception. Tombstone: SIGSEGV (SEGV_ACCERR) on the JS thread, inside React Native core

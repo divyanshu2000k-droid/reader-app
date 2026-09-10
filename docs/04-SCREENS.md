@@ -54,7 +54,12 @@ Apply everywhere unless a screen says otherwise.
 - Every screen must survive 360px width **and 200% system font scale**. The shared
   primitives grow rather than clip and cap scaling at `rules.maxFontScale`, but only real
   screens prove it.
-- Primary buttons ride above the keyboard, never behind it.
+- Text meets WCAG AA in both schemes: 4.5:1 against whatever it sits on, 3:1 for icons.
+  `textMuted` is the faintest text colour; `textFaint` and `textGhost` are never text,
+  including placeholders. `contrast.test.ts` holds it (`DECISIONS.md`, 2026-09-10).
+- Primary buttons ride above the keyboard, never behind it. Inside a `Sheet` this is the
+  sheet's job, not the screen's: Android does not resize the edge-to-edge Modal for the
+  keyboard, so `Sheet` lifts itself by the keyboard's height (`DECISIONS.md`, 2026-09-10).
 - Anything under 400ms shows no loading state at all.
 - Double taps are idempotent. Debounce every submit.
 
@@ -72,10 +77,21 @@ invisibly or takes over the screen.
    screen with no dismiss. The check **fails open** on every error, and blocks only on a
    fresh, well-formed, self-consistent flag — see `DECISIONS.md`, 2026-09-10.
 3. **Session recovery.** If an unfinished session exists in the database, show the recovery
-   sheet offering to save the elapsed time or discard it. Never silently discard. The sheet
-   cannot be dismissed; if saving the choice fails it stays open with the error. "Save"
-   records the elapsed time now; asking where the reader got to belongs to the session
-   logger (Slice 3).
+   sheet. Never silently discard, and **never invent a duration.** The app knows when the
+   session started, not when the reader stopped, so the elapsed time is only an upper
+   bound. A session killed at 23:00 and reopened at 08:00 is nine hours of the app being
+   closed, not of reading.
+   - **Within 3 hours**, the elapsed minutes are pre-filled in an editable field, and the
+     copy says this is the most it could have been.
+   - **Past 3 hours**, the field starts empty and the sheet asks how long they read.
+   - **Save** is disabled until the value is a whole number of minutes from 1 to the
+     elapsed time. **Discard** is always available.
+
+   The sheet cannot be dismissed; if saving the choice fails it stays open with the error.
+   Asking where the reader got to belongs to the session logger (Slice 3). The rule and
+   its tests are in `src/features/launch/recoveryPolicy.ts`, and the reasoning is in
+   `DECISIONS.md`, 2026-09-10. When Slice 6's timer records a heartbeat, the bound
+   tightens to the last heartbeat, but the reader still confirms.
 4. **Restore.** If signed in and the local database is empty, run first sync with the
    restore screen and a real count. **Not built until Slice 8**, which adds sign-in; until
    then the condition cannot be true and the gate passes through.

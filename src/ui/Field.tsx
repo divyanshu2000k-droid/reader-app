@@ -62,7 +62,8 @@ export function Field({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={c.textFaint}
+        // Placeholder text is text: WCAG holds it to 4.5:1, which only textMuted meets.
+        placeholderTextColor={c.textMuted}
         keyboardType={keyboardType}
         autoFocus={autoFocus}
         multiline={multiline}

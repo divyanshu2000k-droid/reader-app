@@ -160,10 +160,39 @@ the silent-pass hazard in `CLAUDE.md`.
 
 ## Styling
 
-- **Every colour, radius, spacing and type size comes from `ui/theme.ts`.** A hardcoded hex
-  in a component is a bug, no matter how small
-- The theme mirrors the design system sheet exactly, including the light mode accent split:
-  bright `#F9BE3D` for fills, `#A4681A` for text and hairlines
+- **Every colour, radius, spacing, type size, opacity, icon size and stroke width comes
+  from `ui/theme.ts`.** A hardcoded value in a component is a bug, no matter how small.
+  ESLint enforces it: hex and rgba literals, bare numbers on spacing/radius/size/type
+  properties, arithmetic on a token, `opacity` literals, numeric JSX `size`,
+  `strokeWidth`, `width` and `height`, numeric defaults on visual props, and hand-written
+  `fontFamily`/`fontSize`/`fontWeight`. `theme.ts` and test files are exempt
+- **`ui/brand.json` is the brand identity**: the two grounds, the accent, and the typeface
+  (family, package, files). It is JSON because `app.config.ts` runs in plain Node and cannot
+  import `theme.ts`. theme.ts reads it, and app.config.ts reads it. A rebrand edits this
+  file and the artwork, and nothing else
+- **Every accent variant is derived** from `brand.accent` by `accentVariants()` in
+  theme.ts, including the light mode split: the accent for fills, a darker derived ink for
+  text and hairlines. Never type an accent hex or an accent rgba anywhere, theme.ts included
+- **Tokens that are arithmetic are computed, not stored.** `size.tabRaised`,
+  `size.iconButtonHitSlop` and `space.toastLift` are expressions over the values they
+  depend on
+- **`typeStyle(token)` takes one argument.** A control shown at two weights gets a named
+  variant in `font` built from its base (`{ ...scale.chip, weight: '600' }`), never a
+  weight passed at the call site
+- Tab labels and screen titles live in `strings.ts` as `nav`
+- **Contrast, WCAG AA, both schemes.** Text is at least 4.5:1 against the surface it sits
+  on, after compositing any translucent surface over the ground. Icons and other non-text
+  marks are at least 3:1. **`textMuted` is the faintest text colour.** `textFaint` is for
+  icons only, and `textGhost` for decoration (the grabber, a progress track). Placeholders
+  are text. `src/ui/__tests__/contrast.test.ts` holds all of this and fails if a faint token
+  appears as a text colour. **When a component draws text on a new background, add the
+  pair to that test's `SPECIAL` list**; the test can only check pairs it knows about
+- **An input inside a `Sheet` is checked on a phone with the keyboard open.** The field, its
+  error and the primary button must be visible above the keyboard. Android does not resize
+  an edge-to-edge Modal for the IME, so `Sheet` lifts itself by the keyboard height. Never
+  put an input in your own `Modal`: it gets none of this. A sheet taller than the space
+  left above the keyboard does not yet scroll the focused field into view (decision due in
+  Slice 3). A full-screen form is a separate case, unverified until Slice 4
 - Sibling groups use flex with `gap`, never margins on children
 - Motion values come from the States sheet. One `motion` object, no magic numbers
 
@@ -299,9 +328,39 @@ Not comprehensive. Targeted at the things that silently corrupt data.
 - Import parsing against real Goodreads exports, including malformed ones
 - Sync queue replay idempotency
 - Migrations against a 2000 book seeded database
+- **Anything the app records on the reader's behalf without their input** must be bounded
+  by what the app actually knows. `recoveryPolicy.test.ts` is the model: the recovered
+  session's elapsed time is an upper bound, never a duration
+- **The launch gate order** (`gateOrder.test.ts`): which screen wins when more than one gate
+  has an opinion
+- **Derived theme values** (`theme.test.ts`): the accent derivation reproduces the design
+  sheet, a rebrand moves every variant, derived text stays readable, and the computed
+  tokens hold their relationships
+- **Config that reaches the native build** (`brand-font.test.ts`, `native-fonts.test.ts`,
+  `metro-blocklist.test.ts`): the font brand.json names is the one app.config.ts embeds,
+  the one in `android/`, and the one in the APK; Metro blocks Gradle output with either
+  path separator. These run against the real config and the real build output, because
+  every past failure here was a config that was correct and never reached a build
 
 **Do not bother testing:** component rendering, navigation, styling. Manual use catches
 those faster.
+
+**Logic that must be tested lives in a pure module the node suite can load.** `npm test`
+runs under plain Node, which cannot load `expo-*`, `react-native`, `expo-sqlite` or anything
+that imports them. A test that imports a hook fails to start, and a decision written inside
+a hook is untestable. So the decision goes in its own file whose only imports from those
+worlds are `import type` (erased at compile time), and the hook or component beside it does
+the I/O and calls it. The pattern, in `src/features/launch/`:
+- `forceUpdatePolicy.ts` beside `forceUpdate.ts`
+- `recoveryPolicy.ts` beside `SessionRecoverySheet.tsx`
+- `gateOrder.ts` beside `useLaunchGates.ts`
+
+What stays untested is the hook's state transition itself; that half is verified on a
+device, and the entry in `DECISIONS.md` says so.
+
+**Config is tested against the real config.** `@expo/config`'s `getConfig(process.cwd())`
+evaluates `app.config.ts` exactly as the Expo CLI does. `brand-font.test.ts` uses it.
+Reading the file as text, or re-deriving what it should produce, tests a copy.
 
 ### Running the device pass
 

@@ -64,8 +64,10 @@ results not containing both words.
 rather than buried.
 
 ### 5. Audiobooks break every statistic they touch
-The largest unmet feature area in the category and the top voted cluster on StoryGraph's
-public roadmap. Every app forces one unit, so switching formats mid book double counts.
+The top voted cluster on StoryGraph's public roadmap, which makes it **the one finding in
+this document backed by demand evidence rather than by complaints** (see "What the
+research shows" below). Every app forces one unit, so switching formats mid book double
+counts.
 
 **Our answer:** format lives on the session. Books, pages and hours are three separate
 numbers that never combine.
@@ -103,6 +105,32 @@ and each is currently costing a competitor stars.
 
 ---
 
+## What the research shows, and what it does not
+
+*Corrected 2026-09-10. The first version of this document drew conclusions the evidence
+does not support. A session reading this must not inherit them. `DECISIONS.md`,
+2026-09-10, has the correction.*
+
+- **The nine complaints are real and sourced.** They are accurate descriptions of what goes
+  wrong in those apps, and the architecture answers each one.
+- **A complaint is not evidence of demand for this app.** A review is written by someone
+  still using the app they are complaining about. It shows that app has a retention
+  problem. It does not show readers looking for a replacement, or that they would move
+  their reading history to one.
+- **Data integrity keeps users. It does not win them.** Findings 1, 2, 6 and 7 are about
+  not losing what a reader logged. Readers leave an app that loses their sessions; nobody
+  installs one because it doesn't. That work pays off only after someone has already
+  chosen the app. It's necessary, and it acquires no one.
+- **Only one differentiator has demand evidence: format-aware counting for audiobooks
+  (finding 5).** The evidence is the top-voted item on StoryGraph's public roadmap: readers
+  asking for a feature, not reviewers describing a flaw. It is also on the roadmap of the
+  best-known competitor, so the advantage lasts only until StoryGraph ships it.
+- **The Slice 3 gate is therefore the project's real decision point.** Nothing in this
+  document shows that readers will switch. The gate in `05-BUILD-PLAN.md` is the first
+  test of that. Treat it as go/no-go, not as a formality.
+
+---
+
 ## Design principles
 
 These settle arguments when you are mid build and unsure.
@@ -137,8 +165,11 @@ require decisions the incumbents already failed to make.
 
 ## What the store listing can say
 
-Six sentences no competitor can currently write. Every one is a promise the architecture
-has to keep.
+Six promises the architecture has to keep. **Whether competitors can also make them has not
+been checked on Android.** The original "no competitor can currently write these" was not
+verified, and was written under the same false iOS-only assumption as the Positioning
+section. Check each competitor's current Android app before using any of these as a
+differentiator claim.
 
 - "Log a session for any date. Change it whenever you like."
 - "Audiobooks counted properly. Hours and pages, never mixed."
@@ -151,8 +182,21 @@ has to keep.
 
 ## Positioning
 
-**Android first, deliberately.** Margins, Bookly, Reading List, Basmo and TBR are all iOS
-only. The best designed apps in the category are invisible to 72% of the world's phones.
+**Android only for v1 is a scope decision, not a market gap.** One platform is what one
+developer working 15 hours a week can build, test on real devices and support.
+
+*Corrected 2026-09-10.* This section used to claim Android-first was a structural advantage
+because the best competitors are iOS only. **That is false. There is no Android whitespace.**
+On the Play Store, as checked by the project owner on 2026-09-10:
+- Bookmory has over 1M installs, rated 4.8.
+- Bookly, previously listed here as iOS only, has over 500k installs.
+- StoryGraph, Fable, Book Towers, Bookshelf, Yuuna, Leero and Seekquel are all on Android.
+
+The platform status of Margins, Reading List, Basmo and TBR was not re-checked. Install
+counts and ratings move, so re-check before quoting any of them.
+
+The app competes on the same store as established apps. It has to win on what it does
+(see "What the research shows"), not on where it is available.
 
 **Accessible pricing.** Free tier is genuinely complete. Plus is ₹99 a month or ₹699 a
 year, roughly a seventh of what StoryGraph and Margins charge. India is a volume and word

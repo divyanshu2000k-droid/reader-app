@@ -20,5 +20,6 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
-  "exclude": ["node_modules", "android", "ios", "src/**/__tests__/**"]
+  // app.config.ts runs in Node, not on the phone: it typechecks under tsconfig.test.json.
+  "exclude": ["node_modules", "android", "ios", "src/**/__tests__/**", "app.config.ts"]
 }

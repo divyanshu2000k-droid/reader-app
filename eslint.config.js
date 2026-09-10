@@ -96,12 +96,53 @@ module.exports = [
             'font.family is applied, so a hand-written text style silently loses the ' +
             'typeface.',
         },
+        // The four gaps a rebrand review found, each with a real value hiding in it.
+        //
+        // Opacity. `disabled: { opacity: 0.4 }`, a pressed 0.9, a grabber 0.6 and a
+        // shimmer 0.35 all lived inline. Anywhere in the value, so `0.35 + x * 0.35` is
+        // caught too. 0 and 1 are allowed: they mean hidden and opaque, not a choice.
+        {
+          selector: 'Property[key.name=/^(opacity|shadowOpacity)$/] Literal[raw=/^0?\\.[0-9]+$/]',
+          message: 'Hardcoded opacity. Name it in `opacity` in src/ui/theme.ts.',
+        },
+        {
+          selector:
+            'JSXAttribute[name.name=/^(opacity|stopOpacity|fillOpacity|strokeOpacity)$/] Literal[raw=/^0?\\.[0-9]+$/]',
+          message: 'Hardcoded opacity. Name it in `opacity` in src/ui/theme.ts.',
+        },
+        // Icon size and stroke, and any other size handed to a component as a prop. The
+        // property rule above only sees style objects; `<Icon size={17} strokeWidth={2}>`
+        // is the same hardcoded value in JSX.
+        {
+          selector:
+            'JSXAttribute[name.name=/^(size|strokeWidth|width|height)$/] > JSXExpressionContainer > Literal[raw=/^-?(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]+)$/]',
+          message:
+            'Hardcoded size or stroke width. Use iconSize, iconStroke or size from src/ui/theme.ts.',
+        },
+        // And as a default parameter, which is where a component's own fallback hides:
+        // `Icon({ size = 21, strokeWidth = 1.9 })`, `Skeleton({ height = 12 })`.
+        {
+          selector:
+            'AssignmentPattern[left.name=/^(size|strokeWidth|width|height|opacity|radius|gap|lineHeight)$/] > Literal[raw=/^-?(?:[1-9][0-9]*(?:\\.[0-9]+)?|0\\.[0-9]+)$/]',
+          message:
+            'Hardcoded default for a visual prop. Default to a token from src/ui/theme.ts.',
+        },
+        // A weight override. typeStyle takes one argument now, so TypeScript rejects a
+        // second; this says why, in words, where the typecheck would only say "expected 1".
+        {
+          selector: 'CallExpression[callee.name="typeStyle"][arguments.length>1]',
+          message:
+            'typeStyle takes one token. A control that needs another weight gets a named ' +
+            'variant in `font` in src/ui/theme.ts, built from its base size.',
+        },
       ],
     },
   },
   {
-    // The one file allowed to contain colour values, because it is where they live.
-    files: ['src/ui/theme.ts'],
+    // The one file allowed to contain colour values, because it is where they live. And
+    // the tests, whose job is to state the expected value literally: a theme test that
+    // compared the theme against itself would assert nothing.
+    files: ['src/ui/theme.ts', 'src/**/__tests__/**/*.ts'],
     rules: { 'no-restricted-syntax': 'off' },
   },
   {

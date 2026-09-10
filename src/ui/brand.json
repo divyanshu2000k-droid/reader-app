@@ -1,5 +1,15 @@
 {
   "ground": "#0B0A08",
   "groundLight": "#FAF6EE",
-  "_why": "The colours BOTH the JS theme and the native Android config need: the adaptive icon background and the splash screen, in each scheme. app.config.ts is transpiled and evaluated by plain Node, which cannot require a .ts module, so it cannot import theme.ts - and duplicating the hex there is how the brand colour drifts. JSON is the only format both loaders read. theme.ts remains the single source components read from; this is its native-side spelling, and theme.ts imports these two values from here rather than the other way round."
+  "accent": "#F9BE3D",
+  "fontFamily": "PlusJakartaSans",
+  "fontPackage": "@expo-google-fonts/plus-jakarta-sans",
+  "fontFiles": {
+    "400": "400Regular/PlusJakartaSans_400Regular.ttf",
+    "500": "500Medium/PlusJakartaSans_500Medium.ttf",
+    "600": "600SemiBold/PlusJakartaSans_600SemiBold.ttf",
+    "700": "700Bold/PlusJakartaSans_700Bold.ttf",
+    "800": "800ExtraBold/PlusJakartaSans_800ExtraBold.ttf"
+  },
+  "_why": "The brand identity, in the one format both loaders read. app.config.ts is evaluated by plain Node, which cannot require theme.ts, so every value the NATIVE side needs lives here and theme.ts imports it rather than repeating it: the two grounds (adaptive icon, splash), the accent (every accent variant in both schemes is derived from it in theme.ts), and the typeface (theme.ts applies fontFamily; app.config.ts embeds exactly these files under exactly that name). A rebrand edits this file. src/__tests__/brand-font.test.ts fails if theme.ts and app.config.ts ever disagree about the font."
 }

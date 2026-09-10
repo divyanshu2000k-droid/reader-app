@@ -25,8 +25,19 @@ import {
 } from 'expo-router/build/react-navigation/bottom-tabs'
 
 import { Icon, type IconName } from './Icon'
-import { font, motion, radius, rules, size, space, typeStyle } from './theme'
+import {
+  font,
+  iconSize,
+  iconStroke,
+  motion,
+  radius,
+  rules,
+  size,
+  space,
+  typeStyle,
+} from './theme'
 import { useColors } from './useTheme'
+import { nav } from '@/lib/strings'
 
 interface TabSpec {
   readonly label: string
@@ -34,11 +45,11 @@ interface TabSpec {
   readonly raised?: boolean
 }
 
-/** Keyed by route file name under src/app/(tabs)/. */
+/** Keyed by route file name under src/app/(tabs)/. Labels from strings.ts `nav`. */
 const TABS: Readonly<Record<string, TabSpec>> = {
-  index: { label: 'Library', icon: 'book' },
-  add: { label: 'Add', icon: 'plus', raised: true },
-  stats: { label: 'Stats', icon: 'chart' },
+  index: { label: nav.library.tab, icon: 'book' },
+  add: { label: nav.add.tab, icon: 'plus', raised: true },
+  stats: { label: nav.stats.tab, icon: 'chart' },
 }
 
 export function TabBar({ state, navigation, insets }: BottomTabBarProps) {
@@ -68,7 +79,9 @@ export function TabBar({ state, navigation, insets }: BottomTabBarProps) {
           if (!focused && !event.defaultPrevented) navigation.navigate(route.name)
         }
 
-        const labelColor = focused ? c.accentInk : spec.raised ? c.textMuted : c.textFaint
+        // Idle labels were textFaint (2.41:1 in light mode). A label is text, so textMuted;
+        // idle and raised now differ by weight alone. The idle ICON keeps textFaint (3:1).
+        const labelColor = focused ? c.accentInk : c.textMuted
 
         return (
           <Pressable
@@ -83,7 +96,12 @@ export function TabBar({ state, navigation, insets }: BottomTabBarProps) {
               <View
                 style={[styles.raised, { backgroundColor: c.accent, borderColor: c.ground }]}
               >
-                <Icon name={spec.icon} size={23} color={c.onAccent} strokeWidth={2.5} />
+                <Icon
+                  name={spec.icon}
+                  size={iconSize.raised}
+                  color={c.onAccent}
+                  strokeWidth={iconStroke.raised}
+                />
               </View>
             ) : (
               <Icon name={spec.icon} color={focused ? c.accentInk : c.textFaint} />
@@ -92,7 +110,7 @@ export function TabBar({ state, navigation, insets }: BottomTabBarProps) {
               numberOfLines={1}
               maxFontSizeMultiplier={rules.maxFontScale}
               style={[
-                typeStyle(font.tab, { weight: focused ? '700' : spec.raised ? '600' : '500' }),
+                typeStyle(focused ? font.tabFocused : spec.raised ? font.tabRaised : font.tab),
                 { color: labelColor },
               ]}
             >

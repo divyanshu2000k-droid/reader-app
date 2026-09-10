@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+
 import type { ExpoConfig } from 'expo/config'
 
 import brand from './src/ui/brand.json'
@@ -25,16 +28,26 @@ const PACKAGE_ID = 'com.example.reader'
  * the plain `fonts: [...]` array does NOT do weight mapping on Android, and every weight
  * would silently render as whichever file loaded first.
  *
- * Changing this list requires a native rebuild (`npx expo run:android`).
+ * THE FAMILY NAME AND THE FILES COME FROM brand.json, which theme.ts also reads. They used
+ * to be typed here and in theme.ts separately, and a mismatch renders every string in
+ * Roboto with no error anywhere (src/__tests__/brand-font.test.ts now fails instead).
+ *
+ * A missing file THROWS, which fails `expo prebuild` and `expo run:android` outright. The
+ * alternative is a build that quietly embeds four weights of five.
+ *
+ * Changing this list requires `npm run prebuild`, then a native rebuild. `expo run:android`
+ * alone does NOT regenerate android/; src/__tests__/native-fonts.test.ts catches a stale one.
  */
-const JAKARTA = '@expo-google-fonts/plus-jakarta-sans'
-const fontWeights = [
-  ['400Regular', 400],
-  ['500Medium', 500],
-  ['600SemiBold', 600],
-  ['700Bold', 700],
-  ['800ExtraBold', 800],
-] as const
+const fontDefinitions = Object.entries(brand.fontFiles).map(([weight, file]) => {
+  const path = `./node_modules/${brand.fontPackage}/${file}`
+  if (!existsSync(join(__dirname, path))) {
+    throw new Error(
+      `app.config.ts: the font file ${path}, named in src/ui/brand.json, does not exist. ` +
+        'Run npm install, or correct brand.json.',
+    )
+  }
+  return { path, weight: Number(weight) }
+})
 
 const config: ExpoConfig = {
   name: 'Reader',
@@ -111,13 +124,7 @@ const config: ExpoConfig = {
       {
         android: {
           fonts: [
-            {
-              fontFamily: 'PlusJakartaSans',
-              fontDefinitions: fontWeights.map(([dir, weight]) => ({
-                path: `./node_modules/${JAKARTA}/${dir}/PlusJakartaSans_${dir}.ttf`,
-                weight,
-              })),
-            },
+            { fontFamily: brand.fontFamily, fontDefinitions },
           ],
         },
       },

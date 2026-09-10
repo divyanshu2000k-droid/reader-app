@@ -72,21 +72,24 @@ export async function getOpenSession(): Promise<OpenSession | null> {
 }
 
 /**
- * Close a recovered session by recording how long it ran.
+ * Close a recovered session with the duration the READER confirmed.
+ *
+ * Never the elapsed time on its own: that is how long the app was closed, not how long
+ * anyone read. The sheet makes the reader see and accept a number first, and
+ * recoveryPolicy.ts bounds it. See DECISIONS.md, 2026-09-10.
  *
  * Writing `duration_seconds` is what makes it no longer "still running", so the gate does
  * not offer it again on the next launch. The reader is not asked for a page count here:
  * the session logger is Slice 3, and inventing a position they did not give would be
- * writing data on their behalf. The session keeps its time and its date, and its position
- * stays blank until they fill it in.
+ * writing data on their behalf. The session keeps its date, and its position stays blank
+ * until they fill it in.
  */
 export async function keepOpenSession(
   id: string,
-  elapsedSeconds: number,
+  confirmedSeconds: number,
 ): Promise<Result<WriteOutcome>> {
-  // Never negative, always a whole number of seconds. A clock that went backwards while
-  // the app was dead must not produce a session that ran for minus four minutes.
-  const safe = Math.max(0, Math.round(elapsedSeconds))
+  // Never negative, always a whole number of seconds, even if a caller skips the policy.
+  const safe = Math.max(0, Math.round(confirmedSeconds))
   return updateRow('sessions', id, { durationSeconds: safe })
 }
 

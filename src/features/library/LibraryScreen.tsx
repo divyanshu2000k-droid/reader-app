@@ -9,7 +9,7 @@
 
 import { useRouter } from 'expo-router'
 
-import { empty } from '@/lib/strings'
+import { empty, nav } from '@/lib/strings'
 import { EmptyState } from '@/ui/EmptyState'
 import { Header, HeaderIconButton } from '@/ui/Header'
 import { Screen } from '@/ui/Screen'
@@ -19,11 +19,11 @@ export function LibraryScreen() {
   return (
     <Screen>
       <Header
-        title="The library"
+        title={nav.library.title}
         right={
           <HeaderIconButton
             icon="settings"
-            accessibilityLabel="Settings"
+            accessibilityLabel={nav.settings.title}
             onPress={() => router.push('/settings')}
           />
         }

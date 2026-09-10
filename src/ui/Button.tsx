@@ -22,7 +22,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 
-import { font, motion, radius, rules, size, space, typeStyle } from './theme'
+import { font, motion, opacity, radius, rules, size, space, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
 /**
@@ -129,7 +129,7 @@ export function Button({
   // Named sizes from the scale. These were `font.bodyStrong.size + 1` and
   // `font.body.size + 0.5`: sizes that did not exist, written to look like they did.
   const textToken =
-    variant === 'primary' ? font.button : variant === 'pill' ? font.secondary : font.buttonSmall
+    variant === 'primary' ? font.button : variant === 'pill' ? font.pillLabel : font.buttonSmall
 
   return (
     <Pressable
@@ -152,10 +152,7 @@ export function Button({
         <Text
           numberOfLines={2}
           maxFontSizeMultiplier={rules.maxFontScale}
-          style={[
-            typeStyle(textToken, { weight: variant === 'primary' ? '700' : '600' }),
-            { color: textColor },
-          ]}
+          style={[typeStyle(textToken), { color: textColor }]}
         >
           {busy ? (busyLabel ?? label) : label}
         </Text>
@@ -174,5 +171,5 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.row },
   pressed: { transform: [{ scale: motion.press.scale }] },
-  disabled: { opacity: 0.4 },
+  disabled: { opacity: opacity.disabled },
 })

@@ -131,7 +131,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             >
               <Text
                 maxFontSizeMultiplier={rules.maxFontScale}
-                style={[typeStyle(font.body, { weight: '700' }), { color: c.accentInk }]}
+                style={[typeStyle(font.toastAction), { color: c.accentInk }]}
               >
                 {actions.undo}
               </Text>

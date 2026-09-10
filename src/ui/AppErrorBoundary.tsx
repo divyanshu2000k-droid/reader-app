@@ -23,7 +23,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import { useEffect } from 'react'
 import { Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native'
 
-import { dark, font, light, radius, rules, size, space, typeStyle } from './theme'
+import { dark, font, light, opacity, radius, rules, size, space, typeStyle } from './theme'
 import { launch } from '@/lib/strings'
 import { reportBoundaryError } from '@/lib/sentry'
 
@@ -93,5 +93,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: space.section,
   },
-  pressed: { opacity: 0.9 },
+  pressed: { opacity: opacity.pressed },
 })

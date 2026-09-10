@@ -192,8 +192,12 @@ export function useMigrationStatus(): MigrationState {
     // same frame would otherwise both pass the check and clear the memo twice, starting
     // two concurrent migrations against one database.
     if (migrationStatus().state !== 'failed') return
+    // The rendered status STAYS 'failed' until the retry resolves, and `retrying` carries
+    // the in-progress state. It used to be reset to 'pending' here, which the launch gates
+    // read as "still booting" and render as nothing — the splash is long gone by then — so
+    // Try again blanked the screen for the length of the retry instead of showing its busy
+    // label. Pinned in src/features/launch/__tests__/gateOrder.test.ts.
     setRetrying(true)
-    setStatus({ state: 'pending' })
     retryMigrations()
       .then((s) => {
         if (alive.current) setStatus(s)
