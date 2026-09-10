@@ -131,6 +131,69 @@ still realistic. Measure it properly at Slice 11, not before.
 
 ---
 
+## Optional services: `.env`, Sentry and the kill switch
+
+**Every one of these is optional.** A fresh clone with no `.env` builds, launches and works:
+crash reporting is off and the force-update check is skipped. Copy `.env.example` to `.env`
+to turn them on. `.env` is gitignored; `.env.example` is committed and holds no values.
+
+`EXPO_PUBLIC_*` values are inlined into the bundle, so **only public keys go in `.env`**.
+After changing `.env`, restart Metro with `--clear`.
+
+### Sentry
+
+1. In Sentry, create a **React Native** project. Copy its DSN (Settings → Client Keys).
+2. Put it in `.env`: `EXPO_PUBLIC_SENTRY_DSN=https://…@….ingest.sentry.io/…`
+3. Turn on **spike protection** in the project settings: the DSN is extractable from the
+   APK, and the realistic abuse is someone burning the free quota.
+4. Events are **disabled in development builds** on purpose. To see one arrive, use a
+   release build.
+
+**The auth token is a different thing and a real secret.** It is only needed to upload source
+maps, which is not set up yet. When it is: `eas secret:create --name SENTRY_AUTH_TOKEN`, or
+`.env.local` for local builds. Never in `app.config.ts`, never in a committed file.
+
+### The force-update kill switch
+
+The payload lives in `killswitch/public/v1/kill-switch.json` and is served from Cloudflare
+Pages. See ADR 007 for why.
+
+**One-time setup:**
+
+1. Create a free Cloudflare account. No card needed.
+2. `npx wrangler login` — do this now, not during an incident.
+3. `npx wrangler pages deploy killswitch/public --project-name reader-killswitch`
+4. Put the resulting URL in `.env`:
+   `EXPO_PUBLIC_FORCE_UPDATE_URL=https://reader-killswitch.pages.dev/v1/kill-switch.json`
+
+**The payload:**
+
+```json
+{ "minimumVersion": "0.1.0", "latestVersion": "0.1.0", "message": null }
+```
+
+- Builds **strictly below** `minimumVersion` see the update screen. Equal is allowed.
+- `latestVersion` must be **at or above** `minimumVersion`, or the whole flag is ignored.
+  This is deliberate: it stops a typo like `11.0.0` from locking out every reader.
+- `message` optionally replaces the body text, 300 characters maximum.
+- There is no store URL field. The button's destination comes from the package id.
+
+**To flip it during an incident:** edit the JSON, run the deploy command in step 3, then
+check it took with `curl -s <url>`. The host revalidates on every request, so a flip is live
+as soon as the deploy finishes.
+
+**To test it locally without deploying:** serve the folder and point the emulator at the host
+machine, which the emulator sees as `10.0.2.2`:
+
+```
+python -m http.server 8787 --directory killswitch/public
+EXPO_PUBLIC_FORCE_UPDATE_URL=http://10.0.2.2:8787/v1/kill-switch.json
+```
+
+Plain `http` works in debug builds only. Release builds require `https`, which is correct.
+
+---
+
 ## Metro, and the two things that will waste your time
 
 **The file watcher does not work on this machine.** Editing a source file does not update

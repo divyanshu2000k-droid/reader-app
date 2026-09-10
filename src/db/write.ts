@@ -415,6 +415,66 @@ export async function restoreRow(
   )
 }
 
+/**
+ * Update SOME columns of an existing live row, and enqueue it, atomically.
+ *
+ * `writeRow` requires a whole row, because its job is insert-or-replace. Using it to
+ * change one field means reading the row, spreading it, and writing it all back — which
+ * is a lost-update race (two edits in the same second, last writer wins, the other's
+ * change silently gone) and, worse, a habit that spreads to every `queries.ts` file that
+ * needs to change one column.
+ *
+ * This was deferred to Slice 2 "with the first edit screen" (DECISIONS.md, 2026-09-04).
+ * Slice 1's session-recovery gate reached it first: closing a recovered session sets
+ * `duration_seconds` and nothing else. Deferring further would have meant writing the
+ * exact read-modify-write that entry warned against, so it lands here instead.
+ *
+ * `createdAt` and `deletedAt` are not patchable, for the same reasons `RowFor` omits
+ * them: a creation date is not editable, and a delete goes through `softDelete` so it
+ * enqueues a `delete` and runs the cascade.
+ *
+ * A patch that changes nothing — an empty object, a missing row, an already-deleted row —
+ * enqueues nothing and reports `changed: false`.
+ */
+export async function updateRow<K extends SyncableTable>(
+  table: K,
+  id: string,
+  patch: Partial<Omit<RowFor<K>, 'id'>>,
+): Promise<Result<WriteOutcome>> {
+  return attempt(
+    async () => {
+      const columns = Object.keys(patch)
+      // No columns means no statement. Running `SET updated_at = ?` alone would bump the
+      // row's timestamp and enqueue a sync for an edit that did not happen.
+      if (columns.length === 0) return { changed: false }
+
+      const t = tableFor(table)
+      const ts = now()
+      const db = getDb()
+      let changed = false
+
+      runInTransaction(() => {
+        const res = db
+          .update(t)
+          .set({ ...patch, updatedAt: ts })
+          .where(and(eq(t.id, id), isNull(t.deletedAt)))
+          .run()
+        if (res.changes === 0) return
+
+        changed = true
+        enqueue(db, table, id, 'upsert', ts)
+      })
+
+      return { changed }
+    },
+    (cause) =>
+      appError('recoverable', 'Could not save that change', {
+        safe: 'Nothing else in your library was affected.',
+        cause,
+      }),
+  )
+}
+
 // ─── DRAIN ───────────────────────────────────────────────────────────────────
 
 /**

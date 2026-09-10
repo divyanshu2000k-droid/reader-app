@@ -255,11 +255,32 @@ counts break progress and statistics silently, which is worse than an obvious er
 | Payments | RevenueCat | Free under $2500 monthly tracked revenue, handles Play billing edge cases you should not hand write |
 | Strings | One flat `src/lib/strings.ts` | No i18n library. Costs nothing now, saves the India localisation later. See `06-CONVENTIONS.md` |
 | Secrets | `app.config.ts` for public keys, EAS Secrets for real ones | The Supabase service role key never appears in the app. See `06-CONVENTIONS.md` |
-| Crash reporting | Sentry | 5000 errors a month free, and you need this on day one |
+| Crash reporting | Sentry (`@sentry/react-native`, pinned to the version Expo resolves) | 5000 errors a month free, and you need this on day one. A no-op until a DSN is configured |
 | Analytics | PostHog | 1M events a month free. Instrument second session rate first, it is the only early number that means anything |
 | Notifications | expo-notifications plus a custom foreground service plugin | The timer notification is a designed feature, see the States sheet |
 | Widgets | react-native-android-widget | Only real option. Treat as v1.1 if it resists |
 | Dates | date-fns with explicit timezone handling | Bookly scrambles sessions across timezones. Store UTC, render local, always |
+
+---
+
+## ADR 007 · The force update flag is hosted outside the backend
+
+**Chosen:** one static JSON file on Cloudflare Pages, at a versioned path
+(`/v1/kill-switch.json`).
+
+**Why not Supabase, when it is already the backend of record:** a kill switch must not share
+a failure domain with the thing it switches off. The incidents most likely to make you reach
+for it — a bad migration, a blown quota, an RLS lockout — are Supabase incidents. Free
+Supabase projects also pause after a week idle and serve a replaced file stale for up to an
+hour. A switch that is asleep or stale during the incident is not a switch.
+
+**What the choice actually optimises:** not uptime. The client fails open, so an unreachable
+host is harmless by construction. The two dangerous failures are a flag that is reachable but
+**stale**, and a flag you **cannot flip** in time. Cloudflare serves static assets with
+`max-age=0, must-revalidate`, invalidates on deploy, and has no request cap.
+
+**Known cost:** flipping needs a laptop and `wrangler`; a deployed file cannot be edited from
+a phone. See `DECISIONS.md`, 2026-09-10, and `09-ENVIRONMENT.md` for the flip procedure.
 
 ---
 
@@ -289,7 +310,8 @@ counts break progress and statistics silently, which is worse than an obvious er
 6. **Deletes are soft, everywhere, no exceptions.**
 7. **The theme file mirrors the design system sheet.** No hardcoded colours in components,
    ever. This is what keeps screen 30 looking like screen 1.
-8. **Feature flags for anything risky.** The force update kill switch is one of these.
+8. **Feature flags for anything risky.** The force update kill switch is one of these. It
+   is hosted deliberately **outside** Supabase — see ADR 007.
 
 ---
 

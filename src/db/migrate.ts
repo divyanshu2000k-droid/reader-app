@@ -10,12 +10,13 @@
  */
 
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { backupBeforeMigration, pruneBackups, restoreNewestBackup } from './backup'
 import { appliedMigrationCount, getDb } from './client'
 import migrations from './migrations/migrations'
 import { appError, type AppError } from '@/lib/result'
+import { reportUnrecoverable } from '@/lib/sentry'
 
 export type MigrationStatus =
   | { readonly state: 'pending' }
@@ -66,12 +67,12 @@ async function performMigrations(): Promise<MigrationStatus> {
   try {
     dataVersion = appliedMigrationCount()
   } catch (cause) {
-    console.error('[migrate] could not read the schema version:', cause)
-    cached = {
-      ok: false,
-      state: 'failed',
-      error: 'Could not read your library',
-    }
+    const error = appError('unrecoverable', 'Could not read your library', {
+      safe: 'Nothing was changed. Your books are still on this phone.',
+      cause,
+    })
+    reportUnrecoverable(error, { stage: 'appliedMigrationCount' })
+    cached = { ok: false, state: 'failed', error: error.message }
     return cached
   }
 
@@ -79,11 +80,15 @@ async function performMigrations(): Promise<MigrationStatus> {
   if (!backup.ok) {
     // Fail closed. An app on an old schema still works; a half-migrated one may not.
     //
-    // The cause is logged because until Sentry lands this is the ONLY place it exists:
-    // the reader sees "could not back up", and without this line nobody — including the
-    // next device pass — can find out why. Discovered the hard way: this branch fired on
-    // a device and the cause had already been thrown away.
-    console.error('[migrate] backup failed:', backup.error.message, backup.error.cause)
+    // `reportUnrecoverable` logs the cause as well as sending it. Until a DSN exists the
+    // log is the ONLY record: the reader sees "could not back up", and without it nobody
+    // — including the next device pass — can find out why. Discovered the hard way: this
+    // branch fired on a device and the cause had already been thrown away.
+    reportUnrecoverable(backup.error, {
+      stage: 'backupBeforeMigration',
+      dataVersion: String(dataVersion),
+      targetVersion: String(SCHEMA_VERSION),
+    })
     cached = { ok: false, state: 'failed', error: backup.error.message }
     return cached
   }
@@ -94,7 +99,6 @@ async function performMigrations(): Promise<MigrationStatus> {
     cached = { ok: true, state: 'done', version: SCHEMA_VERSION }
     return cached
   } catch (cause) {
-    console.error('[migrate] migration failed:', cause)
     // The running code's version, so a backup from a NEWER schema is never restored
     // over it. See restoreNewestBackup.
     const restored = restoreNewestBackup(SCHEMA_VERSION)
@@ -104,7 +108,16 @@ async function performMigrations(): Promise<MigrationStatus> {
         : 'Your library was not modified.',
       cause,
     })
-    // TODO(Slice 0): report to Sentry once the DSN is configured.
+    // The version PAIR and the restore outcome, not just the error. Without them the
+    // Sentry issue is as uninformative as the console line it replaced: "migration
+    // failed" cannot distinguish a v1→v2 failure that rolled back cleanly from a v2→v3
+    // failure that left the library untouched, and those need different responses.
+    reportUnrecoverable(error, {
+      stage: 'migrate',
+      dataVersion: String(dataVersion),
+      targetVersion: String(SCHEMA_VERSION),
+      restored: String(restored.ok),
+    })
     cached = { ok: false, state: 'failed', error: error.message }
     return cached
   }
@@ -115,24 +128,80 @@ export function runMigrations(): Promise<MigrationStatus> {
   return inFlight
 }
 
+/**
+ * Try again after a failure.
+ *
+ * `runMigrations` memoises its promise for the life of the process, which is right for
+ * the ordinary case — two components mounting in the same tick must not run two
+ * concurrent migrations — and wrong after a failure: there was no way to try again
+ * without killing the app, and the failure screen's only honest advice was "force stop
+ * it". A retry is genuinely meaningful here because the restore path CLOSES the database
+ * (see `restoreNewestBackup`), so the next attempt reopens from whatever is on disk.
+ *
+ * Only ever clears the memo on a FAILED status. Re-running a successful migration would
+ * take a second backup and re-enter the migrator for no reason, and calling this while
+ * one is still in flight would start a second concurrent migration against one database —
+ * the exact thing the memo exists to prevent.
+ */
+export function retryMigrations(): Promise<MigrationStatus> {
+  if (cached.state === 'failed') {
+    inFlight = null
+    cached = { state: 'pending' }
+  }
+  return runMigrations()
+}
+
 /** Synchronous read of the last known status, for render. */
 export function migrationStatus(): MigrationStatus {
   return cached
 }
 
-/** Hook form, for the root layout in Slice 1. */
-export function useMigrationStatus(): MigrationStatus {
+export interface MigrationState {
+  readonly status: MigrationStatus
+  /** True while a retry is running, so the button can show its busy label. */
+  readonly retrying: boolean
+  /** Try again after a failure. No-op unless the status is `failed`. */
+  readonly retry: () => void
+}
+
+/**
+ * Hook form, for the launch gates.
+ *
+ * Exposes `retry` because a failed migration is otherwise a dead end: the memo in
+ * `runMigrations` survives for the life of the process, so the only way out was to kill
+ * the app. `06-CONVENTIONS.md` requires an unrecoverable error to offer a restart, and
+ * "force stop the app yourself" is not one.
+ */
+export function useMigrationStatus(): MigrationState {
   const [status, setStatus] = useState<MigrationStatus>(cached)
+  const [retrying, setRetrying] = useState(false)
+  const alive = useRef(true)
 
   useEffect(() => {
-    let alive = true
+    alive.current = true
     runMigrations().then((s) => {
-      if (alive) setStatus(s)
+      if (alive.current) setStatus(s)
     })
     return () => {
-      alive = false
+      alive.current = false
     }
   }, [])
 
-  return status
+  const retry = useCallback(() => {
+    // Guard on the CURRENT cached status rather than the rendered one: two taps in the
+    // same frame would otherwise both pass the check and clear the memo twice, starting
+    // two concurrent migrations against one database.
+    if (migrationStatus().state !== 'failed') return
+    setRetrying(true)
+    setStatus({ state: 'pending' })
+    retryMigrations()
+      .then((s) => {
+        if (alive.current) setStatus(s)
+      })
+      .finally(() => {
+        if (alive.current) setRetrying(false)
+      })
+  }, [])
+
+  return { status, retrying, retry }
 }

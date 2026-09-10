@@ -25,7 +25,17 @@ import {
 import { font, motion, radius, rules, size, space, typeStyle } from './theme'
 import { useColors } from './useTheme'
 
-export type ButtonVariant = 'primary' | 'secondary' | 'pill' | 'danger'
+/**
+ * `ghost` is an extension to the four variants on the Components sheet: a label with no
+ * background and no border, for the low-emphasis half of a pair where the design draws
+ * plain text — "Discard it" under "Save this session" on the recovery sheet.
+ *
+ * It lives here rather than as a bare Pressable in the feature file so that its hit
+ * target, press feedback, debounce and font-scale cap are the same as every other button
+ * in the app. A plain `<Text onPress>` is how a 42px tap target and an un-debounced
+ * destructive action get shipped. See DECISIONS.md, 2026-09-10.
+ */
+export type ButtonVariant = 'primary' | 'secondary' | 'pill' | 'danger' | 'ghost'
 
 interface Props {
   label: string
@@ -96,12 +106,14 @@ export function Button({
               borderWidth: 1,
               borderColor: c.dangerBorder,
             }
-          : {
-              backgroundColor: c.surfaceRaised,
-              borderRadius: radius.buttonSmall,
-              borderWidth: 1,
-              borderColor: c.borderStrong,
-            }
+          : variant === 'ghost'
+            ? { backgroundColor: 'transparent', borderRadius: radius.buttonSmall }
+            : {
+                backgroundColor: c.surfaceRaised,
+                borderRadius: radius.buttonSmall,
+                borderWidth: 1,
+                borderColor: c.borderStrong,
+              }
 
   const textColor =
     variant === 'primary'
@@ -110,7 +122,9 @@ export function Button({
         ? c.accentInk
         : variant === 'danger'
           ? c.danger
-          : c.text
+          : variant === 'ghost'
+            ? c.textMuted
+            : c.text
 
   // Named sizes from the scale. These were `font.bodyStrong.size + 1` and
   // `font.body.size + 0.5`: sizes that did not exist, written to look like they did.

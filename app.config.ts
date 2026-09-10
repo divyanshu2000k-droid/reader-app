@@ -75,6 +75,37 @@ const config: ExpoConfig = {
     'expo-router',
     'expo-status-bar',
     'expo-sqlite',
+    /**
+     * The Android 12+ system splash. Configured here rather than drawn in JS because the
+     * system shows it before any JS exists — which is the only way to hit the sub-800ms
+     * budget in docs/05-BUILD-PLAN.md. `src/features/launch` only decides when to HIDE it.
+     *
+     * The base colours are light mode; `dark` overrides them. Both come from brand.json
+     * for the same reason the adaptive icon does.
+     */
+    [
+      'expo-splash-screen',
+      {
+        backgroundColor: brand.groundLight,
+        image: './assets/splash-icon.png',
+        imageWidth: 180,
+        dark: {
+          backgroundColor: brand.ground,
+          image: './assets/splash-icon.png',
+          imageWidth: 180,
+        },
+      },
+    ],
+    /**
+     * Sentry. The plugin's job is the BUILD-time half: uploading source maps so a stack
+     * trace from a minified release bundle is readable. That upload needs
+     * `SENTRY_AUTH_TOKEN`, which is a REAL secret and lives in EAS Secrets, never here
+     * and never in git. The DSN below is a public key and is a different thing entirely.
+     *
+     * With no org/project configured the plugin is inert, so the app builds and runs
+     * before a Sentry account exists.
+     */
+    '@sentry/react-native',
     [
       'expo-font',
       {
@@ -93,12 +124,10 @@ const config: ExpoConfig = {
     ],
   ],
   experiments: { typedRoutes: true },
-  extra: {
-    // Public keys only. Real secrets live in EAS Secrets. See docs/06-CONVENTIONS.md.
-    sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? null,
-    supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? null,
-    supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? null,
-  },
+  // No `extra` keys for optional services. They are read as `process.env.EXPO_PUBLIC_*` in
+  // src/lib/config.ts, inlined by Metro at bundle time. Putting them here as well made a
+  // second copy that `expo-constants` reads from the APK — frozen at native build time, so
+  // a `.env` change silently did nothing until a full rebuild. See DECISIONS.md, 2026-09-10.
 }
 
 export default config

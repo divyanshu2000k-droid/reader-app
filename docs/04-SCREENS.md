@@ -69,11 +69,24 @@ invisibly or takes over the screen.
    library is slow, show the Library with skeleton rows rather than holding here.
 2. **Force update.** Remote flag check with a 2 second timeout. On timeout, proceed. Never
    block launch on a network call. If the flag says this build is retired, show the update
-   screen with no dismiss.
+   screen with no dismiss. The check **fails open** on every error, and blocks only on a
+   fresh, well-formed, self-consistent flag — see `DECISIONS.md`, 2026-09-10.
 3. **Session recovery.** If an unfinished session exists in the database, show the recovery
-   sheet offering to save the elapsed time or discard it. Never silently discard.
+   sheet offering to save the elapsed time or discard it. Never silently discard. The sheet
+   cannot be dismissed; if saving the choice fails it stays open with the error. "Save"
+   records the elapsed time now; asking where the reader got to belongs to the session
+   logger (Slice 3).
 4. **Restore.** If signed in and the local database is empty, run first sync with the
-   restore screen and a real count.
+   restore screen and a real count. **Not built until Slice 8**, which adds sign-in; until
+   then the condition cannot be true and the gate passes through.
+
+**The gates are evaluated in this order, but their work starts at the same time.** The
+flag fetch runs alongside the database migration, so its 2 seconds are hidden behind work
+that happens anyway. The order decides which screen wins, not what runs first.
+
+**Underneath all four:** the database must open and migrate. If it cannot, a full-screen
+notice says so and offers Try again. That is a notice, not the React error boundary — a
+migration fails asynchronously, and boundaries only catch render errors.
 
 Then Library. In the ordinary returning case the user sees only the splash, briefly.
 

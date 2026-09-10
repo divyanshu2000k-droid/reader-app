@@ -86,7 +86,9 @@ export const dark = {
 } as const satisfies Palette
 
 export const light = {
-  ground: '#FAF6EE',
+  // From brand.json, for the same reason as `dark.ground`: the native splash screen
+  // config needs this exact value and cannot import a .ts module.
+  ground: brand.groundLight,
   surface: '#FFFFFF',
   surfaceRaised: '#FFFFFF',
   border: 'rgba(31,27,19,0.08)',
@@ -142,6 +144,11 @@ export const font = {
   // `font.heading.size + 1`. That is a font size that does not exist in the scale,
   // spelled so it reads as if it does. Four components each invented their own.
   // If a size is real it belongs here with a name; if it is not, it should not be used.
+  /** The centred title on a full-screen notice: update required, error boundary. */
+  notice:      { size: 18, weight: '700', letterSpacing: -0.36, lineHeight: 24 },
+  /** A tab bar label. 10px is below the 12px body floor, which is fine: it is a label
+   *  attached to an icon with an accessibilityLabel, not readable content. */
+  tab:         { size: 10, weight: '500', lineHeight: 13 },
   button:      { size: 15.5, weight: '700', lineHeight: 21 },
   buttonSmall: { size: 13.5, weight: '600', lineHeight: 19 },
   chip:        { size: 12.5, weight: '500', lineHeight: 17 },
@@ -176,6 +183,10 @@ export function typeStyle(
 
 export const space = {
   screen: 22,      // horizontal screen padding
+  /** Between a notice's icon, title, body and action. */
+  notice: 22,
+  /** Between the tab bar's icon and its label. */
+  tabLabel: 5,
   card: 18,        // inside a card
   cardTight: 12,   // inside a compact card
   row: 8,          // between list rows
@@ -200,7 +211,7 @@ export const space = {
   toastGap: 16,    // between the toast message and its Undo
   toastPadX: 16,
   toastPadY: 14,
-  toastLift: 56,   // clears the tab bar
+  toastLift: 66,   // clears the tab bar: size.tabBar plus the hairline gap above its raise zone
 } as const
 
 export const radius = {
@@ -217,6 +228,8 @@ export const radius = {
   segmentInner: 12, // one selected segment
   grabber: 2,
   skeleton: 6,
+  /** The icon container on a full-screen notice. */
+  notice: 20,
 } as const
 
 export const size = {
@@ -238,6 +251,18 @@ export const size = {
   progressBar: 3,
   pill: 34,
   grabber: { w: 38, h: 4 },
+  /** The rounded square holding the icon on a full-screen notice. */
+  noticeIcon: 62,
+  /** The tab bar's own height, above the safe-area inset. */
+  tabBar: 58,
+  /** How far the raised Add button rises above the tab bar. */
+  tabRaise: 28,
+  /** The ring of ground colour that separates the raised button from the bar. */
+  tabRaiseRing: 5,
+  /** The raised button's full diameter: the 52px fab plus its ground ring on both sides. */
+  tabRaised: 62,
+  /** Pads a 38px header icon button up to the 44px minimum touch target. */
+  iconButtonHitSlop: 3,
   /** Extra tap area around controls whose visual box is smaller than minTouch. */
   hitSlop: 10,
   hitSlopTight: 6,

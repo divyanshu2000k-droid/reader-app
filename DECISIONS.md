@@ -630,6 +630,184 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-10 · OPEN: one native crash in React Native Fabric, not reproduced
+**Observed:** one cold start during the Slice 1 device pass died in the foreground with no
+Java exception. Tombstone: SIGSEGV (SEGV_ACCERR) on the JS thread, inside React Native core
+- `MountingCoordinator::pullTransaction` during `UIManager::completeSurface`, called from
+Hermes. No frame from Sentry, the splash module, SQLite, or app code.
+**Reproduction:** 0 of 4 further cold starts, no new tombstone. The crashing launch was the
+one that started seconds after Metro restarted, so a dev-client race while the bundle loads
+is plausible - but plausible is not shown, and it is not being called harmless.
+**Not ours to fix directly** if it is an RN 0.86 renderer bug, but it is ours to watch.
+**Revisit when:** a Sentry DSN is configured (native crashes then report from release
+builds), and on the first physical-device run in Slice 6. If it recurs outside a Metro
+restart, capture the tombstone and search the React Native issue tracker by the frame.
+A second tombstone at 14:12 the same day was the emulator's Bluetooth service, not this app.
+
+## 2026-09-10 · Optional keys are read from `process.env`, not `expo-constants` — found on the device
+**The bug:** with `EXPO_PUBLIC_FORCE_UPDATE_URL` set and Metro restarted, the device logged
+"no force-update URL configured". Metro's served manifest contained the URL. The APK's
+embedded `app.config`, written at native build time, did not — and `expo-constants` reads
+the embedded copy, even in a development build.
+**Impact:** every optional key in `.env` — the kill switch, the Sentry DSN — silently did
+nothing until a full native rebuild. Restarting Metro, the obvious step, changed nothing and
+reported nothing. The setup instructions written the same day were wrong because of it.
+**Fix:** `src/lib/config.ts` reads each key as a literal `process.env.EXPO_PUBLIC_*` member
+expression, which Metro inlines at bundle time. A Metro restart with `--clear` is now
+genuinely sufficient, and release builds still carry the value baked in. The keys were
+removed from `app.config.ts`'s `extra`, so there is one source rather than two that
+disagree. `appVersion` and `androidPackage` stay on `expo-constants`: they genuinely are
+build-time facts.
+**Over:** keeping `extra` and documenting "rebuild after every `.env` change" — accurate,
+but a trap for the next person, who will restart Metro and conclude their key is wrong.
+**The rule this adds:** read a public key only as `process.env.EXPO_PUBLIC_NAME`. Destructuring
+or `process.env[name]` is not inlined and is undefined on a device.
+**Another instance of the silent-pass shape**, added to the list in CLAUDE.md: typechecked,
+linted, threw nothing, and the kill switch could not be switched on.
+
+## 2026-09-10 · The force-update flag lives on Cloudflare Pages, and it must be impossible for it to brick anyone
+**Chose:** one static file, `v1/kill-switch.json`, on Cloudflare Pages, deployed with
+`wrangler`. Fetched every launch with a 2s timeout and a cache-busting query parameter.
+**Over, with the reasons that decided it** (researched, then adversarially judged; scores
+out of 60: Cloudflare Pages 48, GitHub Pages 31, Supabase Storage 22):
+- **Supabase Storage** — free projects pause after a week of inactivity, the free CDN serves
+  a replaced file stale for up to an hour, and above all it puts the kill switch in the
+  **same failure domain as the thing it exists to kill**: from Slice 8 Supabase is the
+  backend, and a bad migration or a blown quota there is precisely when the switch is needed.
+- **GitHub Pages** — `Cache-Control: max-age=600` is fixed and unpurgeable, the repo is
+  local-only so it means publishing a new public repo, and its terms bar commercial use —
+  this app has a paid tier.
+- **raw.githubusercontent / Gist** — pinned 300s cache, per-IP rate limits that punish
+  carrier-grade NAT, and not intended for production hosting.
+- **Netlify** — a free site goes offline when its monthly credits run out, and each deploy
+  spends them. **Vercel Hobby** — no commercial use.
+- **Firebase Remote Config** — a 12-hour default fetch interval, a native SDK, and ADR 003
+  rejected Firebase. **EAS Update** — structurally wrong: a kill switch has to be able to
+  stop an app whose update path is the broken thing.
+
+**Because:** Cloudflare static assets are free with no request cap, need no card, do not
+pause on inactivity, default to `max-age=0, must-revalidate`, and invalidate on deploy. The
+failure that matters for a kill switch is not downtime — the gate fails open, so an
+unreachable host is harmless — it is a flag that is **reachable but stale**, or one you
+**cannot flip**. Cloudflare wins on both.
+
+**The known cost, stated rather than hidden:** a Pages deploy needs a laptop; there is no
+editing a deployed file from a phone. Mitigated by keeping `killswitch/` in this repo and
+authenticating `wrangler` once, now, so a 2am flip is one command.
+**Revisit if** a phone-only flip becomes a requirement. Workers + KV can be edited from a
+browser, but every launch is then a metered invocation against 100,000 a day, and
+exceeding it returns an error — the switch would stop working exactly when the app got
+popular.
+
+**The safety design.** The update screen has no dismiss, so every false positive is a reader
+locked out with no way back:
+- **Blocking is the narrow path.** It needs a fresh successful response on this launch,
+  valid JSON, a parseable `minimumVersion`, a parseable app version, and this build strictly
+  older. Offline, timeout, 500, an HTML error page, malformed JSON, an unknown shape: all
+  proceed to the library.
+- **`latestVersion` is required, and the flag must agree with itself.** One typo — `11.0.0`
+  for `1.1.0` — would retire every build including the fix. So a flag whose `latestVersion`
+  does not clear its own `minimumVersion` is ignored, and locking everyone out now takes two
+  mistakes that agree with each other. **The first test run caught a hole in this guard:** an
+  unparseable `latestVersion` compared as null, `isOlderThan` read null as "not older", and
+  the block went through. Fixed by requiring a parseable, coherent pair; asserted.
+- **An unreadable app version never blocks.** The obvious `'0.0.0'` fallback sits below every
+  minimum and would pin readers on the screen forever. Caught while writing it, not after.
+- **The verdict is never persisted.** Caching "blocked" so the gate answers offline would
+  turn one mistaken flip into a permanent brick for everyone who then goes offline.
+- **No `storeUrl` in the payload.** The button's destination is derived from the package id.
+  A remote file choosing where the only button on an undismissable screen goes is a phishing
+  page the reader cannot leave.
+- **The message is bounded to 300 characters and stripped of control characters**, so a long
+  or hostile string cannot push the button off a 360px screen.
+- **Cache-busted on every request.** The host revalidates, but Android's HTTP cache or a
+  carrier proxy can answer first, and a stale flag fails silently in both directions — the
+  frightening one is the un-brick flip not being seen.
+- **Semver with a tested numeric comparator, not an integer build number.** An integer is
+  harder to get wrong, but the version is what the reader sees and what the flag's author
+  types. The comparator has dedicated assertions including `1.10.0` against `1.9.0`, and was
+  watched to fail — five tests red — when swapped for a string comparison.
+
+**The path is versioned (`/v1/`)** so a future shape ships at `/v2/` without ever having to be
+backward compatible with builds that can no longer change.
+
+## 2026-09-10 · Launch gates: evaluated in order, started concurrently; restore deferred
+**Chose:** start the force-update fetch and the migration at the same moment, and evaluate
+the gates strictly in Journey A's order once each has an answer.
+**Over:** running them in sequence, as the build plan's ordering reads.
+**Because:** rule 1 says the UI never waits on the network. In sequence, every cold start on
+a poor connection pays up to 2s of splash for a flag that is false essentially always.
+Concurrently, that cost hides behind work that has to happen anyway. What the order
+specifies is which screen wins, and that is preserved exactly — `evaluate()` in
+`useLaunchGates.ts` reads as the specification.
+**Gates are rendered state, never routes.** Navigating before the root layout has mounted a
+navigator throws, and a gate that is a route sits in the back stack.
+**Gate 3 (restore) is a declared slot that always passes.** It triggers on "signed in AND
+local database empty"; there is no sign-in until Slice 8, so the condition cannot be true,
+and building the screen now would mean inventing a book count. `isLibraryEmpty()` is written.
+**The splash always hides.** On Android an un-hidden splash means nothing draws at all —
+including the error screen — so it hides on the first decision, and a 4s failsafe hides it
+regardless. The exit fade is 150ms; the default 400ms is half the 800ms budget.
+
+## 2026-09-10 · A failed migration is a notice with a retry, not the React error boundary
+**The build plan's done condition says** a corrupted migration "shows the error boundary".
+**What ships instead:** a full-screen notice, "Could not open your library", with Try again.
+**Because:** a migration runs asynchronously in an effect, and React error boundaries catch
+errors thrown during render — an async failure never reaches one. Throwing it into render to
+make the boundary fire would add a crash in order to show a crash screen. The migration
+already returns its failure as an `AppError`; rendering that directly is honest and gives a
+real retry (`retryMigrations`, which is meaningful because the restore path closes the
+database). The root `ErrorBoundary` still exists and still reports render errors.
+**The boundary's fallback has no provider dependencies.** When the root boundary fires, every
+provider beneath it is gone; a fallback that calls `useSafeAreaInsets` throws inside the
+boundary and loops. So `AppErrorBoundary` uses plain Views and the palette directly.
+
+## 2026-09-10 · Sentry is a no-op without a DSN, pinned at the version Expo resolves
+**Chose:** `@sentry/react-native` 7.11.0, from `npx expo install`, initialised only when a DSN
+exists, disabled in development, errors only (`tracesSampleRate: 0`).
+**Over:** 8.25.0, the current npm release.
+**Because:** 7.11.0 is what Expo SDK 57 pins, so `expo install --check` stays clean. The pin
+is stale — it predates SDK 57 and was copied forward from SDK 55 — and that is recorded
+rather than hidden. **Revisit when** Expo bumps the pin, or when source-map upload is set up:
+the 8.x plugin keys `disableAutoUpload` and `options` are silently ignored on 7.x.
+**`Sentry.init({ dsn: undefined })` is not a no-op** — it binds a client and installs every
+integration. The guard is on the call, not on the option.
+**The DSN is public; the auth token is not.** The DSN only permits sending events and is
+safe in the bundle; its risk is quota burn, mitigated by spike protection. The auth token,
+needed only for source-map upload, is a real secret: EAS secrets, never a committed file.
+**Caught failures are reported explicitly.** The failures that matter most here are returned
+as `AppError`s rather than thrown, so Sentry would never observe them. `reportUnrecoverable`
+sends each with context — for a migration, the data version, the target version and whether
+the restore worked, without which a report cannot tell a clean rollback from a failure that
+left the library untouched.
+
+## 2026-09-10 · `updateRow` landed in Slice 1, not Slice 2
+**Deviation from** the 2026-09-04 deferral. The session-recovery gate closes a session by
+setting `duration_seconds` and nothing else. Without a partial update that means reading the
+row and writing it all back — the lost-update race that entry warned Slice 2 against. It
+updates only the supplied columns of a live row, stamps `updated_at`, enqueues, and reports
+`changed`. An empty patch runs no statement at all.
+
+## 2026-09-10 · Smaller Slice 1 calls
+- **Where an artboard disagrees with `Components.dc.html`, the sheet wins.** The Launch
+  artboard draws a 48px button; the notices use the standard 56px primary.
+- **`Button` gained a `ghost` variant** for the plain-text half of a pair ("Discard it"), so
+  its hit target, debounce and font-scale cap match every other button.
+- **The tab bar's raised button sits inside the bar's bounds.** A view overhanging its parent
+  on Android is only reliably tappable with view flattening on, which Reanimated turns off —
+  the failure is half a button that renders and ignores taps.
+- **Settings is a gear in the Library header.** The design's header shows search and a shelf
+  filter; both arrive with the list in Slice 2, beside it.
+- **Add and Stats are real tabs with honest empty states**, so the shell is exercised end to
+  end without pretending to content.
+- **The device-pass runner moved to `db/devPass.ts`.** Settings needed it, and features may
+  not import from one another.
+- **`brand.json` gained `groundLight`** for the light-mode splash. The Android 12+ splash is
+  configured natively because only the system splash can appear before any JS exists.
+- **Five new tokens rather than arithmetic**, after the lint rule caught `size.fab +
+  ring * 2`, `(minTouch - iconButton) / 2` and a bare `height: 1` in code written this
+  slice: `tabRaised`, `iconButtonHitSlop`, and `StyleSheet.hairlineWidth`.
+
 ## 2026-09-03 · THE WRITE PATH WAS NEVER ATOMIC. Caught by the real atomicity test.
 **The bug:** `writeRow`, `softDelete` and `restoreRow` all used
 `getDb().transaction(async (tx) => …)`. Drizzle's expo-sqlite driver is a **synchronous**

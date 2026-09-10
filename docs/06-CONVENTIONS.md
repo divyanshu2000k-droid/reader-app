@@ -12,9 +12,13 @@ Feature folders, not type folders. Everything a feature needs lives together.
 ```
 src/
   app/                    Expo Router. Routes only, thin.
+    _layout.tsx           Providers, launch gates, root error boundary
     (tabs)/
-      library.tsx
+      _layout.tsx         The tab shell; the bar itself is ui/TabBar.tsx
+      index.tsx           Library
+      add.tsx
       stats.tsx
+    settings.tsx
     book/[id].tsx
     session/log.tsx
     onboarding/
@@ -196,6 +200,28 @@ Three tiers, and the sheet defines how each looks:
 2. **Expected offline** → banner, never a modal, because the app works offline
 3. **Unrecoverable** → error boundary with a restart, reported to Sentry
 
+**What each tier's machinery can actually catch**, because it is not the same thing:
+
+- **React error boundaries catch render errors only** — and a synchronous throw inside a
+  `useEffect`. Nothing after an `await`, no promise rejection, no `onPress` throw. The root
+  `ErrorBoundary` in `src/app/_layout.tsx` is the last-resort net for render failures.
+- **Everything asynchronous is returned, not thrown.** A failed migration, backup or write
+  comes back as an `AppError` and is rendered by the screen that asked for it — a failed
+  migration is a full-screen notice with Try again, not the boundary.
+- **Caught failures reach Sentry only if you send them.** Call `reportUnrecoverable` from
+  `src/lib/sentry.ts` with the context that distinguishes one failure from another. With no
+  DSN configured it logs and does nothing else; the app must behave identically either way.
+- **A root boundary fallback may use no provider.** When it fires, every provider beneath
+  the root layout is gone. `useSafeAreaInsets`, `useToast`, a query hook — any of them
+  throws inside the fallback and loops. Plain Views and the palette only.
+
+**Launch gates are rendered state, never routes.** See `src/features/launch/`. A gate that
+is a route sits in the back stack and can be returned to with the back button.
+
+**Typed routes regenerate only when Metro runs.** After adding or renaming a route file,
+`npm run typecheck` reports the new path as invalid until `npx expo start` has rewritten
+`.expo/types/router.d.ts`. That is stale generated types, not a wrong path.
+
 Error copy says what happened, what is still safe, and one next action. Never a code, never
 "Oops", never blame the network without stating the library is untouched.
 
@@ -220,9 +246,14 @@ The most bug prone area in this app, and the one the whole product thesis rests 
 
 ## Secrets
 
-- **Public keys** (Supabase anon key, Sentry DSN) go in `app.config.ts` via
-  `expo-constants`. They are designed to be public; Row Level Security is what protects the
-  data.
+- **Public keys** (Supabase anon key, Sentry DSN, the force-update URL) go in `.env` as
+  `EXPO_PUBLIC_*` and are read **only** in `src/lib/config.ts`, as literal
+  `process.env.EXPO_PUBLIC_NAME` expressions. Metro inlines those at bundle time, so a
+  Metro restart with `--clear` picks up a change. **Not** `app.config.ts` `extra`:
+  `expo-constants` reads the copy embedded in the APK at native build time, so a `.env`
+  change there silently does nothing until a full rebuild. Destructuring `process.env` or
+  indexing it by a variable is not inlined and is undefined on a device. They are designed to
+  be public; Row Level Security and rate limits are what protect the data.
 - **Real secrets** go in EAS Secrets and never in git.
 - `.env` is gitignored from the first commit, not added after.
 - **The Supabase service role key must never appear in the app.** Reaching for it client

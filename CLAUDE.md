@@ -55,6 +55,13 @@ The four, as evidence:
    `checkpointWal()` in isolation and never executes the failing sequence. A suite of
    green checks over the parts of a startup path says nothing about the path.
 
+7. **The kill switch could not be switched on.** Its URL was read from `expo-constants`,
+   which serves the `app.config` embedded in the APK at native build time — not the
+   manifest Metro serves. Setting the key and restarting Metro did nothing, silently; the
+   manifest looked right and the app logged "no URL configured". Found only by flipping
+   the flag and watching a device ignore it. Public keys are now literal
+   `process.env.EXPO_PUBLIC_*` reads, inlined at bundle time.
+
 Add another if the theme counts: `font.family` was declared from the first commit and
 applied by nothing, so the entire app rendered in the wrong typeface without a single
 error anywhere.
@@ -167,22 +174,28 @@ Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
-Slice 0 complete, reviewed, repaired, and **verified on a device including a real
-schema upgrade**. Typecheck, lint and Prettier clean; 37 tests pass, 27 of them across
-IST, US Central and UTC.
+**Slice 1 built; three of its four done conditions verified on the emulator, one blocked
+by tooling.** Typecheck, lint and Prettier clean; 72 tests pass, including 35 asserting
+that the force-update kill switch cannot lock anyone out.
 
-**Device pass on the Pixel 7 emulator: RUNTIME 14/14 · COMPILE-TIME 1/1**, including the
-two new checks (restore skips a newer-schema backup; cleanup leaves no orphaned rows) and
-the soft-delete cascade verified in the database rather than asserted.
+**Verified on device:** launches to the empty Library with the tab bar and a Settings
+button; the remote flag shows the update screen, and wins over a pending session
+recovery; a corrupted migration shows "Could not open your library" with Try again,
+reports the real error, and leaves the database intact; an open timed session shows the
+recovery sheet.
 
-**Migration `0001` has now run against a POPULATED v1 database**, not just a fresh
-install — which is how three real bugs were found and fixed. See `DECISIONS.md`,
-2026-09-04. Every row survived; the new unique index no longer rejects existing data.
+**Not verified by me — needs a human at the emulator:** tabs switching, the recovery
+sheet's buttons, Settings navigation, and Try again. `adb shell input` taps do not reach
+the app on this emulator (the same failure the Slice 0 pass hit), and both `adb
+screencap` and the emulator's framebuffer capture return black while the view tree holds
+the right content, so no screen has been seen by eye either.
 
-**Outstanding before Slice 1:** the third error tier still does not exist — error
-boundary, Sentry and a migration retry are scheduled into Slice 1 in
-`docs/05-BUILD-PLAN.md`. Everything to date is x86_64 emulator only; arm64 and OEM
-background-killing are first exercised in Slice 6.
+**One open item:** a single native SIGSEGV inside React Native's Fabric renderer on one
+cold start, not reproduced in four more. See `DECISIONS.md`, 2026-09-10.
+
+**Needs the owner:** a Sentry DSN and a deployed kill-switch URL, both optional. See
+`docs/09-ENVIRONMENT.md`. Gate 3 (restore) is a slot until Slice 8 adds sign-in.
+Everything to date is x86_64 emulator only.
 
 See `docs/05-BUILD-PLAN.md`.
 

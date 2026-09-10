@@ -58,7 +58,8 @@ sessions has a correct `local_day`, and each left a row in `sync_queue`.
 - Splash under 800ms, using the Android 12+ system splash API
 - The four launch gates in order: force update check → running session recovery →
   restore → Library
-- Force update driven by a remote flag. Build the kill switch before you need it
+- Force update driven by a remote flag. Build the kill switch before you need it. Hosted on
+  Cloudflare Pages at `/v1/kill-switch.json` (ADR 007); template in `killswitch/`
 - Tab shell: Library, Add, Stats, with Add as a raised centre button
 - Settings reachable from the Library header, not a tab
 
@@ -78,6 +79,17 @@ screen. All three land here because all three belong to the launch path:
 **Done when:** the app launches to an empty Library, tabs switch, toggling the remote
 flag shows the update screen, and a deliberately corrupted migration shows the error
 boundary with a working restart rather than grey text.
+
+> **As built (2026-09-10):** a corrupted migration shows a full-screen **notice with Try
+> again**, not the React error boundary. A migration fails asynchronously and boundaries
+> only catch render errors; forcing it into render would add a crash to show a crash
+> screen. The root boundary exists and reports render errors. Gate 3 (restore) is a slot
+> that passes through until Slice 8 adds sign-in. See `DECISIONS.md`, 2026-09-10.
+>
+> **Device status, 2026-09-10:** empty Library, the update screen from the flag, the
+> migration-failure notice and the recovery sheet verified on the emulator. Tab
+> switching and every button tap are **not yet verified** — `adb` input does not reach the
+> app on this emulator — and need checking by hand before this slice is called done.
 
 ---
 

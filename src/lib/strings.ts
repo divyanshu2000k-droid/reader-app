@@ -111,6 +111,43 @@ export const toasts = {
 } as const
 
 /**
+ * The four launch gates and the error boundary.
+ *
+ * These live here rather than inline because they are the app's highest-stakes copy: the
+ * reader is looking at one of them on their worst day, and three of the four cannot be
+ * dismissed. They must say what happened, what is still safe, and what to do — the error
+ * copy rule at the top of this file, applied where it matters most.
+ */
+export const launch = {
+  update: {
+    title: 'Time for an update',
+    /** Overridable by the remote flag, so an incident can explain itself specifically. */
+    body: 'This version has a problem that could affect your reading history, so we have retired it. Your books are safe and waiting.',
+    action: 'Update now',
+    /** Shown when the flag carries no store link, so the button would go nowhere. */
+    noStore: 'Update Reader from the Play Store to carry on.',
+  },
+  migrationFailed: {
+    title: 'Could not open your library',
+    body: 'Your books are still on this phone and nothing was deleted. This usually clears on a second try.',
+    action: actions.tryAgain,
+    busy: 'Trying again',
+  },
+  sessionRecovery: {
+    /** e.g. "You were reading for 41 minutes". The duration comes from lib/dates. */
+    title: (duration: string) => `You were reading for ${duration}`,
+    body: 'The app closed before you finished. Keep the time and tell us where you got to, or throw it away.',
+    save: 'Save this session',
+    discard: 'Discard it',
+  },
+  crashed: {
+    title: 'Something went wrong',
+    body: 'Your library is saved on this phone and was not affected. Restarting usually fixes it.',
+    action: 'Restart the app',
+  },
+} as const
+
+/**
  * The free-tier promise. This wording is a store-listing claim and appears on the
  * paywall. It must not drift, and the list it describes must never shrink.
  */
