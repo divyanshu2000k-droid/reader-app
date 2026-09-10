@@ -32,8 +32,9 @@ import {
   syncQueue,
   type SyncOperation,
 } from './schema'
-import { now, type UnixMs } from '@/lib/dates'
-import { appError, attempt, type Result } from '@/lib/result'
+import { now, toLocalDay, type UnixMs } from '@/lib/dates'
+import { appError, attempt, type AppError, type Result } from '@/lib/result'
+import { errors } from '@/lib/strings'
 
 /**
  * The registry of syncable tables, keyed by SQL table name.
@@ -70,8 +71,34 @@ export type SyncableTable = keyof typeof SYNCABLE
  */
 export type RowFor<K extends SyncableTable> = Omit<
   (typeof SYNCABLE)[K]['$inferInsert'],
-  'createdAt' | 'updatedAt' | 'deletedAt'
+  'createdAt' | 'updatedAt' | 'deletedAt' | DerivedColumn<K>
 > & { id: string }
+
+/**
+ * Columns the write path DERIVES, which a caller therefore cannot supply.
+ *
+ * `sessions.local_day` is the calendar day of `occurred_at` in the device timezone, and the
+ * contract is that it is written whenever `occurred_at` is written and never otherwise
+ * (docs/03-DATA-MODEL.md). While callers supplied it, nothing held them to that:
+ * `updateRow` accepted a new `occurredAt` with no `localDay`, and the session stayed filed
+ * under its old day in every streak, pace chart and yearly total. It is now computed here
+ * from the `occurredAt` actually being written, and passing it is a compile error.
+ */
+type DerivedColumn<K extends SyncableTable> = K extends 'sessions' ? 'localDay' : never
+
+/**
+ * What `updateRow` accepts: any subset of a row's writable columns, where a key that is
+ * present must carry a real value. `null` clears a nullable column and is allowed;
+ * `undefined` is not a write and is rejected.
+ *
+ * Drizzle's insert types spell `| undefined` into every optional column, so
+ * `exactOptionalPropertyTypes` alone does not stop `{ note: undefined }`. Stripping it here,
+ * WITH that flag on, does. The runtime count in `updateRow` still holds for values that
+ * never passed through the compiler.
+ */
+export type PatchFor<K extends SyncableTable> = {
+  [P in keyof Omit<RowFor<K>, 'id'>]?: Exclude<Omit<RowFor<K>, 'id'>[P], undefined>
+}
 
 export const SYNCABLE_TABLES = Object.keys(SYNCABLE) as SyncableTable[]
 
@@ -112,6 +139,34 @@ void _shapeCheck
  */
 function tableFor(name: SyncableTable): SyncableShape {
   return SYNCABLE[name] as unknown as SyncableShape
+}
+
+// ─── LOCAL_DAY, DERIVED FROM OCCURRED_AT ─────────────────────────────────────
+
+/** The `occurredAt` a sessions write carries, or null for any other table or none given. */
+function occurredAtOf(table: SyncableTable, values: object): UnixMs | null {
+  if (table !== 'sessions' || !('occurredAt' in values) || values.occurredAt === undefined) {
+    return null
+  }
+  const at = values.occurredAt
+  if (typeof at !== 'number' || !Number.isFinite(at)) {
+    throw new Error(`occurredAt must be unix milliseconds, got ${String(at)}`)
+  }
+  return at
+}
+
+/**
+ * `local_day` for a write that sets `occurred_at` on an EXISTING row: kept when the instant
+ * is unchanged, recomputed when it moved. SQL evaluates every SET expression against the
+ * row as it was before the statement, so `"occurred_at"` here is the stored value — in a
+ * plain UPDATE and in an upsert's DO UPDATE alike.
+ *
+ * Never an unconditional recompute: the stored day is the day the reader experienced, in
+ * the timezone they were in. Rewriting the same instant from a phone that is now in Tokyo
+ * would move last Tuesday's reading to Wednesday, which the contract's third rule forbids.
+ */
+function localDayOnUpdate(occurredAt: UnixMs): SQL {
+  return sql`CASE WHEN "occurred_at" = ${occurredAt} THEN "local_day" ELSE ${toLocalDay(occurredAt)} END`
 }
 
 // ─── THE SOFT-DELETE CASCADE ─────────────────────────────────────────────────
@@ -211,6 +266,154 @@ const CHILDREN: Partial<Record<SyncableTable, readonly ChildLink[]>> = {
   ],
 }
 
+// ─── NO LIVE ROW UNDER A DELETED PARENT ──────────────────────────────────────
+
+/**
+ * WHO A ROW BELONGS TO, for the one rule the cascade exists to keep: no live row points at
+ * a deleted parent. A live session under a deleted read keeps counting in every statistic,
+ * and no screen can explain the number.
+ *
+ * The cascade enforced it on the way down and nothing enforced it on the way back up. A
+ * book deleted, then its shelf deleted, then the book restored, brought back a live
+ * assignment to a deleted shelf. A session restored on its own came back live under a
+ * read deleted since. And `writeRow` / `updateRow` would attach or move a row onto a
+ * deleted parent without complaint. All three now run this check inside their transaction
+ * and roll back.
+ *
+ * `notes.read_id` is deliberately absent: it is provenance, and a note belongs to its book.
+ */
+interface ParentLink {
+  readonly parent: SyncableTable
+  /** True when the row `id`'s parent through this link exists and is soft-deleted. */
+  readonly isDeleted: (db: Database, id: string) => boolean
+}
+
+const PARENTS: Partial<Record<SyncableTable, readonly ParentLink[]>> = {
+  reads: [
+    {
+      parent: 'books',
+      isDeleted: (db, id) =>
+        db
+          .select({ d: books.deletedAt })
+          .from(reads)
+          .innerJoin(books, eq(reads.bookId, books.id))
+          .where(eq(reads.id, id))
+          .all()
+          .some((r) => r.d !== null),
+    },
+  ],
+  sessions: [
+    {
+      parent: 'reads',
+      isDeleted: (db, id) =>
+        db
+          .select({ d: reads.deletedAt })
+          .from(sessions)
+          .innerJoin(reads, eq(sessions.readId, reads.id))
+          .where(eq(sessions.id, id))
+          .all()
+          .some((r) => r.d !== null),
+    },
+  ],
+  notes: [
+    {
+      parent: 'books',
+      isDeleted: (db, id) =>
+        db
+          .select({ d: books.deletedAt })
+          .from(notes)
+          .innerJoin(books, eq(notes.bookId, books.id))
+          .where(eq(notes.id, id))
+          .all()
+          .some((r) => r.d !== null),
+    },
+  ],
+  book_shelves: [
+    {
+      parent: 'books',
+      isDeleted: (db, id) =>
+        db
+          .select({ d: books.deletedAt })
+          .from(bookShelves)
+          .innerJoin(books, eq(bookShelves.bookId, books.id))
+          .where(eq(bookShelves.id, id))
+          .all()
+          .some((r) => r.d !== null),
+    },
+    {
+      parent: 'shelves',
+      isDeleted: (db, id) =>
+        db
+          .select({ d: shelves.deletedAt })
+          .from(bookShelves)
+          .innerJoin(shelves, eq(bookShelves.shelfId, shelves.id))
+          .where(eq(bookShelves.id, id))
+          .all()
+          .some((r) => r.d !== null),
+    },
+  ],
+}
+
+/** What the reader calls each parent, in "restore the … first". */
+const NOUN: Record<SyncableTable, string> = {
+  books: 'book',
+  reads: 'read',
+  sessions: 'session',
+  shelves: 'shelf',
+  book_shelves: 'shelf assignment',
+  notes: 'note',
+  goals: 'goal',
+}
+
+class ParentDeletedError extends Error {
+  readonly parent: SyncableTable
+  constructor(table: SyncableTable, parent: SyncableTable) {
+    super(`a ${table} row would be live under a deleted ${parent} row`)
+    this.name = 'ParentDeletedError'
+    this.parent = parent
+  }
+}
+
+function deletedParentOf(db: Database, table: SyncableTable, id: string): SyncableTable | null {
+  for (const link of PARENTS[table] ?? []) if (link.isDeleted(db, id)) return link.parent
+  return null
+}
+
+/** Throws inside the caller's transaction, so the write it guards rolls back. */
+function assertParentsLive(db: Database, table: SyncableTable, id: string): void {
+  const parent = deletedParentOf(db, table, id)
+  if (parent) throw new ParentDeletedError(table, parent)
+}
+
+/** An error's message and every `cause` beneath it: drizzle wraps SQLite's own text. */
+function causeText(cause: unknown): string {
+  const parts: string[] = []
+  let c: unknown = cause
+  for (let i = 0; i < 5 && c instanceof Error; i += 1) {
+    parts.push(c.message)
+    c = 'cause' in c ? c.cause : undefined
+  }
+  return parts.join(' <- ')
+}
+
+/**
+ * The reader-facing failure for a write, naming the cause when it is one they can act on:
+ * a deleted parent to restore first, or a clash with a row added since (an undo of read #1
+ * after a new read #1, a shelf assignment re-added before its old one is restored).
+ */
+function writeFailure(cause: unknown, message: string, safe: string): AppError {
+  if (cause instanceof ParentDeletedError) {
+    return appError('recoverable', message, {
+      safe: errors.parentDeleted(NOUN[cause.parent]),
+      cause,
+    })
+  }
+  if (/UNIQUE constraint failed/i.test(causeText(cause))) {
+    return appError('recoverable', message, { safe: errors.writeClash, cause })
+  }
+  return appError('recoverable', message, { safe, cause })
+}
+
 // ─── PRIMITIVES, ALL SYNCHRONOUS AND ALL TRANSACTION-INTERNAL ────────────────
 
 function enqueue(
@@ -253,6 +456,9 @@ function cascadeRestore(
     const t = tableFor(child.table)
     const matching = child.ids(db, id, (col) => eq(col, deletedAt))
     for (const childId of matching) {
+      // A child with ANOTHER parent that is still deleted stays deleted, with its subtree:
+      // restoring a book must not revive its assignment to a shelf deleted since.
+      if (deletedParentOf(db, child.table, childId) !== null) continue
       db.update(t).set({ deletedAt: null, updatedAt: ts }).where(eq(t.id, childId)).run()
       enqueue(db, child.table, childId, 'upsert', ts)
       cascadeRestore(db, child.table, childId, deletedAt, ts)
@@ -297,15 +503,28 @@ export async function writeRow<K extends SyncableTable>(
     async () => {
       const t = tableFor(table)
       const ts = now()
+      const occurredAt = occurredAtOf(table, values)
+      if (table === 'sessions' && occurredAt === null) {
+        throw new Error('a session cannot be written without occurredAt')
+      }
       // One timestamp for the row and the queue entry. Reading the clock twice can
       // produce two values and makes the pair look like two separate edits.
-      const insertRow = { ...values, createdAt: ts, updatedAt: ts }
+      const insertRow = {
+        ...values,
+        ...(occurredAt === null ? {} : { localDay: toLocalDay(occurredAt) }),
+        createdAt: ts,
+        updatedAt: ts,
+      }
 
       // The conflict branch updates everything the caller supplied EXCEPT the identity
       // and the creation date. Writing `id` back to itself is harmless; writing
-      // `createdAt` is the bug above.
+      // `createdAt` is the bug above. `local_day` moves only if the instant did.
       const { id: _identity, ...mutable } = values
-      const updateSet = { ...mutable, updatedAt: ts }
+      const updateSet = {
+        ...mutable,
+        ...(occurredAt === null ? {} : { localDay: localDayOnUpdate(occurredAt) }),
+        updatedAt: ts,
+      }
 
       const db = getDb()
 
@@ -317,14 +536,16 @@ export async function writeRow<K extends SyncableTable>(
           .values(insertRow)
           .onConflictDoUpdate({ target: t.id, set: updateSet })
           .run()
+        assertParentsLive(db, table, values.id)
         enqueue(db, table, values.id, 'upsert', ts)
       })
     },
     (cause) =>
-      appError('recoverable', 'Could not save that change', {
-        safe: 'Nothing else in your library was affected.',
+      writeFailure(
         cause,
-      }),
+        'Could not save that change',
+        'Nothing else in your library was affected.',
+      ),
   )
 }
 
@@ -405,13 +626,16 @@ export async function restoreRow(
         if (res.changes === 0) return
 
         changed = true
+        // Refused, and rolled back, if its parent is still deleted: restore the parent
+        // first, which brings this back with it if they were deleted together.
+        assertParentsLive(db, table, id)
         enqueue(db, table, id, 'upsert', ts)
         if (typeof deletedAt === 'number') cascadeRestore(db, table, id, deletedAt, ts)
       })
 
       return { changed }
     },
-    (cause) => appError('recoverable', 'Could not restore that', { cause }),
+    (cause) => writeFailure(cause, 'Could not restore that', 'Nothing was changed.'),
   )
 }
 
@@ -433,45 +657,55 @@ export async function restoreRow(
  * them: a creation date is not editable, and a delete goes through `softDelete` so it
  * enqueues a `delete` and runs the cascade.
  *
- * A patch that changes nothing — an empty object, a missing row, an already-deleted row —
- * enqueues nothing and reports `changed: false`.
+ * A patch that changes nothing — an empty object, one whose every value is `undefined`, a
+ * missing row, an already-deleted row — enqueues nothing and reports `changed: false`.
+ *
+ * `occurredAt` carries `local_day` with it (see `localDayOnUpdate`); `localDay` itself is
+ * not patchable, because a day that moves without its instant is how they came apart.
  */
 export async function updateRow<K extends SyncableTable>(
   table: K,
   id: string,
-  patch: Partial<Omit<RowFor<K>, 'id'>>,
+  patch: PatchFor<K>,
 ): Promise<Result<WriteOutcome>> {
   return attempt(
     async () => {
-      const columns = Object.keys(patch)
-      // No columns means no statement. Running `SET updated_at = ?` alone would bump the
-      // row's timestamp and enqueue a sync for an edit that did not happen.
-      if (columns.length === 0) return { changed: false }
+      // Count only keys that will actually be written. Drizzle drops `undefined` values
+      // from SET, so `{ note: undefined }` used to pass a key count of one, run
+      // `SET updated_at = ?` alone, report `changed: true` and enqueue a sync for an edit
+      // that did not happen. `null` is a real write (clear the column) and counts.
+      const writes = Object.entries(patch).filter(([, value]) => value !== undefined).length
+      if (writes === 0) return { changed: false }
 
       const t = tableFor(table)
       const ts = now()
+      const occurredAt = occurredAtOf(table, patch)
+      const derived = occurredAt === null ? {} : { localDay: localDayOnUpdate(occurredAt) }
       const db = getDb()
       let changed = false
 
       runInTransaction(() => {
         const res = db
           .update(t)
-          .set({ ...patch, updatedAt: ts })
+          .set({ ...patch, ...derived, updatedAt: ts })
           .where(and(eq(t.id, id), isNull(t.deletedAt)))
           .run()
         if (res.changes === 0) return
 
         changed = true
+        // Moving a row onto a deleted parent is refused and rolled back.
+        assertParentsLive(db, table, id)
         enqueue(db, table, id, 'upsert', ts)
       })
 
       return { changed }
     },
     (cause) =>
-      appError('recoverable', 'Could not save that change', {
-        safe: 'Nothing else in your library was affected.',
+      writeFailure(
         cause,
-      }),
+        'Could not save that change',
+        'Nothing else in your library was affected.',
+      ),
   )
 }
 

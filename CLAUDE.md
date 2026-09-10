@@ -80,6 +80,24 @@ The four, as evidence:
    and nothing measured it. `contrast.test.ts` now computes every text/background pair in
    both schemes.
 
+11. **Every cold start backed up the whole database, and a full phone was locked out with
+   no update pending.** `performMigrations` never asked whether a migration was pending.
+   Each launch paid a WAL checkpoint and a synchronous file copy before the splash lifted,
+   plus a 3x free-space check that blocked the library. The notice then dropped the
+   error's own advice and said "try again", which that reader could do forever.
+12. **`runInTransaction` reopened bug #1 in its own replacement.** It took
+   `task: () => void`, which TypeScript satisfies with an async function, and the guard
+   only looked for drizzle's `.transaction(async`. Now `() => undefined`, pinned by
+   `transaction.types.ts`.
+13. **`npm test` ran 44 of 106 tests on any non-Windows shell, and passed.** The glob was
+   unquoted; `sh` expands `**` one level deep. Every count before 2026-09-10 was a
+   Windows-only count.
+14. **A recovered session counted nowhere.** The recovery sheet carefully bounded the
+   duration, and stats read only positions, so every recovered session was filed as
+   `unusable`: real reading, reported as broken data.
+15. **`updateRow` could move a session's date without its day**, and `{ note: undefined }`
+   queued a sync for an edit that never happened. Latent: no caller had done either yet.
+
 Add another if the theme counts: `font.family` was declared from the first commit and
 applied by nothing, so the entire app rendered in the wrong typeface without a single
 error anywhere.
@@ -196,8 +214,22 @@ Build locally for day to day work. EAS is for release builds only.
 ## Current state
 
 **Slice 1 is verified on a physical phone** (Nothing Phone 2a, Android 16, arm64 — the first
-arm64 build, earlier than Slice 6 planned). Typecheck, lint, Prettier clean; 106 tests pass,
-27 of them in each of UTC, IST and US Central.
+arm64 build, earlier than Slice 6 planned). Typecheck, lint, Prettier clean. **129 tests
+pass under both `cmd` and POSIX `sh`**; every count before 2026-09-10 was Windows-only (see
+item 13). Device pass on the phone: **RUNTIME 23/23 · COMPILE-TIME 1/1**.
+
+**Review fixes, 2026-09-10 evening, each verified and watched failing:**
+- **Backups only when a migration is pending.** A failed migration is verified as rolled
+  back, not file-restored. Failure notices carry their own next step, e.g. "free up N MB".
+- **`npm test` quotes its glob,** held there by a guard.
+- **`runInTransaction` rejects an async task.** The guard covers every way to open a
+  transaction.
+- **`local_day` is derived by the write path.** `updateRow` takes `PatchFor<K>`, and
+  `exactOptionalPropertyTypes` is on.
+- **Restore never orphans a row.** Refusals say why. Undo returns a `Result`, and the toast
+  reports a failure. The delete-book copy is true.
+- **Sessions count by the owner's rule:** timed and recovered sessions count in hours,
+  never unusable. `from_position` is the page finished before the session.
 
 **Post-review fixes, 2026-09-10, verified on the phone:**
 - **The recovery sheet no longer invents a duration.** A 9h-old session shows an empty
@@ -228,8 +260,12 @@ native rebuild after a config change. LogBox's dev-only toast swallowed taps in 
 over the tab bar, and a routine warn of mine raised it every launch. Metro crashed when
 started during a Gradle build — Gradle output is now blocked from its watcher.
 
-**Open:** one unreproduced native SIGSEGV in React Native's Fabric renderer (plan in
-`DECISIONS.md`). Gate 3 (restore) waits for sign-in in Slice 8. Settings holds only the
+**Open:** a native SIGSEGV in React Native's Fabric renderer (`pullTransaction`, a jump
+into heap memory), now seen **twice, on two devices**, both on the first cold start after
+the bundle's source changed. A release-build run alone will not settle it. The plan is a
+100-launch loop per build type, before Slice 2 dogfooding (`DECISIONS.md`, log in
+`docs/crashes/`). The fragile-list triage from the 2026-09-10 review is pending the
+owner's call. Gate 3 (restore) waits for sign-in in Slice 8. Settings holds only the
 version and the dev device-pass button.
 
 See `docs/05-BUILD-PLAN.md`.

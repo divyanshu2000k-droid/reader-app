@@ -19,7 +19,7 @@
 
 import type { UpdateRequirement } from './forceUpdatePolicy'
 import type { OpenSession } from './queries'
-import type { MigrationStatus } from '@/db/migrate'
+import type { MigrationFailure, MigrationStatus } from '@/db/migrate'
 
 export type LaunchGate =
   /** Nothing has been decided yet. The splash is still up. */
@@ -27,7 +27,7 @@ export type LaunchGate =
   /** Gate 1. No dismiss, by design. */
   | { readonly gate: 'update'; readonly requirement: UpdateRequirement }
   /** Underneath every gate: the database could not be opened or migrated. */
-  | { readonly gate: 'migrationFailed'; readonly message: string }
+  | { readonly gate: 'migrationFailed'; readonly error: MigrationFailure }
   /** Gate 2. */
   | { readonly gate: 'recoverSession'; readonly session: OpenSession }
   /** Gate 4. Show the app. */
@@ -51,7 +51,7 @@ export function evaluate(
 
   // 0 · The database.
   if (migration.state === 'pending') return { gate: 'booting' }
-  if (migration.state === 'failed') return { gate: 'migrationFailed', message: migration.error }
+  if (migration.state === 'failed') return { gate: 'migrationFailed', error: migration.error }
 
   // 2 · A session was still running.
   if (openSession === undefined) return { gate: 'booting' }

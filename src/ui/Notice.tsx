@@ -28,15 +28,15 @@ interface Props {
   title: string
   body: string
   /** Omitted when there is genuinely nothing the reader can do from here. */
-  actionLabel?: string
-  onAction?: () => void
+  actionLabel?: string | undefined
+  onAction?: (() => void) | undefined
   busy?: boolean
-  busyLabel?: string
+  busyLabel?: string | undefined
   /** A second, lower-emphasis way out. */
   secondaryLabel?: string
   onSecondary?: () => void
   /** Small print pinned to the bottom, e.g. the version number. */
-  footer?: string
+  footer?: string | undefined
   /** `centre` for a screen that is only this message. */
   glow?: 'centre' | 'upper'
 }

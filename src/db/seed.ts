@@ -10,7 +10,7 @@
  */
 
 import { writeRow } from './write'
-import { now, toLocalDay } from '@/lib/dates'
+import { now } from '@/lib/dates'
 import { newId } from '@/lib/ids'
 import type { Result } from '@/lib/result'
 
@@ -59,9 +59,8 @@ export async function seedSampleLibrary(): Promise<Result<{ bookId: string }>> {
     const result = await writeRow('sessions', {
       id: newId(),
       readId,
+      // local_day is derived from occurredAt by writeRow; a caller cannot supply it.
       occurredAt,
-      // Written together with occurredAt, always. See DECISIONS.md.
-      localDay: toLocalDay(occurredAt),
       format: p.format,
       fromPosition: p.from,
       toPosition: p.to,

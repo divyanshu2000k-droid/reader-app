@@ -8,6 +8,12 @@
     // under tsconfig.test.json instead. `npm run typecheck` runs both.
     "types": [],
     "noUncheckedIndexedAccess": true,
+    // An optional property may be ABSENT, but not present with the value `undefined`, unless
+    // its type says so. Turned on for the write path: `updateRow(t, id, { note: undefined })`
+    // used to typecheck, run `SET updated_at = ?` alone and queue a sync for an edit that
+    // never happened. The runtime rule in write.ts is the guarantee; this is the early
+    // warning. See src/db/__tests__/write.types.ts.
+    "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,

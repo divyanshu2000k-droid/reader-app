@@ -170,6 +170,10 @@ banner and manual entry still works completely.
 - Opens from the Library card, book detail, or the FAB
 - Defaults: `from_position` is the current page, `occurred_at` is now, format is the book's
   usual format
+- **Positions are labelled as boundaries: "Was on page" and "Now on page"** (`session` in
+  `strings.ts`). Reading pages 1 to 10 is "was on page 0, now on page 10": ten pages. Never
+  "From page" / "To page", which reads as 1 → 10 and nine pages. The Session artboards still
+  say "From page" / "To page". That is a design revision item, and the code wins
 - Quick add chips adjust `to_position` without typing
 - **The date field is prominent and always editable**, before and after saving
 - Format toggle per session, pages or minutes
@@ -183,6 +187,11 @@ Finishing routes to Session complete.
 streak, percent and time remaining. Two actions: Done, or I finished the book.
 
 **Editing.** Every session is editable and deletable from book detail, forever.
+
+**Undo can fail, and says so.** An undo toast's action returns a `Result`. The toast stays
+up while it runs. If it fails (the book it belonged to is deleted too, or something added
+since takes its place), the toast is replaced by what happened and what to do. It never
+just disappears with nothing restored.
 
 ---
 

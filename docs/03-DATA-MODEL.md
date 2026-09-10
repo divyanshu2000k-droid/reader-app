@@ -113,15 +113,24 @@ The atom of the whole system. Append only in practice, always editable in princi
 | `occurred_at` | INTEGER NOT NULL | **The single most important column in the schema** |
 | `local_day` | TEXT NOT NULL | `YYYY-MM-DD`. The calendar day in the device's timezone at write time. Indexed. See below |
 | `format` | TEXT NOT NULL | `pages` or `minutes`. Lives here, not on the book |
-| `from_position` | INTEGER | Page or minute started at |
-| `to_position` | INTEGER | Page or minute ended at |
-| `duration_seconds` | INTEGER | Nullable. Only set for timed sessions |
+| `from_position` | INTEGER | The last page (or minute) finished **before** this session. `0` for a first session. See below |
+| `to_position` | INTEGER | The last page (or minute) finished **during** this session |
+| `duration_seconds` | INTEGER | Nullable. How long the reader actually read. Set for timed sessions, including recovered ones. Counts towards time read |
 | `is_timed` | INTEGER | 1 if from the timer, 0 if manually logged |
 | `note` | TEXT | Optional quick thought |
 | `created_at` / `updated_at` / `deleted_at` | INTEGER | |
 
 **`occurred_at` defaults to now and is never locked.** Editable before saving, after
 saving, and on imported rows. This one column is the fix for four competitor bugs.
+
+**Positions are boundaries, not pages.** `from_position` is the last page already finished
+before the session, and `to_position` the last one finished during it. So reading pages 1
+to 10 is stored as `0 → 10`, which is ten pages, and the next session starts at `10`.
+`to_position − from_position` is then exactly the amount read, and a run of sessions sums to
+the page reached, with no page dropped or counted twice. The other reading ("from page 1 to
+page 10" as `1 → 10`) gives nine pages. That off-by-one is where competitors produce totals
+their readers stop trusting. The logger's labels say which one this is (`session` in
+`src/lib/strings.ts`). The alternative wording is never used anywhere.
 
 **`format` on the session, not the book,** is what lets one book hold both print and audio
 without double counting. It is the top voted unshipped request on StoryGraph's public
@@ -138,7 +147,12 @@ Three rules, and they are the whole contract:
 
 1. **`local_day` is written whenever `occurred_at` is written, and never otherwise.** Insert
    and any edit of the date recompute it from the new `occurred_at` in the *current* device
-   timezone. Editing a note or a page count does not touch it.
+   timezone. Editing a note or a page count does not touch it, and neither does re-saving
+   the same instant. **The write path computes it; no caller can supply it.**
+   `RowFor<'sessions'>` omits it, and `writeRow` and `updateRow` derive it from the
+   `occurredAt` being written. On an existing row, a SQL `CASE` keeps the stored day unless
+   the instant actually changed. It used to be the caller's job, and `updateRow` accepted
+   a new `occurredAt` with no `localDay`, which filed the session under its old day.
 2. **Every day-bucketed aggregate reads `local_day`.** Streaks, daily pace, "today",
    grouping by month or year for charts. Never `date(occurred_at)`, anywhere.
 3. **A timezone change does not rewrite existing rows.** The session happened on that day
@@ -231,7 +245,7 @@ Compute these with SQL. Storing them means they drift.
 | Current page | `MAX(to_position)` over sessions where format is pages |
 | Percent complete | current page ÷ `books.page_count` |
 | Pages read this year | `SUM(to_position - from_position)` where format is pages, grouped by `substr(local_day, 1, 4)` |
-| Hours listened | Same over minutes, kept in a **separate column of the UI**, never summed with pages |
+| Time read (hours) | `duration_seconds / 60` for **every timed session, whatever its format**. For an audiobook session logged by hand (no duration), `to_position - from_position` in minutes. A timed audiobook counts its duration only, never its span as well. Kept in a **separate column of the UI**, never summed with pages |
 | Daily pace | Group sessions by `local_day`. This only works because sessions carry real dates |
 | Streak | Consecutive `local_day` values having at least one session |
 | Books finished | Count of reads with status finished in the year of `finished_at` |
@@ -241,6 +255,21 @@ Every row above that buckets by day or year uses `local_day`, never `date(occurr
 
 **Pages and hours are never added together.** Three numbers on the Stats screen, always
 separate. Audiobooks inflating page counts is the category's largest unmet complaint.
+
+**How each kind of session counts** (`contribution()` in `src/domain/stats.ts`):
+
+| Session | Pages | Time | Needs fixing |
+|---|---|---|---|
+| Pages, positions, untimed | the span | — | no |
+| Pages, positions, timed | the span | the duration | no |
+| **Recovered: a duration, no positions** | **nothing** | **the duration, in full** | **no — never** |
+| Audiobook logged by hand | — | the minute span | no |
+| Audiobook, timed | — | the duration, not the span | no |
+| Positions half-filled or backwards | not counted | the duration, if any | yes |
+| No positions and no duration | — | — | yes |
+
+A recovered session is real reading by a real person. It must never be counted as
+something to fix, and it must never count towards pages it cannot vouch for.
 
 ---
 
@@ -310,6 +339,22 @@ away.
 rows. That is correct: every one of those rows genuinely has to reach the server. It is
 one transaction, so the reader still sees one atomic, undoable action.
 
+**Restore never leaves a live row under a deleted parent.** The cascade kept that rule on
+the way down, and nothing kept it on the way up:
+- **A row whose parent is still deleted cannot be restored.** It is refused, and the
+  refusal says to restore the parent first. Restoring the parent brings the row back with
+  it, if the two were deleted together.
+- **A cascade restore skips a child whose other parent is deleted.** A book deleted, then
+  its shelf deleted, then the book restored: the assignment to the deleted shelf stays
+  deleted.
+- **Writing or moving a row onto a deleted parent is refused too**, by `writeRow` and
+  `updateRow`.
+- **A restore that collides with a unique index is refused, and says why.** For example,
+  undoing read #1 after a new read #1 was added.
+
+Parents, for this rule: `reads → books`, `sessions → reads`, `notes → books`, and
+`book_shelves → books` and `→ shelves`. `notes.read_id` is provenance, not ownership.
+
 Enforced in `src/db/write.ts` and nowhere else. A `queries.ts` file cannot delete.
 
 ---
@@ -347,13 +392,15 @@ violate the never-lose-data directive. Concretely:
 
 | Question | Answer |
 |---|---|
+| When | **Only when drizzle will apply at least one migration to a database that already holds data.** Never on a launch with nothing pending (almost every launch), never on a fresh install. "Pending" uses drizzle's own rule: journal entries whose `when` is later than the newest `created_at` in `__drizzle_migrations` (`src/db/migrationPlan.ts`) |
 | What | File copy of the SQLite database via `expo-file-system` |
 | Where | App-internal storage, `FileSystem.documentDirectory + 'backups/'`. Not user visible, not in a folder the OS may clear |
 | Naming | `reader-<schemaVersion>-<unixMs>.db` |
 | Retention | Keep the newest three. Delete older ones **after** a successful migration, never before |
-| Free space | Check available space first. Require at least 3x the database size. If unavailable, **block the migration** and surface a clear message |
+| Free space | Check available space first. Require at least 3x the database size. If unavailable, **block the migration** and say **how many MB to free**, then Try again. Checked only when a backup is actually about to be taken |
 | If backup fails | **Fail closed.** Do not migrate. An app on an old schema still works; an app with a half-migrated database may not |
-| Restore | On migration failure, restore the newest backup **that this build can read**, roll the schema version back, and report to Sentry |
+| On migration failure | **Verify, do not restore.** Drizzle runs every pending migration in one transaction and rolls it back on failure, so the database is already as it was. Re-read the applied count; if it is unchanged, leave the files alone and report to Sentry. **Only if that cannot be confirmed**, restore the backup taken for this run (`restoreBackup`) |
+| Restore | Restore the newest backup **that this build can read** (`restoreNewestBackup`), for a future "restore from backup" action |
 
 **Never restore a backup from a newer schema than the running code.** The version is in
 the filename and `restoreNewestBackup(currentSchemaVersion)` takes the newest at or below
@@ -404,9 +451,19 @@ renumbers duplicate live reads in creation order before creating the index, and 
 the repaired rows for sync — a migration that changes rows is a write like any other.
 
 **Backups are named for the version of the data inside them, not the version being
-migrated to.** `backupBeforeMigration(appliedMigrationCount())`, never `SCHEMA_VERSION`.
+migrated to.** `backupBeforeMigration(appliedMigrations().count)`, never `SCHEMA_VERSION`.
 The first device pass produced `reader-2-*.db` files whose contents were v1, which
 silently defeats the rule above about never restoring a backup a build cannot read.
+
+**Journal timestamps must strictly increase.** Drizzle applies only entries newer than the
+last applied one, so a migration added with an older `when` (a rebase, a hand edit) applies
+on a fresh install and is **skipped forever** on every existing phone.
+`migrationPlan.test.ts` fails on it.
+
+**`PRAGMA foreign_keys=OFF` does nothing inside a migration.** Drizzle wraps the whole run
+in one transaction, and SQLite ignores that pragma inside a transaction. drizzle-kit emits
+it around a table rebuild, so a rebuild migration runs with foreign keys still enforced.
+Write any rebuild so it is valid with them on, and test it against a populated database.
 
 Test every migration against a database seeded with 2000 books, and test the failure path
 by deliberately corrupting a migration once. There is no `{ name: 'none' }` success

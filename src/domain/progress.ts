@@ -10,11 +10,21 @@
 import type { LocalDay, UnixMs } from '@/lib/dates'
 import type { SessionFormat } from '@/db/schema'
 
-/** The minimum a session must expose for progress maths. */
+/**
+ * The minimum a session must expose for progress maths.
+ *
+ * POSITIONS ARE BOUNDARIES, NOT PAGES. `fromPosition` is the last page (or minute) already
+ * finished before this session; `toPosition` is the last one finished during it. Reading
+ * pages 1 to 10 is `0 → 10`, which is ten pages, and the next session starts from 10. That
+ * is what makes `to − from` the amount read with no off-by-one, and consecutive sessions
+ * chain without a gap or an overlap. See docs/03-DATA-MODEL.md, `sessions`.
+ */
 export interface ProgressSession {
   readonly format: SessionFormat
   readonly fromPosition: number | null
   readonly toPosition: number | null
+  /** Set for timed sessions, including recovered ones. How long the reader actually read. */
+  readonly durationSeconds: number | null
   readonly occurredAt: UnixMs
   readonly localDay: LocalDay
 }
@@ -86,8 +96,10 @@ export function isBackwards(session: ProgressSession): boolean {
 }
 
 /**
- * Units covered by one session, or NULL when that cannot honestly be computed: either
- * end unknown, or the session runs backwards.
+ * Positions covered by one session (pages, or audiobook minutes), or NULL when that cannot
+ * honestly be computed: either end unknown, or the session runs backwards. This is the
+ * position span only; how a session counts towards the totals is `contribution` in
+ * stats.ts, which also knows about a timed session's duration.
  *
  * This used to clamp both cases to 0 and carry on. A session typed as 120 to 40 then
  * contributed nothing to any total, with no error, no flag and no way for the reader to

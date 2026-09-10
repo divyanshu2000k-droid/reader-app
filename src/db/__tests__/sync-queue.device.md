@@ -84,6 +84,28 @@ honest: cleanup once matched only `Devcheck%`, so every run left the seeded book
 and its three sessions behind, and the next run's seed added three more. A device pass
 that grows the database it is checking produces numbers that stop meaning anything.
 
+## 8. `local_day` follows `occurred_at`, and only it
+
+A session's day is derived on insert. A write that leaves the instant alone never moves it,
+whether that write is a note edit, a same-instant `updateRow` or a same-instant upsert.
+Each is checked against a planted day from "another timezone". Moving the instant moves the
+day through both write paths. A patch of only `undefined` values changes nothing, leaves
+`updated_at` untouched and queues nothing.
+
+## 9. Restore undoes exactly its cascade, and never orphans a row
+
+**9a.** Delete one session on its own, then delete its book. Restoring the book brings back
+the book, read, other session, note and shelf assignment, with one upsert each. The session
+deleted separately stays deleted. Both directions, because either one failing is a wrong
+statistic.
+**9b.** A book deleted, then its shelf deleted, then the book restored: the assignment to
+the deleted shelf stays deleted.
+**9c.** Restoring a session whose read is deleted is refused. The refusal says to restore
+the parent first, and it queues nothing.
+**9d.** Writing a session under a deleted read, or moving one there, is refused.
+**9e.** Undoing the delete of read #1 after a new read #1 exists is refused with "clashes",
+not an opaque failure.
+
 ## What a migration needs on top of all this
 
 Every check above runs against whatever schema the app is on. **None of them tests an

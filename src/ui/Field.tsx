@@ -31,7 +31,7 @@ interface Props {
   autoFocus?: boolean
   multiline?: boolean
   /** Inline error. Says what happened; the caller supplies what is still safe. */
-  error?: string
+  error?: string | undefined
   style?: StyleProp<ViewStyle>
 }
 

@@ -89,6 +89,13 @@ mix conventions within a layer.
 - Types derive from the Drizzle schema, never hand written duplicates
 - Fallible operations return `Result<T, E>` rather than throwing. Throwing is for genuinely
   unrecoverable states
+- `exactOptionalPropertyTypes` is on. An optional property may be absent, but it may not
+  be present holding `undefined` unless its type says `| undefined`. Widen a component
+  prop that way when a caller genuinely passes "maybe"
+- **Compile-time assertions live in `__tests__/*.types.ts`**: `@ts-expect-error` lines
+  that `npm run typecheck` checks and nothing executes. They are deliberately not
+  `*.test.ts`, so they never inflate the runtime count. `transaction.types.ts` and
+  `write.types.ts` are the pattern
 
 ---
 
@@ -120,6 +127,23 @@ a delete performed by setting `deleted_at` through `writeRow` — which would en
 `upsert` instead of a `delete` and skip the cascade — are both unrepresentable rather than
 merely discouraged.
 
+**`sessions.local_day` is derived by the write path, and `RowFor<'sessions'>` omits it.**
+`writeRow` and `updateRow` compute it from the `occurredAt` being written. On an existing
+row they recompute it only if the instant actually changed. A caller that could supply it
+could supply one that disagrees, and `updateRow` once let a date move without its day.
+
+**`updateRow` takes `PatchFor<K>`**: any subset of columns, where a key that is present
+carries a real value. `null` clears a column. `undefined` is not a write: it is a compile
+error, and a patch of only `undefined` values is `changed: false` with nothing queued.
+
+**No live row under a deleted parent, in either direction.** `softDelete` cascades down.
+`writeRow`, `updateRow` and `restoreRow` check the row's parents inside their transaction
+and roll back if one is deleted. A cascade restore skips a child whose *other* parent is
+still deleted. A refusal comes back as an `AppError` whose `safe` line names the parent to
+restore first, or says it clashes with something added since. **An undo passes that
+`Result` to the toast (`showUndo(msg, () => restoreRow(…))`), never a function that
+swallows it.**
+
 ### Transactions: `runInTransaction`, never `db.transaction(async …)`
 
 **"One transaction" was false for the whole of Slice 0, and everything passed.**
@@ -146,9 +170,22 @@ Everything inside `runInTransaction` must be synchronous. Drizzle's builders end
 `.run()` / `.all()` / `.get()` on this dialect, so there is nothing to await; the public
 functions in `write.ts` stay `async` so no caller changed.
 
-**Two guards in `src/db/__tests__/no-bypass.test.ts`:** one fails on any
-`.transaction(async` anywhere in `src/`, the other on any `db.insert` / `db.update` /
-`db.delete` or raw `execSync` / `runSync` outside the one file allowed to have them.
+**The compiler enforces it.** `runInTransaction` takes `task: () => undefined`, not
+`() => void`. It shipped as `() => void`, which TypeScript satisfies with an async function,
+so the replacement for the broken API had the same hole. A promise-returning task is now a
+compile error, pinned by `src/db/__tests__/transaction.types.ts`. One thing no type can
+see: a promise started *inside* a sync task (`void writeRow(…)`) runs after the commit.
+**Never call the public write functions from inside a transaction.**
+
+**The guards in `src/db/__tests__/no-bypass.test.ts`:**
+- Any `db.insert` / `db.update` / `db.delete`, or raw `execSync` / `runSync`, outside the
+  one file allowed to have them.
+- Any drizzle `.transaction(`, sync or async.
+- Any `runInTransaction(async`.
+- Any expo-sqlite `with…Transaction…` outside `client.ts`.
+
+The transaction guard strips comments before matching, because the files that explain
+these bugs name them.
 
 **Why the original test did not catch it, which is the lesson worth keeping.** The
 substitute test asserted that a transaction *aborts* when its first statement fails. That
@@ -266,7 +303,8 @@ The most bug prone area in this app, and the one the whole product thesis rests 
 - **Group by `sessions.local_day`, never by `date(occurred_at)`.** The latter buckets in UTC
   and misfiles early morning or late evening sessions depending on the timezone. This is the
   one stored derivation in the schema and the reasoning is in `03-DATA-MODEL.md`
-- `local_day` is written whenever `occurred_at` is written, and never otherwise
+- `local_day` is written whenever `occurred_at` is written, and never otherwise, **by the
+  write path**. No caller supplies it; see Data access
 - `occurred_at` is user editable everywhere it appears
 - Test explicitly: a session logged at 11pm on the 31st in IST must belong to the correct
   day, month and year. Bookly gets this wrong and travellers notice
@@ -324,7 +362,12 @@ Not comprehensive. Targeted at the things that silently corrupt data.
 - **A soft delete cascades and its restore reverses exactly that set.** A live session
   under a deleted read is a wrong statistic that no screen can explain
 - Statistics aggregation, especially pages and hours staying separate, and sessions that
-  cannot be counted surfacing as `unusable` rather than as a silent zero
+  cannot be counted surfacing as `unusable` rather than as a silent zero. **A recovered
+  session (a duration, no positions) counts fully in time and is never `unusable`**; the
+  full table is in `03-DATA-MODEL.md`
+- **When a backup is taken** (`migrationPlan.test.ts`): only when drizzle will apply
+  something, by drizzle's own timestamp rule, and never on a fresh install. Also that the
+  journal's timestamps strictly increase
 - Import parsing against real Goodreads exports, including malformed ones
 - Sync queue replay idempotency
 - Migrations against a 2000 book seeded database
@@ -345,6 +388,14 @@ Not comprehensive. Targeted at the things that silently corrupt data.
 **Do not bother testing:** component rendering, navigation, styling. Manual use catches
 those faster.
 
+**`npm test` passes its glob in double quotes, and a test holds it there.** Unquoted, `sh`
+expands the glob itself, and without `globstar` `**` means one directory. On macOS, Linux or
+any CI that ran 44 of 106 tests and reported a clean pass. Windows hid it, because `cmd`
+hands the literal to Node's own glob. `src/lib/__tests__/test-runner.test.ts` fails if the
+quotes go, or if any `*.test.ts` on disk is not matched. It lives one directory under
+`src/` on purpose: the broken glob still reaches it there, while `src/__tests__/` is exactly
+where it would silently not run.
+
 **Logic that must be tested lives in a pure module the node suite can load.** `npm test`
 runs under plain Node, which cannot load `expo-*`, `react-native`, `expo-sqlite` or anything
 that imports them. A test that imports a hook fails to start, and a decision written inside
@@ -354,6 +405,8 @@ the I/O and calls it. The pattern, in `src/features/launch/`:
 - `forceUpdatePolicy.ts` beside `forceUpdate.ts`
 - `recoveryPolicy.ts` beside `SessionRecoverySheet.tsx`
 - `gateOrder.ts` beside `useLaunchGates.ts`
+- `src/db/migrationPlan.ts` beside `migrate.ts`
+- `src/ui/toastQueue.ts` beside `Toast.tsx`
 
 What stays untested is the hook's state transition itself; that half is verified on a
 device, and the entry in `DECISIONS.md` says so.

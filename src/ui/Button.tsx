@@ -42,7 +42,7 @@ interface Props {
   onPress: () => void
   variant?: ButtonVariant
   /** Present participle shown while working, e.g. "Saving". Same width, no jump. */
-  busyLabel?: string
+  busyLabel?: string | undefined
   busy?: boolean
   disabled?: boolean
   accessibilityLabel?: string

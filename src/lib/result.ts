@@ -31,7 +31,7 @@ export interface AppError {
    * What is still safe. Error copy must always say this, because the most common fear
    * in this category is that something was lost.
    */
-  readonly safe?: string
+  readonly safe?: string | undefined
   readonly cause?: unknown
 }
 

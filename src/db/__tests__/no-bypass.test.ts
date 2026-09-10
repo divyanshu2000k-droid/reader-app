@@ -137,6 +137,58 @@ test('no async callback is passed to drizzle transaction()', () => {
   )
 })
 
+/**
+ * THE SAME BUG, IN ITS REPLACEMENT.
+ *
+ * `runInTransaction` was typed `task: () => void`, which accepts an async function, and the
+ * guard above only looked for drizzle's `.transaction(async`. So
+ * `runInTransaction(async () => …)` passed every check while committing before its
+ * statements ran. The type now rejects it (`__tests__/transaction.types.ts`); this catches
+ * it in source as well, together with the other ways to open a transaction that bypass
+ * the wrapper entirely.
+ */
+/**
+ * Source with comments removed, so a guard judges code rather than prose. The files that
+ * explain these bugs name the forbidden shapes in their comments (client.ts spells out
+ * `runInTransaction(async () => …)` precisely to warn against it), and the first run of
+ * the guard below failed on exactly that. Not string-aware, deliberately simple: `//`
+ * after a colon is kept so a URL does not swallow the rest of its line.
+ */
+function code(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
+}
+
+test('every transaction goes through runInTransaction, with a synchronous task', () => {
+  const offenders: string[] = []
+
+  for (const file of walk(SRC)) {
+    const rel = relative(process.cwd(), file).replace(/\\/g, '/')
+    const source = code(readFileSync(file, 'utf8'))
+    if (/\brunInTransaction\s*\(\s*async\b/.test(source)) {
+      offenders.push(`${rel}: async task passed to runInTransaction`)
+    }
+    // Drizzle's own helper, sync or async: the rule is one wrapper, not two.
+    if (/\.transaction\s*\(/.test(source)) {
+      offenders.push(`${rel}: drizzle .transaction() instead of runInTransaction`)
+    }
+    // expo-sqlite's transaction entry points, including the async ones, which are exactly
+    // the shape that commits early. Only client.ts may touch the raw handle at all.
+    if (
+      !SQLITE_ALLOWED.includes(rel) &&
+      /\bwith(Exclusive)?Transaction(Sync|Async)\s*\(/.test(source)
+    ) {
+      offenders.push(`${rel}: expo-sqlite transaction outside client.ts`)
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'Open transactions only with runInTransaction from db/client.ts, and only with a ' +
+      'synchronous task: an async one commits before its statements run.',
+  )
+})
+
 test('client.ts does not export the raw SQLite handle', () => {
   const source = readFileSync(join(SRC, 'db', 'client.ts'), 'utf8')
   assert.ok(

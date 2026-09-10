@@ -17,6 +17,7 @@
 import { drizzle } from 'drizzle-orm/expo-sqlite'
 import * as SQLite from 'expo-sqlite'
 
+import type { AppliedMigrations } from './migrationPlan'
 import * as schema from './schema'
 
 export const DATABASE_NAME = 'reader.db'
@@ -64,13 +65,30 @@ export function checkpointWal(): void {
  *
  * The device pass caught exactly this: a failing enqueue left the table row behind, which
  * is the precise failure the single write path exists to prevent.
+ *
+ * ─── WHY THE PARAMETER IS `() => undefined` AND NOT `() => void` ─────────────
+ *
+ * This wrapper shipped as `task: () => void`, which reopened the same hole one level up.
+ * TypeScript lets ANY function satisfy `() => void`, an `async` one included, and
+ * `withTransactionSync` calls `task()` and commits without looking at what it returned. So
+ * `runInTransaction(async () => { … })` typechecked, committed immediately and rolled
+ * nothing back: bug #1 again, in its own replacement.
+ *
+ * `() => undefined` rejects a promise-returning task at compile time, because
+ * `Promise<void>` is not `undefined`. A task with no `return`, or a bare `return;`, still
+ * satisfies it (TypeScript 5.1+). What it cannot see: an un-awaited promise started INSIDE
+ * a sync task (`void writeRow(…)`), which runs after the commit. Never call the public
+ * write functions from inside a transaction. Pinned in `__tests__/transaction.types.ts`.
  */
-export function runInTransaction(task: () => void): void {
+export function runInTransaction(task: () => undefined): void {
   openHandle().withTransactionSync(task)
 }
 
 /**
- * How many migrations have already been applied to the database on disk.
+ * What `__drizzle_migrations` says about the database on disk: how many migrations are
+ * applied (the schema version of the data, which names a backup) and the newest
+ * `created_at` (what drizzle itself compares against to decide what is pending — see
+ * migrationPlan.ts).
  *
  * Lives here because `client.ts` is the only file permitted to touch raw SQLite, and
  * because HOW it reads matters: `getAllSync` runs the statement to completion and
@@ -80,14 +98,22 @@ export function runInTransaction(task: () => void): void {
  * `NativeDatabase.execSync … database table is locked`, surfacing to the reader as
  * "Could not back up your library before updating" and a migration that could never run.
  *
- * Returns 0 when the table does not exist, which is a fresh install.
+ * One statement for both values, so they describe the same instant.
+ *
+ * Returns `{ count: 0, lastAppliedAt: null }` when the table does not exist, which is a
+ * fresh install. Note that opening the handle creates an empty `reader.db` if there was
+ * none, so "the file exists" is not a test for "the reader has data"; this is.
  */
-export function appliedMigrationCount(): number {
+export function appliedMigrations(): AppliedMigrations {
   try {
-    const rows = openHandle().getAllSync<{ n: number }>(
-      'select count(*) as n from __drizzle_migrations',
+    const rows = openHandle().getAllSync<{ n: number; last: number | null }>(
+      'select count(*) as n, max(created_at) as last from __drizzle_migrations',
     )
-    return rows[0]?.n ?? 0
+    const row = rows[0]
+    return {
+      count: row?.n ?? 0,
+      lastAppliedAt: row?.last === null || row?.last === undefined ? null : Number(row.last),
+    }
   } catch (cause) {
     // ONLY a missing table means "fresh install". Every other failure — locked, corrupt,
     // I/O — must surface.
@@ -97,7 +123,9 @@ export function appliedMigrationCount(): number {
     // backup taken from it is named `reader-0-*.db` and every future build will consider
     // it safe to restore. Swallowing an error to produce a plausible number is how a
     // version stops describing a fact.
-    if (cause instanceof Error && /no such table/i.test(cause.message)) return 0
+    if (cause instanceof Error && /no such table/i.test(cause.message)) {
+      return { count: 0, lastAppliedAt: null }
+    }
     throw cause
   }
 }

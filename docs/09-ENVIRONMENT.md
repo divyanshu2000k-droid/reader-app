@@ -331,6 +331,24 @@ connection or a real filesystem runs on a device instead, from a `__DEV__`-only 
 adb logcat -d | grep devcheck
 ```
 
+**Prefer the phone, and know which Metro the app is actually talking to.** Learned on
+2026-09-10, at the cost of an evening:
+- **On the phone,** `adb reverse tcp:8081 tcp:<your port>` routes the dev client to your
+  Metro. It worked first time: RUNTIME 18/18.
+- **On the emulator, `adb reverse` does not apply.** The dev client loads
+  `http://10.0.2.2:8081`, the host's port 8081, whatever is serving it. Here that was a
+  second Metro, started earlier by someone else, so the flag set on mine never reached the
+  app and the pass silently did not run. A `reader://expo-development-client/?url=…` deep
+  link was accepted by Android and then ignored. Emulator `input tap` did not reach JS, and
+  `screencap` came back black.
+- **Prove the route before reading any result.** List the app's connections with
+  `adb shell cat /proc/net/tcp6`, filtered to its uid: `127.0.0.1` means your reverse,
+  `10.0.2.2` means the host's 8081. Also check that your Metro's log gained an
+  `Android Bundled` line when the app launched. A device pass that never started looks, in
+  logcat, exactly like one that has not finished yet.
+- **That second Metro did pick up file edits.** The "watcher does not work" warning above
+  was not true of it. Still verify by grepping the bundle, which is the rule either way.
+
 **Why a flag and not the button.** A suite that can only be started by a finger cannot be
 run from a script, and Slice 2 has to re-run this against 2000 books.
 
@@ -422,7 +440,14 @@ because skipping it broke something in Slice 1.
    same for `reader.db-wal` and `reader.db-shm`. Without the WAL you edit a stale database.
 3. Edit with Python's `sqlite3`. Then `PRAGMA wal_checkpoint(TRUNCATE)` and
    `PRAGMA journal_mode=DELETE`, so the result is one self-contained file.
-4. Push through `/data/local/tmp`, since `run-as` cannot read your host.
+4. **Run steps 4 and 5 as one script with `set -e`, and never delete the live `-wal` until the
+   copy has succeeded.** On 2026-09-10 the push failed and the script carried on: it
+   deleted the phone's live `reader.db-wal`, which held 2.3 MB of committed,
+   un-checkpointed data. It was recovered only because step 2's copies existed. The push
+   failed because, with `MSYS_NO_PATHCONV=1`, `adb.exe` receives a Git-Bash path such as
+   `/c/Users/...` literally and cannot read it. **Give `adb push` a Windows path**:
+   `adb push "$(cygpath -w reader.db)" …`.
+   Push through `/data/local/tmp`, since `run-as` cannot read your host.
    - `adb push reader.db /data/local/tmp/reader.db`, then `adb shell chmod 644` it.
    - `adb shell run-as com.example.reader cp /data/local/tmp/reader.db files/SQLite/reader.db`
      as **separate arguments**. `run-as … sh -c '…'` loses its quoting through

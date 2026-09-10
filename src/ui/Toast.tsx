@@ -9,17 +9,15 @@
  * The undo callback is what actually protects the reader, so a toast that is dismissed
  * or times out must never run it. Only an explicit tap on Undo does.
  *
- * THIS IS A QUEUE, NOT A SLOT, AND THAT IS THE WHOLE POINT.
+ * THIS IS A QUEUE, NOT A SLOT. Delete two sessions in quick succession and each delete
+ * keeps its own undo for its own full window. A screen that deletes many rows at once
+ * should raise ONE toast whose undo reverses the batch; that is the caller's job.
  *
- * It used to hold one toast and replace it. Delete two sessions in quick succession —
- * the most ordinary interaction there is in a list — and the first delete's undo was
- * discarded before the reader could reach it. No warning, no trace, and the row was
- * already gone. "Undo on every destructive action" is non-negotiable rule 2, and the one
- * component responsible for it was dropping undos.
- *
- * Each toast now waits its turn and gets its full window. A screen that deletes many
- * rows at once should raise ONE toast whose undo reverses the batch, rather than N
- * toasts the reader has to sit through; that is the caller's job, not this file's.
+ * AN UNDO REPORTS WHETHER IT WORKED. `showUndo` takes a function returning a `Result`.
+ * It used to take `() => void`, so a restore that failed (a clash with something added
+ * since, a parent deleted meanwhile) vanished with the toast and nothing came back. Now the
+ * toast stays up while the undo runs, and a failure takes its place saying what happened
+ * and what is still safe. The rules live in `toastQueue.ts`, with tests.
  */
 
 import {
@@ -28,29 +26,36 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
-  useState,
   type ReactNode,
 } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { actions } from '@/lib/strings'
-import { font, radius, rules, size, space, typeStyle } from './theme'
+import { font, opacity, radius, rules, size, space, typeStyle } from './theme'
+import {
+  canUndo,
+  toastQueue,
+  undoFailureMessage,
+  type QueuedToast,
+  type UndoAction,
+} from './toastQueue'
 import { useColors } from './useTheme'
+import { appError, err, type Result } from '@/lib/result'
+import { actions, errors } from '@/lib/strings'
 
-interface ToastState {
-  /** Local only, for the React key and for identifying the head across renders. */
-  readonly id: number
-  readonly message: string
-  readonly onUndo?: () => void
-}
+export type { UndoAction }
 
 interface ToastApi {
   /** A plain confirmation with no action. */
   show: (message: string) => void
-  /** A destructive action with its undo. The undo runs only on an explicit tap. */
-  showUndo: (message: string, onUndo: () => void) => void
+  /**
+   * A destructive action with its undo. The undo runs only on an explicit tap, and must
+   * return its `Result` — pass `() => restoreRow('sessions', id)`, not a function that
+   * swallows it.
+   */
+  showUndo: (message: string, onUndo: UndoAction) => void
 }
 
 const ToastContext = createContext<ToastApi | null>(null)
@@ -64,35 +69,65 @@ export function useToast(): ToastApi {
 export function ToastProvider({ children }: { children: ReactNode }) {
   const c = useColors()
   const insets = useSafeAreaInsets()
-  const [queue, setQueue] = useState<readonly ToastState[]>([])
-  const nextId = useRef(0)
+  const [queue, dispatch] = useReducer(toastQueue, [])
+  const lastId = useRef(0)
+  const nextId = useCallback(() => {
+    lastId.current += 1
+    return lastId.current
+  }, [])
+  /** Undos in flight. A ref, so two taps in one frame cannot both start one. */
+  const running = useRef(new Set<number>())
 
   const current = queue[0] ?? null
+  const currentId = current?.id
+  const currentUndoing = current?.undoing ?? false
 
-  const enqueue = useCallback((toast: Omit<ToastState, 'id'>) => {
-    nextId.current += 1
-    setQueue((q) => [...q, { ...toast, id: nextId.current }])
-  }, [])
-
-  /** Removes the head. Never runs its undo — only an explicit tap does that. */
-  const dismissCurrent = useCallback(() => {
-    setQueue((q) => q.slice(1))
-  }, [])
-
-  // One timer per displayed toast, keyed by its id, so each one gets its own full
-  // window rather than inheriting what is left of the previous one's.
+  // One timer per displayed toast, keyed by its id, so each gets its own full window. None
+  // while its undo runs: dismissing it would hide the one place its failure can appear.
   useEffect(() => {
-    if (!current) return
-    const timer = setTimeout(dismissCurrent, rules.toastMs)
+    if (currentId === undefined || currentUndoing) return
+    const timer = setTimeout(() => dispatch({ type: 'expire', id: currentId }), rules.toastMs)
     return () => clearTimeout(timer)
-  }, [current, dismissCurrent])
+  }, [currentId, currentUndoing])
+
+  const runUndo = useCallback(
+    async (toast: QueuedToast) => {
+      if (!canUndo(toast) || toast.onUndo === null || running.current.has(toast.id)) return
+      running.current.add(toast.id)
+      dispatch({ type: 'undoStarted', id: toast.id })
+
+      let result: Result<unknown>
+      try {
+        result = await toast.onUndo()
+      } catch (cause) {
+        result = err(
+          appError('recoverable', errors.undoFailed.message, {
+            safe: errors.undoFailed.safe,
+            cause,
+          }),
+        )
+      }
+      running.current.delete(toast.id)
+
+      if (result.ok) dispatch({ type: 'undoSucceeded', id: toast.id })
+      else {
+        dispatch({
+          type: 'undoFailed',
+          id: toast.id,
+          failureId: nextId(),
+          message: undoFailureMessage(result.error),
+        })
+      }
+    },
+    [nextId],
+  )
 
   const api = useMemo<ToastApi>(
     () => ({
-      show: (message) => enqueue({ message }),
-      showUndo: (message, onUndo) => enqueue({ message, onUndo }),
+      show: (message) => dispatch({ type: 'show', id: nextId(), message, onUndo: null }),
+      showUndo: (message, onUndo) => dispatch({ type: 'show', id: nextId(), message, onUndo }),
     }),
-    [enqueue],
+    [nextId],
   )
 
   return (
@@ -113,9 +148,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           ]}
         >
           <Text
-            numberOfLines={2}
+            numberOfLines={3}
             maxFontSizeMultiplier={rules.maxFontScale}
-            style={[typeStyle(font.body), { flex: 1, color: c.text }]}
+            style={[typeStyle(font.body), styles.message, { color: c.text }]}
           >
             {current.message}
           </Text>
@@ -123,11 +158,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={actions.undo}
+              accessibilityState={{ busy: current.undoing, disabled: current.undoing }}
+              disabled={current.undoing}
               hitSlop={size.hitSlop}
-              onPress={() => {
-                current.onUndo?.()
-                dismissCurrent()
-              }}
+              onPress={() => void runUndo(current)}
+              style={current.undoing ? styles.busy : null}
             >
               <Text
                 maxFontSizeMultiplier={rules.maxFontScale}
@@ -155,4 +190,6 @@ const styles = StyleSheet.create({
     paddingVertical: space.toastPadY,
     borderWidth: 1,
   },
+  message: { flex: 1 },
+  busy: { opacity: opacity.disabled },
 })

@@ -26,7 +26,7 @@ import { Directory, File, Paths } from 'expo-file-system'
 
 import { checkpointWal, dangerouslyExecDevSql, DATABASE_NAME, getDb } from './client'
 import { books, reads, sessions, syncQueue } from './schema'
-import { restoreRow, softDelete, writeRow } from './write'
+import { restoreRow, softDelete, updateRow, writeRow } from './write'
 import { backupBeforeMigration, listBackups, pruneBackups, restoreNewestBackup } from './backup'
 import { SCHEMA_VERSION } from './migrate'
 import { seedSampleLibrary, SEEDED_TITLE } from './seed'
@@ -230,7 +230,6 @@ async function checkAtomicity() {
       id,
       readId: 'no-such-read-' + newId(),
       occurredAt: now(),
-      localDay: toLocalDay(now()),
       format: 'pages',
       fromPosition: 0,
       toPosition: 10,
@@ -524,6 +523,349 @@ async function checkRestore() {
   })
 }
 
+// ─── 8. LOCAL_DAY FOLLOWS OCCURRED_AT, AND ONLY IT ───────────────────────────
+
+const DAY = 24 * 60 * 60 * 1000
+
+/** A live book, read and session to test against. Removed by cleanup, by title. */
+async function devSession(title: string, occurredAt: number) {
+  const bookId = newId()
+  const readId = newId()
+  const sessionId = newId()
+  const b = await writeRow('books', { id: bookId, title, source: 'manual' })
+  const r = await writeRow('reads', { id: readId, bookId, status: 'reading', readNumber: 1 })
+  const s = await writeRow('sessions', {
+    id: sessionId,
+    readId,
+    occurredAt,
+    format: 'pages',
+    fromPosition: 0,
+    toPosition: 10,
+    isTimed: 0,
+  })
+  assert(b.ok && r.ok && s.ok, 'could not create the test session')
+  return { bookId, readId, sessionId }
+}
+
+async function dayOf(sessionId: string): Promise<string | undefined> {
+  const rows = await getDb()
+    .select({ day: sessions.localDay })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+  return rows[0]?.day
+}
+
+/**
+ * Stamp a day no computation in this timezone could produce, standing in for a session
+ * written while the reader was somewhere else. Any write that recomputes the day when it
+ * should not is then visible, whatever zone the device is in.
+ */
+function plantForeignDay(sessionId: string) {
+  dangerouslyExecDevSql(
+    `UPDATE sessions SET local_day = '1999-01-01' WHERE id = '${sessionId}'`,
+  )
+}
+
+async function checkLocalDay() {
+  await check('8a. local_day is derived from occurred_at on insert', async () => {
+    const at = now() - 3 * DAY
+    const { sessionId } = await devSession('Devcheck LocalDay Insert', at)
+    const day = await dayOf(sessionId)
+    assert(day === toLocalDay(at), `local_day ${day}, expected ${toLocalDay(at)}`)
+    return `local_day ${day}`
+  })
+
+  await check('8b. a write that leaves the instant alone never moves local_day', async () => {
+    const at = now() - 2 * DAY
+    const { sessionId, readId } = await devSession('Devcheck LocalDay Keep', at)
+    plantForeignDay(sessionId)
+
+    const note = await updateRow('sessions', sessionId, { note: 'edited' })
+    assert(note.ok && note.value.changed, 'the note edit failed')
+    assert((await dayOf(sessionId)) === '1999-01-01', 'a NOTE edit rewrote local_day')
+
+    const same = await updateRow('sessions', sessionId, { occurredAt: at })
+    assert(same.ok, 'the same-instant edit failed')
+    assert(
+      (await dayOf(sessionId)) === '1999-01-01',
+      'the SAME instant, re-set, moved local_day',
+    )
+
+    const upsert = await writeRow('sessions', {
+      id: sessionId,
+      readId,
+      occurredAt: at,
+      format: 'pages',
+      fromPosition: 0,
+      toPosition: 12,
+      isTimed: 0,
+    })
+    assert(upsert.ok, 'the upsert failed')
+    assert((await dayOf(sessionId)) === '1999-01-01', 'a same-instant UPSERT moved local_day')
+    return 'note edit, same-instant updateRow and same-instant upsert all kept the stored day'
+  })
+
+  await check('8c. moving occurred_at moves local_day, through both write paths', async () => {
+    const { sessionId, readId } = await devSession('Devcheck LocalDay Move', now() - 5 * DAY)
+
+    const moved = now() - 9 * DAY
+    const u = await updateRow('sessions', sessionId, { occurredAt: moved })
+    assert(u.ok && u.value.changed, 'updateRow failed')
+    const afterUpdate = await dayOf(sessionId)
+    assert(afterUpdate === toLocalDay(moved), `updateRow left local_day at ${afterUpdate}`)
+
+    plantForeignDay(sessionId)
+    const again = now() - 11 * DAY
+    const w = await writeRow('sessions', {
+      id: sessionId,
+      readId,
+      occurredAt: again,
+      format: 'pages',
+      fromPosition: 0,
+      toPosition: 10,
+      isTimed: 0,
+    })
+    assert(w.ok, 'the upsert failed')
+    const afterUpsert = await dayOf(sessionId)
+    assert(afterUpsert === toLocalDay(again), `the upsert left local_day at ${afterUpsert}`)
+    return `updateRow -> ${afterUpdate}, upsert -> ${afterUpsert}`
+  })
+
+  await check(
+    '8d. a patch of only undefined values is no change and queues nothing',
+    async () => {
+      const { sessionId } = await devSession('Devcheck Undefined Patch', now())
+      const stamp = async () =>
+        (
+          await getDb()
+            .select({ u: sessions.updatedAt })
+            .from(sessions)
+            .where(eq(sessions.id, sessionId))
+        )[0]?.u
+      const before = await stamp()
+      const queued = (await queueRowsFor('sessions', sessionId)).length
+
+      // Built the way an untyped caller would build it (a form, a parsed payload): the
+      // compiler rejects `{ note: undefined }` written literally, and the runtime rule must
+      // hold for the data that never passed through it.
+      const patch: Parameters<typeof updateRow<'sessions'>>[2] = {}
+      Reflect.set(patch, 'note', undefined)
+      Reflect.set(patch, 'toPosition', undefined)
+
+      const r = await updateRow('sessions', sessionId, patch)
+      assert(r.ok, 'an all-undefined patch returned an error')
+      assert(!r.value.changed, 'an all-undefined patch reported a change')
+      assert((await stamp()) === before, 'an all-undefined patch bumped updated_at')
+      const after = (await queueRowsFor('sessions', sessionId)).length
+      assert(after === queued, `an all-undefined patch queued ${after - queued} sync row(s)`)
+      return 'no change, updated_at untouched, nothing queued'
+    },
+  )
+}
+
+// ─── 9. RESTORE UNDOES EXACTLY ITS CASCADE, AND NEVER ORPHANS A ROW ──────────
+
+/** Resolves once the clock has moved, so two deletes can never share a timestamp. */
+async function nextMs(): Promise<void> {
+  const start = now()
+  while (now() === start) await new Promise((resolve) => setTimeout(resolve, 2))
+}
+
+/** A row's `deleted_at`: null when live, undefined when the row does not exist. */
+async function deletedAtOf(table: string, id: string): Promise<number | null | undefined> {
+  const rows = await getDb().all<{ deleted_at: number | null }>(
+    sql`select deleted_at from ${sql.identifier(table)} where id = ${id}`,
+  )
+  return rows[0]?.deleted_at
+}
+
+async function upsertsFor(table: string, id: string): Promise<number> {
+  return (await queueRowsFor(table, id)).filter((q) => q.operation === 'upsert').length
+}
+
+async function devBook(title: string) {
+  const bookId = newId()
+  const readId = newId()
+  const b = await writeRow('books', { id: bookId, title, source: 'manual' })
+  const r = await writeRow('reads', { id: readId, bookId, status: 'reading', readNumber: 1 })
+  assert(b.ok && r.ok, 'could not create the test book')
+  return { bookId, readId }
+}
+
+async function devSessionUnder(readId: string): Promise<string> {
+  const id = newId()
+  const s = await writeRow('sessions', {
+    id,
+    readId,
+    occurredAt: now(),
+    format: 'pages',
+    fromPosition: 0,
+    toPosition: 5,
+    isTimed: 0,
+  })
+  assert(s.ok, 'could not create the test session')
+  return id
+}
+
+async function devShelf(bookId: string) {
+  const shelfId = newId()
+  const assignmentId = newId()
+  const sh = await writeRow('shelves', { id: shelfId, name: 'Devcheck Shelf', sortOrder: 0 })
+  const a = await writeRow('book_shelves', {
+    id: assignmentId,
+    bookId,
+    shelfId,
+    addedAt: now(),
+  })
+  assert(sh.ok && a.ok, 'could not create the test shelf')
+  return { shelfId, assignmentId }
+}
+
+async function checkRestoreCascade() {
+  /**
+   * THE MUST-HAVE FROM 06-CONVENTIONS, which nothing tested: a soft delete cascades AND
+   * its restore reverses exactly that set. Both directions: everything the delete took
+   * comes back, and a session deleted separately before it does not.
+   */
+  await check('9a. restoring a book brings back exactly what its delete took', async () => {
+    const { bookId, readId } = await devBook('Devcheck Cascade Exact')
+    const kept = await devSessionUnder(readId)
+    const separate = await devSessionUnder(readId)
+    const noteId = newId()
+    const n = await writeRow('notes', { id: noteId, bookId, type: 'note', content: 'devcheck' })
+    assert(n.ok, 'could not create the test note')
+    const { shelfId, assignmentId } = await devShelf(bookId)
+
+    assert((await softDelete('sessions', separate)).ok, 'the separate delete failed')
+    await nextMs()
+    const del = await softDelete('books', bookId)
+    assert(del.ok && del.value.changed, 'the book delete failed')
+
+    const stamp = await deletedAtOf('books', bookId)
+    const taken = [
+      ['reads', readId],
+      ['sessions', kept],
+      ['notes', noteId],
+      ['book_shelves', assignmentId],
+    ] as const
+    for (const [table, id] of taken) {
+      assert(
+        (await deletedAtOf(table, id)) === stamp,
+        `the cascade did not take the ${table} row`,
+      )
+    }
+    const separateStamp = await deletedAtOf('sessions', separate)
+    assert(separateStamp !== stamp, 'the separate delete shares the stamp; this proves nothing')
+
+    const before = new Map<string, number>()
+    for (const [table, id] of [['books', bookId], ...taken] as const) {
+      before.set(id, await upsertsFor(table, id))
+    }
+
+    const res = await restoreRow('books', bookId)
+    assert(
+      res.ok && res.value.changed,
+      `the restore failed: ${res.ok ? '' : res.error.message}`,
+    )
+
+    for (const [table, id] of [['books', bookId], ...taken] as const) {
+      assert((await deletedAtOf(table, id)) === null, `the ${table} row did not come back`)
+      const added = (await upsertsFor(table, id)) - (before.get(id) ?? 0)
+      assert(added === 1, `the ${table} row queued ${added} upserts on restore, expected 1`)
+    }
+    assert(
+      (await deletedAtOf('sessions', separate)) === separateStamp,
+      'restoring the book RESURRECTED a session the reader deleted on its own',
+    )
+    assert((await deletedAtOf('shelves', shelfId)) === null, 'the shelf was touched')
+    await softDelete('shelves', shelfId)
+    return 'book, read, session, note and assignment back with one upsert each; the separate session stayed deleted'
+  })
+
+  await check('9b. a cascade restore skips a child whose other parent is deleted', async () => {
+    const { bookId } = await devBook('Devcheck Cascade Shelf')
+    const { shelfId, assignmentId } = await devShelf(bookId)
+    assert((await softDelete('books', bookId)).ok, 'the book delete failed')
+    await nextMs()
+    assert((await softDelete('shelves', shelfId)).ok, 'the shelf delete failed')
+
+    const res = await restoreRow('books', bookId)
+    assert(res.ok && res.value.changed, 'the book restore failed')
+    assert((await deletedAtOf('books', bookId)) === null, 'the book did not come back')
+    assert(
+      (await deletedAtOf('book_shelves', assignmentId)) !== null,
+      'restoring the book revived an assignment to a DELETED shelf',
+    )
+    return 'book back, assignment to the deleted shelf left deleted'
+  })
+
+  await check(
+    '9c. restoring a row under a deleted parent is refused and says why',
+    async () => {
+      const { bookId, readId } = await devBook('Devcheck Orphan Restore')
+      const sid = await devSessionUnder(readId)
+      assert((await softDelete('sessions', sid)).ok, 'the session delete failed')
+      await nextMs()
+      assert((await softDelete('books', bookId)).ok, 'the book delete failed')
+      const queued = (await queueRowsFor('sessions', sid)).length
+
+      const res = await restoreRow('sessions', sid)
+      assert(!res.ok, 'a session was restored LIVE under a deleted read')
+      assert(/Restore the .+ first/.test(res.error.safe ?? ''), `unhelpful: ${res.error.safe}`)
+      assert(
+        (await deletedAtOf('sessions', sid)) !== null,
+        'the session is live under a deleted read',
+      )
+      const after = (await queueRowsFor('sessions', sid)).length
+      assert(after === queued, 'a refused restore still queued a sync')
+      return `refused: "${res.error.message}. ${res.error.safe}"`
+    },
+  )
+
+  await check('9d. a row cannot be written or moved under a deleted parent', async () => {
+    const live = await devBook('Devcheck Orphan Live')
+    const dead = await devBook('Devcheck Orphan Dead')
+    assert((await softDelete('books', dead.bookId)).ok, 'the book delete failed')
+
+    const id = newId()
+    const w = await writeRow('sessions', {
+      id,
+      readId: dead.readId,
+      occurredAt: now(),
+      format: 'pages',
+      fromPosition: 0,
+      toPosition: 3,
+      isTimed: 0,
+    })
+    assert(!w.ok, 'a live session was WRITTEN under a deleted read')
+    assert((await deletedAtOf('sessions', id)) === undefined, 'the refused row exists')
+    assert((await queueRowsFor('sessions', id)).length === 0, 'the refused write queued a sync')
+
+    const sid = await devSessionUnder(live.readId)
+    const u = await updateRow('sessions', sid, { readId: dead.readId })
+    assert(!u.ok, 'a live session was MOVED under a deleted read')
+    const row = await getDb()
+      .select({ readId: sessions.readId })
+      .from(sessions)
+      .where(eq(sessions.id, sid))
+    assert(row[0]?.readId === live.readId, 'the refused move changed the row')
+    return 'insert and move both refused, nothing written, nothing queued'
+  })
+
+  await check('9e. an undo that clashes with something added since says so', async () => {
+    const { bookId, readId } = await devBook('Devcheck Restore Clash')
+    assert((await softDelete('reads', readId)).ok, 'the read delete failed')
+    const w = await writeRow('reads', { id: newId(), bookId, status: 'reading', readNumber: 1 })
+    assert(w.ok, 'the new read #1 failed')
+
+    const res = await restoreRow('reads', readId)
+    assert(!res.ok, 'two live reads now share number 1')
+    assert(/clashes/.test(res.error.safe ?? ''), `unhelpful: ${res.error.safe}`)
+    assert((await deletedAtOf('reads', readId)) !== null, 'the clashing read came back')
+    return `refused: "${res.error.message}. ${res.error.safe}"`
+  })
+}
+
 // ─── CLEANUP ─────────────────────────────────────────────────────────────────
 
 async function cleanup() {
@@ -580,6 +922,8 @@ export async function runDeviceChecks(): Promise<CheckResult[]> {
   await checkSeed()
   await checkBackupAssumptions()
   await checkRestore()
+  await checkLocalDay()
+  await checkRestoreCascade()
   await cleanup()
 
   const runtime = results.filter((r) => r.kind === 'runtime')

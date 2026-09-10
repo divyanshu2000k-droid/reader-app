@@ -51,6 +51,28 @@ export const errors = {
     message: 'Something went wrong',
     safe: 'Your library is saved on this phone and was not affected.',
   },
+  /** An undo that threw rather than returning its failure. */
+  undoFailed: {
+    message: 'Could not undo that',
+    safe: 'Nothing else in your library changed.',
+  },
+  /** A write or restore refused because the row's parent is deleted. */
+  parentDeleted: (noun: string) =>
+    `It belongs to a ${noun} that is deleted too. Restore the ${noun} first.`,
+  /** A write or restore that collides with a row added since. */
+  writeClash: 'It clashes with something added since, so nothing was changed.',
+} as const
+
+/**
+ * The session logger's position labels. Positions are BOUNDARIES: "was on page 0, now on
+ * page 10" is ten pages. "From page 1 to page 10" reads as nine, which is exactly the
+ * off-by-one competitors ship. Never label these "from" and "to". See 03-DATA-MODEL.md.
+ */
+export const session = {
+  fromPages: 'Was on page',
+  toPages: 'Now on page',
+  fromMinutes: 'Was at minute',
+  toMinutes: 'Now at minute',
 } as const
 
 export const empty = {
@@ -88,7 +110,11 @@ export const empty = {
 export const confirm = {
   deleteBook: {
     title: 'Remove this book?',
-    body: 'It moves to Recently Deleted for 30 days. Your sessions are kept.',
+    /**
+     * It used to say "Your sessions are kept", which the cascade in write.ts makes false:
+     * the sessions go with the book and stop counting until it is restored.
+     */
+    body: 'It moves to Recently Deleted for 30 days, with its sessions and notes, and stops counting in your stats. Restoring it brings them back.',
     action: actions.remove,
   },
   deleteSession: {
@@ -141,7 +167,12 @@ export const launch = {
   },
   migrationFailed: {
     title: 'Could not open your library',
-    body: 'Your books are still on this phone and nothing was deleted. This usually clears on a second try.',
+    /**
+     * Fallback only, for a failure that carries no `safe` line of its own. Every failure
+     * in db/migrate.ts carries one, because only the failure knows the right next step:
+     * "try again" is advice a reader with a full phone can follow forever.
+     */
+    body: 'Your books are still on this phone and nothing was deleted.',
     action: actions.tryAgain,
     busy: 'Trying again',
   },

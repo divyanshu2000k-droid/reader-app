@@ -70,7 +70,7 @@ export function LaunchGates({ children }: { children: ReactNode }) {
     case 'migrationFailed':
       return (
         <MigrationFailed
-          message={state.message}
+          error={state.error}
           retrying={migration.retrying}
           onRetry={migration.retry}
         />

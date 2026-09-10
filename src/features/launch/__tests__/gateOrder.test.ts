@@ -34,7 +34,18 @@ const PENDING: MigrationStatus = { state: 'pending' }
 const FAILED: MigrationStatus = {
   ok: false,
   state: 'failed',
-  error: 'Could not update the database',
+  error: {
+    message: 'Could not update your library',
+    safe: 'The update was undone, so your library is exactly as it was.',
+  },
+}
+const NO_SPACE: MigrationStatus = {
+  ok: false,
+  state: 'failed',
+  error: {
+    message: 'Not enough free space to update safely',
+    safe: 'Your library has not been changed. Free up about 12 MB on this phone, then tap Try again.',
+  },
 }
 
 test('the ordinary case passes straight through to the library', () => {
@@ -58,8 +69,20 @@ test('while the flag is still being checked, nothing else may show', () => {
 test('a failed migration takes over before session recovery is even asked', () => {
   assert.deepEqual(evaluate(null, FAILED, SESSION), {
     gate: 'migrationFailed',
-    message: 'Could not update the database',
+    error: FAILED.state === 'failed' ? FAILED.error : null,
   })
+})
+
+/**
+ * The next step reaches the screen, not only the headline. The `safe` line used to be
+ * dropped between the migration and the gate, so a reader on a full phone saw a generic
+ * "try again" they could follow forever without it ever working.
+ */
+test('a failure’s own next step survives to the screen', () => {
+  const gate = evaluate(null, NO_SPACE, null)
+  assert.equal(gate.gate, 'migrationFailed')
+  if (gate.gate !== 'migrationFailed') return
+  assert.match(gate.error.safe ?? '', /Free up about 12 MB/)
 })
 
 test('a migration still running holds the splash', () => {

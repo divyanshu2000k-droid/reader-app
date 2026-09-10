@@ -17,11 +17,14 @@ import { Directory, File, Paths } from 'expo-file-system'
 
 import { checkpointWal, closeDatabase, DATABASE_NAME } from './client'
 import { appError, attempt, err, ok, type Result } from '@/lib/result'
+import { actions } from '@/lib/strings'
 
 const BACKUP_DIR = 'backups'
 const KEEP_NEWEST = 3
 /** Require this multiple of the database size in free space before migrating. */
 const FREE_SPACE_FACTOR = 3
+/** Decimal megabytes, which is what Android's own storage screen shows the reader. */
+const BYTES_PER_MB = 1_000_000
 
 /**
  * The sidecar files WAL mode creates. `-wal` holds committed transactions that have not
@@ -117,77 +120,91 @@ export function listBackups(): BackupInfo[] {
 export async function backupBeforeMigration(
   schemaVersion: number,
 ): Promise<Result<BackupOutcome>> {
-  const source = databaseFile()
-
-  // A database that does not exist yet is a fresh install. Nothing to lose, nothing to
-  // back up, and blocking the first migration would be absurd. Reported as its own
-  // outcome rather than as a fake backup.
-  if (!source.exists) {
-    return ok({ kind: 'skipped', reason: 'no database yet' })
+  // The preflight reads touch the filesystem and can throw. They used to sit outside any
+  // handler, so a throw here rejected the migration promise and the app never left the
+  // splash. Everything in this function now returns its failure.
+  let source: File
+  let dbSize: number
+  let free: number | null
+  try {
+    source = databaseFile()
+    // A database that does not exist yet is a fresh install. Nothing to lose, nothing to
+    // back up, and blocking the first migration would be absurd. Reported as its own
+    // outcome rather than as a fake backup. (migrate.ts no longer calls this on a fresh
+    // install at all; this stays as the belt.)
+    if (!source.exists) return ok({ kind: 'skipped', reason: 'no database yet' })
+    dbSize = source.size ?? 0
+    free = Paths.availableDiskSpace
+  } catch (cause) {
+    return err(backupFailed(cause))
   }
 
-  const dbSize = source.size ?? 0
-  const free = Paths.availableDiskSpace
-  if (free !== null && free < dbSize * FREE_SPACE_FACTOR) {
+  const required = dbSize * FREE_SPACE_FACTOR
+  if (free !== null && free < required) {
+    // Say how much, and what to do. The generic "try again" advice this used to sit under
+    // was something a reader could follow forever without it ever working.
+    const shortfallMb = Math.max(1, Math.ceil((required - free) / BYTES_PER_MB))
     return err(
       appError('unrecoverable', 'Not enough free space to update safely', {
-        safe: 'Your library has not been changed. Free up some space and reopen the app.',
+        safe:
+          `Your library has not been changed. Free up about ${shortfallMb} MB on this phone, ` +
+          `then tap ${actions.tryAgain}.`,
       }),
     )
   }
 
-  return attempt(
-    async () => {
-      const dir = backupsDirectory()
-      if (!dir.exists) dir.create({ intermediates: true })
-      const name = `reader-${schemaVersion}-${Date.now()}.db`
-      const target = new File(dir, name)
+  return attempt(async () => {
+    const dir = backupsDirectory()
+    if (!dir.exists) dir.create({ intermediates: true })
+    const name = `reader-${schemaVersion}-${Date.now()}.db`
+    const target = new File(dir, name)
 
-      // BELT. Fold the write-ahead log into the main file first. Without this, a copy of
-      // `reader.db` alone can be missing every transaction still sitting in
-      // `reader.db-wal` — plausibly the reader's most recent sessions.
-      //
-      // A FAILURE HERE IS A WARNING, NOT AN ABORT, and that is the whole point of also
-      // copying the sidecars below. A checkpoint cannot truncate the WAL while any
-      // reader holds a lock, so it can fail for reasons that have nothing to do with the
-      // backup's integrity — and when it did, this being inside the fatal path meant the
-      // backup failed, so the migration refused to run, so the app could never upgrade.
-      // The design was always "belt AND braces"; the code made the belt mandatory.
-      try {
-        checkpointWal()
-      } catch (cause) {
-        console.warn('[backup] WAL checkpoint failed, relying on the sidecars:', cause)
-      }
+    // BELT. Fold the write-ahead log into the main file first. Without this, a copy of
+    // `reader.db` alone can be missing every transaction still sitting in
+    // `reader.db-wal` — plausibly the reader's most recent sessions.
+    //
+    // A FAILURE HERE IS A WARNING, NOT AN ABORT, and that is the whole point of also
+    // copying the sidecars below. A checkpoint cannot truncate the WAL while any
+    // reader holds a lock, so it can fail for reasons that have nothing to do with the
+    // backup's integrity — and when it did, this being inside the fatal path meant the
+    // backup failed, so the migration refused to run, so the app could never upgrade.
+    // The design was always "belt AND braces"; the code made the belt mandatory.
+    try {
+      checkpointWal()
+    } catch (cause) {
+      console.warn('[backup] WAL checkpoint failed, relying on the sidecars:', cause)
+    }
 
-      // Explicitly synchronous. `copy()` returns a promise that this code never awaited,
-      // so the assertions that followed were racing it.
-      source.copySync(target)
+    // Explicitly synchronous. `copy()` returns a promise that this code never awaited,
+    // so the assertions that followed were racing it.
+    source.copySync(target)
 
-      // BRACES. A checkpoint can be partial if another connection holds a read lock, so
-      // copy the sidecars too. If they are present at restore time SQLite replays them;
-      // if the checkpoint was clean they are empty and harmless.
-      for (const suffix of WAL_SUFFIXES) {
-        const sidecar = sidecarFile(suffix)
-        if (sidecar.exists) sidecar.copySync(new File(dir, `${name}${suffix}`))
-      }
+    // BRACES. A checkpoint can be partial if another connection holds a read lock, so
+    // copy the sidecars too. If they are present at restore time SQLite replays them;
+    // if the checkpoint was clean they are empty and harmless.
+    for (const suffix of WAL_SUFFIXES) {
+      const sidecar = sidecarFile(suffix)
+      if (sidecar.exists) sidecar.copySync(new File(dir, `${name}${suffix}`))
+    }
 
-      const made = BACKUP_NAME.exec(name)
-      // The name is built two lines up, so a mismatch means the naming contract and its
-      // parser have drifted apart — which would silently make every later backup
-      // invisible to listBackups. Fail here, where it is obvious.
-      assertBackupName(made, name)
+    const made = BACKUP_NAME.exec(name)
+    // The name is built two lines up, so a mismatch means the naming contract and its
+    // parser have drifted apart — which would silently make every later backup
+    // invisible to listBackups. Fail here, where it is obvious.
+    assertBackupName(made, name)
 
-      return {
-        kind: 'made',
-        backup: { name, uri: target.uri, createdAt: Number(made[2]), schemaVersion },
-      }
-    },
-    (cause) =>
-      appError('unrecoverable', 'Could not back up your library before updating', {
-        safe: 'Nothing was changed. Your library is exactly as it was.',
-        cause,
-      }),
-  )
+    return {
+      kind: 'made',
+      backup: { name, uri: target.uri, createdAt: Number(made[2]), schemaVersion },
+    }
+  }, backupFailed)
+}
+
+function backupFailed(cause: unknown) {
+  return appError('unrecoverable', 'Could not back up your library before updating', {
+    safe: 'Nothing was changed. Your library is exactly as it was.',
+    cause,
+  })
 }
 
 /**
@@ -213,7 +230,13 @@ export function pruneBackups(): void {
 }
 
 /**
- * Restore the newest USABLE backup over the live database. Used when a migration fails.
+ * Restore the newest USABLE backup over the live database.
+ *
+ * No longer the routine response to a failed migration: drizzle rolls a failed run back
+ * inside its own transaction, and `migrate.ts` verifies that and leaves the files alone.
+ * It restores (the specific backup it just took, via `restoreBackup`) only when that
+ * verification fails. This function remains for a future "restore from backup" action,
+ * and the device pass exercises it.
  *
  * NEVER RESTORES A BACKUP FROM A NEWER SCHEMA THAN THE RUNNING CODE.
  *
@@ -243,7 +266,14 @@ export function restoreNewestBackup(currentSchemaVersion: number): Result<void> 
       ),
     )
   }
+  return restoreBackup(newest)
+}
 
+/**
+ * Put one specific backup in place of the live database. See `restoreNewestBackup` for
+ * the rules; this is the file work, shared by both callers.
+ */
+export function restoreBackup(backup: BackupInfo): Result<void> {
   try {
     // Close first. Deleting an open file on Android leaves the connection attached to
     // the unlinked inode, so without this the copy lands on disk and the running app
@@ -263,7 +293,7 @@ export function restoreNewestBackup(currentSchemaVersion: number): Result<void> 
     // function whose entire job is not losing data. Everything after this copy is a
     // metadata operation: delete and rename, which do not run out of space halfway.
     if (staging.exists) staging.delete()
-    new File(newest.uri).copySync(staging)
+    new File(backup.uri).copySync(staging)
 
     if (target.exists) target.delete()
     for (const suffix of WAL_SUFFIXES) {
@@ -274,7 +304,7 @@ export function restoreNewestBackup(currentSchemaVersion: number): Result<void> 
     staging.moveSync(target)
 
     for (const suffix of WAL_SUFFIXES) {
-      const saved = new File(`${newest.uri}${suffix}`)
+      const saved = new File(`${backup.uri}${suffix}`)
       if (saved.exists) saved.copySync(sidecarFile(suffix))
     }
 

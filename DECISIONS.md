@@ -630,6 +630,205 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-10 · INCIDENT: I deleted the phone's live WAL. Recovered, verified, and the recipe now stops.
+**What happened:** repairing two Devcheck orphans that a deliberate mutant run had left on
+the phone, I followed the pull, edit and push recipe. The `adb push` failed: with
+`MSYS_NO_PATHCONV=1`, `adb.exe` was handed a Git-Bash path it could not read. The script had
+no `set -e`, so it carried on and removed the live `reader.db-wal` (2.3 MB of committed,
+un-checkpointed data) and `-shm`. The phone was left with a main file missing that data.
+**Why nothing was lost:** step 2 had pulled all three files before any change, and the app
+was force-stopped. The repaired file, WAL folded in plus the two fixes, was pushed again
+with a Windows path.
+**Verified, not assumed:**
+- The file was pulled back and compared with the untouched snapshot (opened in a copy):
+  `integrity_check` ok, every table's total equal (87 books, 50 reads, 60 sessions, 505
+  queue rows, 2 migrations).
+- The only difference is the two intended sessions going live → deleted.
+- One app launch in the window (23:51:21) came from another app's uid, not from these
+  commands. It never reached JS and never opened the database: no `-wal` was created.
+**The rule this adds**, now in `09-ENVIRONMENT.md`: the push steps run as one script with
+`set -e`, the live WAL is deleted only after the copy succeeds, and `adb push` gets a
+Windows path.
+**The lesson, which is the project's usual one:** a recipe written for a human, who stops
+when a step fails, was run by a script that did not.
+
+## 2026-09-10 · Restore never orphans a row, undo reports failure, the delete copy is true
+**The bugs:**
+- The cascade kept "no live row under a deleted parent" on the way down only. Delete a book,
+  then its shelf, then restore the book, and you got a live assignment to a deleted shelf.
+- Restoring a session on its own brought it back live under a deleted read.
+- `writeRow` and `updateRow` would attach or move rows onto deleted parents.
+- The toast's undo was `() => void`, so a restore that failed vanished with the toast.
+- The delete-book confirmation promised "Your sessions are kept", which the cascade makes
+  false.
+**Chose:**
+- **A `PARENTS` registry in `write.ts`.** `writeRow`, `updateRow` and `restoreRow` check it
+  inside their transaction and roll back on a deleted parent. `cascadeRestore` skips a
+  child whose other parent is still deleted, leaving its subtree deleted too.
+- **Refusals name the fix.** "Restore the read first", and a unique-index collision says
+  "clashes with something added since". The collision is found by reading drizzle's
+  wrapped cause chain.
+- **`showUndo` takes `() => Promise<Result>`.** The toast stays up while the undo runs, and a
+  failure replaces it in place. Pure rules in `toastQueue.ts`, 7 tests.
+- The copy says the sessions and notes go with the book, stop counting, and come back on
+  restore.
+**Over:**
+- Auto-restoring the parent chain when a child is restored. That silently brings back more
+  than the reader asked for.
+- A cascade id column instead of the timestamp match. Still unneeded: 9a found no
+  collision.
+**Accepted, stated:** book deleted, then shelf deleted, then book restored, then shelf
+restored leaves the assignment deleted, because neither restore owns it any more. That is
+lossy in one rare order and never orphaned. **Revisit if** Recently Deleted makes that
+order common.
+**Proven on the phone:**
+- Clean: RUNTIME 23/23.
+- Both guards disabled: 9b, 9c and 9d went red as predicted. The cleanup check 7 also went
+  red on the orphans the mutant left, and 9e stayed green, since the clash is caught by
+  SQLite's index, not the guard. The orphans were Devcheck rows, repaired afterwards by the
+  host-side recipe in `09-ENVIRONMENT.md`.
+**Not yet exercised:** no screen calls `showUndo` until Slice 2. Its rules are unit-tested;
+the component wiring is typechecked only.
+
+## 2026-09-10 · `local_day` is derived by the write path; a patch cannot carry `undefined`
+**The bugs, both latent:** `updateRow` accepted a new `occurredAt` without a `localDay`, so a
+session could be filed under its old day in every day-bucketed statistic. And
+`updateRow(t, id, { note: undefined })` passed the empty-patch check, ran
+`SET updated_at = ?` alone (drizzle drops `undefined` keys), reported `changed: true` and
+queued a sync for an edit that did not happen.
+**Chose:**
+- `RowFor<'sessions'>` omits `localDay`, and the write path derives it. On insert it is
+  `toLocalDay(occurredAt)`. On an update or upsert it is a SQL
+  `CASE WHEN "occurred_at" = ? THEN "local_day" ELSE ? END`, which keeps the stored day
+  when the instant is unchanged. That is the contract's third rule: a session re-saved from
+  a phone now in Tokyo must not move days.
+- `updateRow` counts only defined values.
+- `PatchFor<K>` strips `undefined` from each column.
+- `exactOptionalPropertyTypes` is on.
+**What the compiler needed:** the flag alone did not reject `{ note: undefined }`, because
+drizzle's insert types spell `| undefined` into every optional column. The flag plus the
+stripped patch type does. Turning the flag on cost four one-word prop widenings.
+**Over:** keeping `localDay` caller-supplied and asserting it matched. That is a check every
+future caller must pass rather than a mistake no caller can make.
+**Proven:**
+- Compile time: three mutants (allow `localDay` in `RowFor`, plain `Partial<>`, flag off)
+  each turned `write.types.ts` red.
+- On the phone, device checks 8a–8d. A planted "other timezone" day survived a note edit, a
+  same-instant `updateRow` and a same-instant upsert. A moved instant moved it through both
+  write paths. An all-`undefined` patch (built with `Reflect.set`, as an untyped caller
+  would) changed nothing and queued nothing. RUNTIME 18/18.
+
+## 2026-09-10 · How a session counts, and what `from_position` means (owner's decision)
+**Decided by the owner:** hours and pages stay separate and never combine. A timed session
+records minutes and counts towards hours read. A page-based session records positions and
+counts towards pages read. A recovered session has a duration and no positions, so it counts
+fully in hours, not at all in pages, and **never** lands in `unusable`: a real person really
+did read for that time.
+**`from_position` is the last page finished before the session.** Reading pages 1 to 10 is
+stored `0 → 10`, ten pages. The arithmetic (`to − from`) was already right for that
+reading. `03-DATA-MODEL.md` said "page started at", which implies `1 → 10` and nine pages.
+The doc was the bug, and it now says boundaries.
+**Implemented:** `contribution()` in `domain/stats.ts` holds the table now in 03-DATA-MODEL.
+`ProgressSession` gained `durationSeconds`. Two cases the decision implies, settled here:
+- A **timed audiobook** counts its duration, not its minute span as well, so time is never
+  counted twice. At 1.5x the span is the book's minutes, not the reader's.
+- `unusable` now means "has something the reader can fix": positions given but not
+  countable, or no measure at all. A timed session with broken positions still counts its
+  duration AND is flagged, because both are true.
+**Before this:** `sessionAmount` was the only measure, so every recovered session, which
+the recovery sheet had just carefully bounded, counted nowhere and was flagged as broken.
+**Proven:** four mutants each turned `stats.test.ts` red, and restoring made it green again.
+- Ignoring durations, the old behaviour: 4 failures, including the recovered session.
+- A timed audiobook counting duration plus span: 1.
+- A recovered session flagged unusable: 2.
+- `to − from + 1`: 8, including the 0 → 10 test.
+**Revisit if:** the Slice 7 Stats screen needs "hours listened" separately from "hours
+read". The Utility design sheet says "hours listened", which undercounts paper read with the
+timer. Noted for the design revision.
+
+## 2026-09-10 · `runInTransaction` rejects an async task; the guard covers every way in
+**The bug:** the wrapper written to close bug #1 was typed `task: () => void`, and TypeScript
+lets any function satisfy `() => void`, async included. `withTransactionSync` calls `task()`
+and commits without looking at the result, so `runInTransaction(async () => …)` typechecked
+and rolled nothing back. The source guard only looked for drizzle's `.transaction(async`.
+**Chose:** `task: () => undefined`. `Promise<void>` is not `undefined`, so a promise-returning
+task is a compile error. A task with no `return`, or a bare `return;`, still satisfies it
+(TypeScript 5.1+). The guard now fails on `runInTransaction(async`, on any drizzle
+`.transaction(`, and on expo-sqlite's `with…Transaction…` outside `client.ts`. It strips
+comments first: its first run failed on `client.ts` prose that names the bug.
+**Over:** a conditional type such as `T extends PromiseLike ? never : T`, which cannot infer
+`T` through the conditional and ends up accepting everything.
+**Proven:** `__tests__/transaction.types.ts` holds three `@ts-expect-error` lines. Reverting
+the signature to `() => void` turned all three into errors. Probe files with an async task,
+a sync drizzle `.transaction()` and a `withTransactionAsync` each turned the guard red.
+**Not covered, stated rather than hidden:** a promise started INSIDE a sync task
+(`void writeRow(…)`) runs after the commit. Catching it needs type-aware lint
+(`no-floating-promises`), which this project does not run.
+**Revisit if:** type-aware ESLint is adopted for another reason.
+
+## 2026-09-10 · `npm test` quotes its glob. Every earlier count was Windows-only.
+**The bug:** the glob was unquoted, so `sh` expanded it. On macOS, Linux or any CI, `**`
+without `globstar` means one directory. It ran 44 of 106 tests, reported as a clean pass;
+`src/__tests__/` and `src/features/launch/__tests__/` never ran. Windows was green only
+because `cmd` passes the literal to Node's own glob.
+**Chose:** double quotes, and a guard, `src/lib/__tests__/test-runner.test.ts`. It fails if
+the glob is unquoted, and it fails if any `*.test.ts` on disk is not matched by the pattern
+Node receives. Double rather than single quotes, because `cmd` would pass single quotes
+through literally.
+**Where the guard lives matters.** It first sat in `src/__tests__/`, exactly the directory the
+bug skips, so under `sh` it would never have run. It sits one level down so even the broken
+pattern reaches it.
+**Verified:** 114/114 under `cmd`, and 114/114 with npm's script shell forced to POSIX `sh`
+(Git's, on this Windows machine: no WSL, Docker or Linux host is available). With the glob
+unquoted, the guard failed under both shells; under `sh` only 51 tests ran, and the guard
+was among them.
+**Revisit when:** CI exists. Run the suite there on Linux once; that is the real check.
+
+## 2026-09-10 · A backup only when a migration is pending; a failed migration is verified, not restored
+**The bug:** `performMigrations` backed up on every launch. Every cold start paid a WAL
+checkpoint and a synchronous copy of the whole database on the JS thread before the splash
+lifted. It also ran the 3x free-space check, so a reader on a nearly full phone was locked
+out of their library with no update to apply. The emulator held three `reader-2-*` backups
+from consecutive launches that had nothing to migrate. The failure screen then dropped the
+error's `safe` line ("free up some space") and said "this usually clears on a second try",
+which that reader could tap forever without success.
+**Chose:**
+- **Pending is decided by drizzle's own rule.** Drizzle applies journal entries whose `when`
+  is later than the newest `created_at` in `__drizzle_migrations`, not by count
+  (`migrationPlan.ts`, pure, tested). No backup when nothing is pending, and none on a fresh
+  install, which has no data to protect. `migrate()` still runs every launch as the
+  authority, and afterwards the applied count is checked against the plan. A mismatch is
+  reported.
+- **A test that journal timestamps strictly increase.** Drizzle skips an out-of-order
+  migration forever on existing installs while a fresh install applies it.
+- **No file restore after a failed migration.** Drizzle runs all pending migrations in ONE
+  transaction and rolls back on failure (`sqlite-core/dialect.js`), and SQLite DDL is
+  transactional. Closing, deleting and moving files added the only step in the module that
+  could leave no database at all. The count is now re-read, and if it is unchanged the files
+  are left alone. Only if that check fails or cannot be made is the backup just taken put
+  back (`restoreBackup`, that specific file).
+- **The failure's own `message` and `safe` reach the screen.** The space error says how many
+  MB to free. The fixed body is now a fallback for failures that carry no `safe` line.
+- Two fragile spots were in the lines being rewritten and are fixed with it: the backup
+  preflight now returns its failure instead of throwing, and `runMigrations` never rejects.
+  Pruning sits outside the migration's `try`, so a listing error cannot become a "failed"
+  migration.
+**Over:** keeping the restore "to be safe". It was redundant with drizzle's rollback and was
+the riskiest code on the startup path.
+**Verified on the emulator:**
+- Nothing pending: no new backup.
+- 0001's row deleted, so drizzle re-runs it and fails: a `reader-1` backup was taken, the
+  count stayed at 1, and `sync_queue` stayed at 57 (0001's own insert was rolled back). The
+  inode was unchanged (no file surgery), and the screen showed "The update was undone…".
+- A real v1 shape: 0001 applied, count 1 → 2, the partial indexes are present, and prune
+  kept three backups.
+- Free-space factor forced to 10⁶: the notice named the MB to free, no backup was attempted,
+  and the migration did not run.
+**Consequence for every future migration:** `PRAGMA foreign_keys=OFF`, which drizzle-kit emits
+around a table rebuild, is a no-op inside that transaction. Recorded in 03-DATA-MODEL.
+**Revisit if:** drizzle's migrator stops running a batch in one transaction. Re-read
+`dialect.js` on every drizzle-orm upgrade.
+
 ## 2026-09-10 · CORRECTION to the product research: there is no Android whitespace
 **The error:** `01-PRODUCT.md` (Positioning) and `02-ARCHITECTURE.md` (constraint 3) claimed
 Android-first was a structural advantage because the best competitors are iOS only, and
@@ -927,6 +1126,57 @@ native project. Recorded in `CLAUDE.md` and `docs/09-ENVIRONMENT.md`.
 **Revisit if:** a check can assert the native project matches the config — e.g. the device
 pass asserting a font file exists in the installed APK — so this cannot silently recur.
 
+## 2026-09-10 · OPEN, NOW TWICE ON TWO DEVICES: native crash in React Native Fabric
+**Second occurrence, 2026-09-10 23:18:38 IST.** Pixel_7_API_36 emulator: x86_64, Android 16
+userdebug, a different binary from the phone's arm64 build. It came on the first launch
+after the dev client was pointed at a freshly started Metro, 2.1 s after `Running "main"`.
+Full log: `docs/crashes/2026-09-10-fabric-sigsegv-emulator-x86_64.txt`. The frames that
+matter:
+
+    signal 11 (SIGSEGV), code 2 (SEGV_ACCERR)   tid mqt_v_js (the JS thread)
+    Cause: trying to execute non-executable memory.
+    #00 pc …16da8  [anon:scudo:primary]                        <- jumped into the heap
+    #01 MountingCoordinator::pullTransaction(bool) const+713
+    #02 FabricUIManagerBinding::schedulerDidFinishTransaction
+    #03 Scheduler::uiManagerDidFinishTransaction
+    #04 UIManager::shadowTreeDidFinishTransaction
+    #05 ShadowTree::mount   #06 ShadowTree::tryCommit   #07 ShadowTree::commit
+    #16 UIManager::completeSurface   … #22–28 libhermesvm (the JS render commit)
+
+The first occurrence had the same frame, `pullTransaction` inside `completeSurface`, and also
+came on a cold start seconds after the bundle's source changed. The next five emulator
+launches in this session did not crash.
+
+**What two occurrences change.**
+- **Not one device, ABI or build artifact.** arm64 and x86_64, two binaries. The "noise on
+  this machine" reading is much weaker.
+- **Not a clean null dereference.** The program counter landed in a heap page, which is a
+  call through a pointer into freed or corrupted memory inside `pullTransaction`. That is a
+  memory-safety bug on the render-commit path, whether it lives in React Native core or in
+  a native module hooked into mounting.
+- **Still no app frame, and no Sentry, SQLite or splash frame.** Nothing in `src/` is
+  implicated.
+- **The one shared circumstance** is the first cold start after the bundle's source
+  changed. With two data points that is a pattern, not proof. It is also the only reason
+  a release build might behave differently, since a release build never switches bundles.
+
+**Is a release-build run enough to settle it? No.** A clean release launch, or a handful of
+them, cannot settle a crash that has appeared in roughly two of fifteen development cold
+starts. Absence over a few runs is close to no evidence, and the earlier plan ("prove it
+on the release build") would have closed this on exactly that. What would settle it:
+1. **A scripted cold-start loop:** 100 launches each of the debug and release builds on the
+   phone (`am force-stop`, `am start -W`, count new tombstones). That gives a rate per
+   build type, takes under an hour, and needs no human.
+2. **If release crashes at any rate,** it is a shipped crash against the 99.5% crash-free
+   target. Bisect by disabling native suspects one at a time (Reanimated, react-native-screens,
+   Sentry's native SDK), and search the React Native tracker for `pullTransaction` on 0.86.
+3. **If only debug crashes, and only after a bundle change,** record it as a dev-client
+   reload race, with the loop as the evidence. Keep Sentry's native crash reporting on in
+   release so a field occurrence cannot hide.
+**Owner and deadline:** before Slice 2's dogfooding, when the owner's phone becomes the
+real library. **Revisit:** when the loop's numbers exist.
+
+### The original entry, kept as written
 ## 2026-09-10 · OPEN: one native crash in React Native Fabric, not reproduced
 **Observed:** one cold start during the Slice 1 device pass died in the foreground with no
 Java exception. Tombstone: SIGSEGV (SEGV_ACCERR) on the JS thread, inside React Native core
