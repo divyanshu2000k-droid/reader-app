@@ -162,8 +162,8 @@ export const launch = {
     /** Overridable by the remote flag, so an incident can explain itself specifically. */
     body: 'This version has a problem that could affect your reading history, so we have retired it. Your books are safe and waiting.',
     action: 'Update now',
-    /** Shown when the flag carries no store link, so the button would go nowhere. */
-    noStore: 'Update Reader from the Play Store to carry on.',
+    /** Shown when the package id is unreadable, so the button would go nowhere. */
+    noStore: 'Update this app from the Play Store to carry on.',
   },
   migrationFailed: {
     title: 'Could not open your library',

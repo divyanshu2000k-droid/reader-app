@@ -35,6 +35,12 @@ function value(raw: string | undefined): string | null {
 
 export const config = {
   sentryDsn: value(process.env.EXPO_PUBLIC_SENTRY_DSN),
+  /**
+   * The device pass. Read HERE like every other public key, not in `db/devPass.ts` where
+   * it used to be. It decides which database the whole app opens: see DATABASE_NAME in
+   * db/client.ts. A pass that shares the reader's library has written to it twice.
+   */
+  devicePass: value(process.env.EXPO_PUBLIC_DEVICE_PASS) === '1',
   supabaseUrl: value(process.env.EXPO_PUBLIC_SUPABASE_URL),
   supabaseAnonKey: value(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
   forceUpdateUrl: value(process.env.EXPO_PUBLIC_FORCE_UPDATE_URL),
@@ -62,6 +68,12 @@ export const appVersion: string | null =
  * The Android package id, used to derive the Play Store URL locally rather than trusting
  * a remote payload to name where the update button sends the reader. A build-time fact.
  */
+/** The app's name, from app.config.ts. One source, so a rename is one edit. */
+export const appName: string =
+  typeof Constants.expoConfig?.name === 'string' && Constants.expoConfig.name.length > 0
+    ? Constants.expoConfig.name
+    : 'Reader'
+
 export const androidPackage: string | null =
   typeof Constants.expoConfig?.android?.package === 'string'
     ? Constants.expoConfig.android.package

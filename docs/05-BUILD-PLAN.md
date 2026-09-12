@@ -113,6 +113,30 @@ boundary with a working restart rather than grey text.
   3. **Hold 60fps scrolling it**, which is what FlashList tuning is for. If it does not
      hold, that is a bug, not a tradeoff
 
+**Filed here by the 2026-09-12 review** (the one review pass per slice rule: everything
+that is not silent data loss is filed against the slice that needs it, not fixed on sight):
+
+- **A migration harness that runs under `node --test`.** Apply `0000` to an empty file,
+  seed the shape that violates what the next migration adds, apply `0001`, assert the
+  repair. `node:sqlite` is built into Node 24 and the migrations are plain SQL, so this
+  needs no device. Today the only check that `0001` survives a populated v1 database is a
+  procedure run by hand, and it is the highest-value gap in the regression audit
+  (`DECISIONS.md`, 2026-09-12).
+- **The same harness, run as a sequence**, for the startup path: read the applied count,
+  checkpoint, back up, migrate. The bug that bricked upgrades was the *order* of two
+  correct operations, and the device pass passed 14/14 throughout because it calls each
+  part in isolation.
+- **The cover fallback:** `BookCover` shows a blank coloured box when an image fails to
+  load — no `onError`, no fall back to the initial. Offline is the normal case for a
+  local-first app, and this slice is where covers first arrive.
+- **`books.cover_color` stores a value derived from the title**, which contradicts "derived
+  values are never stored". Decide here, when books are first written: either drop the
+  column and derive at render, or document it as a cache with the reason.
+- **Measure a 500-session delete** before changing the cascade, as the Slice 0 review asked.
+- **The undo toast gets its first real caller here.** `showUndo` takes a function returning
+  a `Result`; the toast reports a failure rather than vanishing. Its rules are unit-tested
+  and its wiring has never run on a device.
+
 **Done when:** seeded books display, you can move one between shelves, delete it, and
 restore it — and a 2000-book library migrates cleanly and scrolls at 60fps.
 
@@ -122,8 +146,15 @@ restore it — and a 2000-book library migrates cleanly and scrolls at 60fps.
 **~1 week. This is the product.**
 
 - Log session, with the editable date field prominent
+- **Positions are labelled as boundaries: "Was on page" / "Now on page"** (`session` in
+  `strings.ts`). `from_position` is the page finished BEFORE this session, so pages 1 to 10
+  is `0 → 10` and ten pages. Never "From page" / "To page", which reads as nine. The
+  Session artboards still use the old labels; the code wins. See `03-DATA-MODEL.md`
 - Quick add chips, +10, +25, +50, Finished
 - Format toggle per session, pages or minutes
+- **The toast renders beneath a Modal.** An undo raised from inside a sheet is invisible
+  until the sheet closes, and this is the first slice with sheets that delete. Filed by the
+  2026-09-12 review
 - Session complete screen
 - Session edit and delete from book detail
 - Streak and goal calculation
@@ -261,6 +292,14 @@ feature will break.
 **~4 days**
 
 - Three separate numbers: books, pages, hours. Never combined
+- **Hours come from `contribution()` in `domain/stats.ts`**, which already holds the owner's
+  rule: a timed session counts its duration, an audiobook logged by hand counts its minute
+  span, a timed audiobook counts its duration only, and a recovered session counts fully in
+  hours and never as "needs fixing". The table is in `03-DATA-MODEL.md`
+- **`goals` has no unique index on `(year)`**, so two live goals for one year are
+  representable. This is the slice that writes them: add the partial unique index in a
+  migration, with the data repair a constraint-adding migration requires. Filed by the
+  2026-09-12 review
 - Daily pace chart, genre breakdown, year switcher
 - Empty state for a library with too little data
 - Everything free, no gating
@@ -354,6 +393,25 @@ every book and statistic untouched.
   corrected hexes were written into `design/`. But the sheets still draw some placeholder
   and idle-tab text in the faint colour, which the code no longer does. When the design is
   next revised, bring the sheets' usage in line
+
+**Filed here by the 2026-09-12 review:**
+
+- **The APK budget is wrong and now has numbers.** The first release build ever produced is
+  a **112 MB universal APK**, with **23.3 MB of arm64 native libraries alone**, and both
+  minification and resource shrinking are off by default. Apply the three levers — R8 with
+  `shrinkResources`, an AAB rather than a universal APK, and dropping the x86 ABIs Play
+  never serves to phones — then **set the `< 15 MB` budget in `06-CONVENTIONS.md` to what
+  the platform actually allows**. See `DECISIONS.md`, 2026-09-12
+- **Release signing and Sentry's upload.** A local release build currently needs
+  `SENTRY_DISABLE_AUTO_UPLOAD=true` or it fails on the source-map upload task, and it is
+  signed with the debug keystore. Both belong to this slice, with the store submission
+- **Extend `native-fonts.test.ts` to the splash and Sentry plugin.** It proves the font
+  reached the build; the splash resources and `sentry.properties` have no such check, and
+  that is the exact class of bug that had them in the config and in no build for a week
+- **`ScreenGlow`'s gradient id** is per-instance via `useId`, and nothing tests it. Either
+  accept it, or make the collision impossible rather than avoided
+- **The faint-token scan is line-based.** A line carrying both `backgroundColor` and a text
+  colour would pass. It has a positive control now, but its breadth is still a heuristic
 
 **Done when:** a fresh install walks a stranger from launch to logging their first session
 without confusion.

@@ -101,7 +101,7 @@ export async function discardOpenSession(id: string): Promise<Result<WriteOutcom
 /**
  * Does this device hold any library data at all?
  *
- * Gate 4 (restore) asks this: a signed-in reader with an empty database is on a new phone
+ * Gate 3 (restore) asks this: a signed-in reader with an empty database is on a new phone
  * and their books need fetching. Counts every book including soft-deleted ones, because a
  * database holding only deleted rows is still a database that has been used — restoring
  * over it would duplicate everything the reader deliberately threw away.

@@ -132,7 +132,7 @@ export function Sheet({ visible, onClose, title, children, dismissable = true }:
             backgroundColor: c.ground,
             borderColor: c.border,
             bottom: keyboard,
-            maxHeight: (height - keyboard) * 0.9,
+            maxHeight: (height - keyboard) * rules.sheetMaxHeightFraction,
             paddingBottom: (keyboard > 0 ? 0 : insets.bottom) + space.bottomSafe,
           },
         ]}

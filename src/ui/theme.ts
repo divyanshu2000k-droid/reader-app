@@ -495,6 +495,8 @@ export const rules = {
   minScreenWidth: 360,
   /** Layouts must survive this font scale without clipping. */
   maxFontScale: 2.0,
+  /** A sheet never covers the whole screen: what is behind it stays visible. */
+  sheetMaxHeightFraction: 0.9,
 } as const
 
 // ─── THEME OBJECT ────────────────────────────────────────────────────────────

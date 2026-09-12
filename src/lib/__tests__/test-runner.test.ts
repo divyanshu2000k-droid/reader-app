@@ -24,18 +24,33 @@ import { test } from 'node:test'
 
 const ROOT = process.cwd()
 
+/** The double-quoted glob in a test script, or null if it is not double-quoted. */
+function quotedPattern(script: string): string | null {
+  return /--test\s+"([^"]+)"/.exec(script)?.[1] ?? null
+}
+
 function testPattern(): string {
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as {
     scripts: Record<string, string>
   }
   const script = pkg.scripts.test ?? ''
-  const quoted = /--test\s+"([^"]+)"/.exec(script)
+  const pattern = quotedPattern(script)
   assert.ok(
-    quoted?.[1],
+    pattern,
     `npm test must pass its glob in DOUBLE quotes so no shell expands it: ${script}`,
   )
-  return quoted[1]
+  return pattern
 }
+
+/** The positive control: the check must reject the exact script that shipped the bug. */
+test('the quoting check rejects an unquoted or single-quoted glob', () => {
+  assert.equal(quotedPattern('tsx --test src/**/__tests__/*.test.ts'), null)
+  assert.equal(quotedPattern("tsx --test 'src/**/__tests__/*.test.ts'"), null)
+  assert.equal(
+    quotedPattern('tsx --test "src/**/__tests__/*.test.ts"'),
+    'src/**/__tests__/*.test.ts',
+  )
+})
 
 function testFilesOnDisk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -48,6 +63,30 @@ function testFilesOnDisk(dir: string, out: string[] = []): string[] {
 
 test('npm test hands its glob to node unexpanded', () => {
   testPattern()
+})
+
+/**
+ * `test:tz` must list every suite whose answers depend on the zone. `streaks.test.ts` was
+ * missing from that list — the one suite holding the DST case and every "11pm on the 31st"
+ * boundary — so it only ever ran in whatever zone this machine happens to be in.
+ */
+test('every timezone-sensitive suite is in the test:tz list', () => {
+  const runner = readFileSync(join(ROOT, 'scripts', 'test-tz.js'), 'utf8')
+  const listed = new Set([...runner.matchAll(/'([^']+\.test\.ts)'/g)].map((m) => m[1]))
+  // What it IMPORTS, not which words it contains: this guard's own source names those
+  // functions, and matched itself on its first run.
+  const sensitive = testFilesOnDisk(join(ROOT, 'src')).filter((f) => {
+    const source = readFileSync(join(ROOT, f), 'utf8')
+    return /from '(?:\.\.\/)+(?:dates|stats|streaks|progress)'|from '@\/lib\/dates'/.test(
+      source,
+    )
+  })
+  const missing = sensitive.filter((f) => !listed.has(f))
+  assert.deepEqual(
+    missing,
+    [],
+    `these suites bucket by local day but never run in three zones:\n${missing.join('\n')}`,
+  )
 })
 
 test('the pattern node receives matches every test file on disk', () => {

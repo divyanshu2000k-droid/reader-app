@@ -170,6 +170,26 @@ couple of minutes, restart it with `--clear`.
 on `localhost`. If `expo run:android` cannot find the phone, set `ANDROID_SERIAL` to its
 serial from `adb devices` rather than passing `--device`, which expects a device name.
 
+**A local RELEASE build needs Sentry's upload switched off.** Without it, the build fails:
+
+```
+error: An organization ID or slug is required (provide with --org)
+> Task :app:createBundleReleaseJsAndAssets_SentryUpload_… FAILED
+```
+
+The Sentry Gradle plugin tries to upload source maps for a release bundle and fails the
+build when no org and token exist. Until those are configured (Slice 11, with the release
+signing), build with:
+
+```
+SENTRY_DISABLE_AUTO_UPLOAD=true npx expo run:android --variant release --no-bundler
+```
+
+The crash reporting inside the app is unaffected: that is the DSN, a different thing. Only
+the build-time source-map upload is skipped, so a release stack trace would be minified
+until the token exists. **Release builds are signed with the debug keystore** by the React
+Native template, so one installs over a debug build and keeps the app's data.
+
 **The debug APK is around 80 MB and that is expected.** It carries an unminified JS
 bundle, source maps, the dev client and Hermes debugger, and every ABI, with no R8
 shrinking. The `< 15 MB` budget in `06-CONVENTIONS.md` is a **release** budget and is
@@ -310,7 +330,26 @@ Two further constraints that are easy to trip over, both learned the hard way:
 
 ---
 
+## Hardware: use the phone
+
+**The phone is the device. Plug it in first.**
+
+- **One attempt on the emulator, then stop.** If it does not work first time — input not
+  reaching the app, black screenshots, the dev client loading a Metro you did not start —
+  **stop and ask for the phone**. Do not debug the emulator.
+- Two sessions have been lost to emulator problems the phone did not have: taps that never
+  reached JS, `screencap` returning black, and a dev client that loads `10.0.2.2:8081`
+  whatever is serving it, so the flag you set never arrived. The same work on the phone
+  succeeded on the first try, through `adb reverse`.
+- The emulator stays for the case where no phone is available at all. It is not the default
+  and it is not worth an hour.
+
 ## Running the device pass
+
+**It runs on its own database, and will not run on yours.** `EXPO_PUBLIC_DEVICE_PASS=1`
+makes the whole app open `devcheck.db` (and `backups-devcheck/`) from launch. Without the
+flag the Settings button refuses, saying so. Verified on the phone on 2026-09-12:
+`devcheck.db` appeared, and `reader.db` kept its byte-for-byte md5 and its mtime.
 
 The node test suite (`npm test`) covers pure logic. Anything needing a real SQLite
 connection or a real filesystem runs on a device instead, from a `__DEV__`-only button.

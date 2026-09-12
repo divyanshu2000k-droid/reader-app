@@ -23,6 +23,7 @@ import {
 } from 'react-native'
 
 import { font, motion, opacity, radius, rules, size, space, typeStyle } from './theme'
+import { now } from '@/lib/dates'
 import { useColors } from './useTheme'
 
 /**
@@ -66,7 +67,7 @@ export function Button({
   const lastPress = useRef(0)
 
   const handlePress = useCallback(() => {
-    const t = Date.now()
+    const t = now()
     if (t - lastPress.current < DEBOUNCE_MS) return
     lastPress.current = t
     onPress()

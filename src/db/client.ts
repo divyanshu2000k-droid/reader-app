@@ -19,8 +19,25 @@ import * as SQLite from 'expo-sqlite'
 
 import type { AppliedMigrations } from './migrationPlan'
 import * as schema from './schema'
+import { config } from '@/lib/config'
 
-export const DATABASE_NAME = 'reader.db'
+/**
+ * THE DEVICE PASS RUNS ON ITS OWN DATABASE.
+ *
+ * With `EXPO_PUBLIC_DEVICE_PASS=1` the whole app opens `devcheck.db` instead, from launch:
+ * the gates, the migrations, the write path and the checks all use it, and the reader's
+ * library is not opened at all.
+ *
+ * The pass writes to the real database otherwise, which it did twice. It seeds, deletes,
+ * renames `sync_queue`, restores backups OVER the live file, and leaves soft-deleted rows
+ * and queue entries behind. One deliberately broken run left two orphans in the owner's
+ * library, and repairing those is what deleted a live WAL holding 2.3 MB of committed data.
+ *
+ * Chosen over switching the handle once the app is running: that mutates global state
+ * under live queries, which is the class of bug this codebase keeps paying for. Deciding
+ * once, before anything opens, cannot half-apply.
+ */
+export const DATABASE_NAME = config.devicePass ? 'devcheck.db' : 'reader.db'
 
 let handle: SQLite.SQLiteDatabase | null = null
 let database: ReturnType<typeof drizzle<typeof schema>> | null = null

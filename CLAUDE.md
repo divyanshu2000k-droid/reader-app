@@ -124,6 +124,96 @@ When you fix something in this shape, add it to the list above. The list is the 
 
 ---
 
+## The reintroduction problem, and the rules that follow from it
+
+**Three bugs came back inside the code that fixed the previous version, within a few lines,
+in the same sitting.**
+
+1. **The async transaction, twice.** `db.transaction(async …)` commits before its statements
+   run. The fix was `runInTransaction`, typed `task: () => void` — which TypeScript
+   satisfies with an async function. The guard written alongside searched for
+   `.transaction(async`, the old spelling, so the new one passed everything.
+2. **`created_at`.** The fix that made the write path type-safe by passing the caller's
+   whole values object to `onConflictDoUpdate` is what began rewriting the creation date on
+   every update.
+3. **The vacuous guard.** The guard written to catch `book_shelves` shipping without sync
+   columns terminated its regex at the wrong brace, read the *next* table, and asserted
+   nothing for two of seven tables. It was green from the day it was written.
+
+A fourth has the same shape: fixing the backup's version label introduced the `SELECT` that
+held a read lock and broke the next line's checkpoint. Two fixes in a row, same file, the
+second breaking the first.
+
+**What they share, and it is not carelessness:**
+
+- **The fix moved the hazard behind a new name, and the guard still named the old one.**
+  Every one of those guards is a regex over source text. A regex protects the exact
+  spelling that existed when it was written, and a fix is precisely a change of spelling.
+- **The original bug had no test that ran against the new code.** The behaviour was
+  re-argued in a comment instead of re-asserted.
+- **Confidence was highest exactly there.** Each fixed file gained a long, correct
+  explanation of why it was now safe. The explanation became the deliverable.
+
+**What would have caught each automatically, with nobody reading the diff:**
+
+| Reintroduction | The automatic catch |
+|---|---|
+| Async task in `runInTransaction` | A type that cannot express it: `task: () => undefined`, with `@ts-expect-error` assertions in `__tests__/transaction.types.ts`. No textual guard could have; the text was new |
+| `created_at` rewritten | A behavioural check against a real database: write, update, assert the creation date is unchanged and `updated_at` moved. That is device check 1c, which did not exist until 2026-09-12 |
+| A guard that matches nothing | A **positive control**: the guard is fed a known-bad sample every run and must flag it, plus prose it must not flag. In `no-bypass.test.ts`, `contrast.test.ts` and `test-runner.test.ts` |
+
+### Which of our guards are textual, and therefore only as good as last week's spelling
+
+**Textual** (a regex over source or config text; protects one spelling):
+`no-bypass.test.ts` write and raw-handle guards, its transaction guard, its
+`client.ts` export check and its schema-shape extractor; the faint-token scan in
+`contrast.test.ts`; the ESLint theme rules; `test-runner.test.ts`'s quoting check;
+`metro-blocklist.test.ts`. **Every one of these now carries a positive control**, so a
+guard that has stopped matching fails instead of passing.
+
+**Structural** (the mistake cannot be written, or the check reads the real artefact):
+`RowFor` / `PatchFor` / `DerivedColumn`; `runInTransaction`'s `() => undefined`;
+`_shapeCheck`; `Palette` with `satisfies`; `UndoAction` returning a `Result`;
+`exactOptionalPropertyTypes`; the two tsconfigs; `brand-font.test.ts` and
+`native-fonts.test.ts` (they read the evaluated config and the built APK);
+`migrationPlan.test.ts`'s journal check (reads the real journal); the contrast ratios; and
+every device check, which runs the real write path against a real SQLite file.
+
+**Prefer the structural one. A textual guard is a last resort for things the type system
+cannot see**, and it must have a control.
+
+### Standing rules
+
+1. **Every bug that gets fixed gets a check that fails without the fix.** No exceptions.
+   "Check" means anything automatic: a node test, a `@ts-expect-error` type assertion, or a
+   device check. If a bug was worth finding it is worth a regression test, and that test is
+   the only thing that stops it coming back. Where the fix is a native or timing matter that
+   no assertion can hold, the check is a **counted measurement** with a number written down,
+   never "we looked and it seemed fine".
+2. **A type that makes the mistake uncompilable beats a lint rule; a lint rule beats a
+   comment.** When you write a comment that says "never do X", ask what type would make X
+   not compile. We still have the weaker form in several places, listed in
+   `06-CONVENTIONS.md`; each is a candidate, not an accepted state.
+3. **A guard counts only once it has been watched failing, and it must be re-watched
+   whenever the code it guards is rewritten.** A guard that passes because it no longer
+   matches anything is worse than no guard: it spends the attention a real check would have
+   earned. Positive controls make this automatic for textual guards.
+4. **When you fix something in a file, look for the same class of bug in the rest of that
+   file before you leave it.** All three reintroductions were within a few lines of the
+   original. Say in the report what you looked at and what you found.
+
+### One review pass per slice
+
+**A slice gets exactly one review pass, and it fixes only what is silent and loses data.**
+Everything else — fragility, convention drift, polish, tidiness — gets a `DECISIONS.md`
+entry filed against the slice that will need it, and is not fixed now. **There is no second
+review round on the same code.**
+
+Slice 1 was reviewed for longer than it took to build, and the app still cannot log a book.
+Reviewing is not progress. The rules above exist so that one pass is enough.
+
+---
+
 ## Non-negotiable rules
 
 1. **Local first.** Every read comes from SQLite. Every write goes to SQLite first and
@@ -198,6 +288,11 @@ EXPO_PUBLIC_DEVICE_PASS=1 npx expo start --clear   # runs the device pass on lau
 adb logcat -d | grep devcheck                      # its results
 ```
 
+**That flag makes the whole app open `devcheck.db`, not your library**, and the pass
+refuses to run without it. The pass is destructive: it seeds, soft-deletes, renames
+`sync_queue` and restores backups over the live file. It shared the reader's library until
+2026-09-12 and wrote to it twice. Use the phone, not the emulator: see `09-ENVIRONMENT.md`.
+
 `npm run typecheck` rather than a bare `tsc --noEmit`: the app compiles with `"types": []`
 so Node globals are not in scope for code that runs on a phone, and the test files compile
 separately under `tsconfig.test.json` where `node:test` and `node:fs` are legitimate. The
@@ -214,9 +309,27 @@ Build locally for day to day work. EAS is for release builds only.
 ## Current state
 
 **Slice 1 is verified on a physical phone** (Nothing Phone 2a, Android 16, arm64 — the first
-arm64 build, earlier than Slice 6 planned). Typecheck, lint, Prettier clean. **129 tests
-pass under both `cmd` and POSIX `sh`**; every count before 2026-09-10 was Windows-only (see
-item 13). Device pass on the phone: **RUNTIME 23/23 · COMPILE-TIME 1/1**.
+arm64 build, earlier than Slice 6 planned). Typecheck, lint, Prettier clean. **139 tests
+pass under both `cmd` and POSIX `sh`**, 34 in each of UTC, IST and US Central; every count
+before 2026-09-10 was Windows-only (see item 13). Device pass on the phone:
+**RUNTIME 25/25 · COMPILE-TIME 1/1**, on `devcheck.db`, with the library's md5 unchanged.
+
+**2026-09-12, the last review of this slice** (one pass per slice from here — see the rule
+above):
+- **The device pass has its own database.** `EXPO_PUBLIC_DEVICE_PASS=1` opens `devcheck.db`
+  and `backups-devcheck/`; without it the pass refuses. Check 0 refuses to vouch for
+  anything if it is not on its own file, and was watched failing.
+- **The Fabric crash is measured, not argued: 0 in 220 launches** — 100 debug, 100 release,
+  and 20 under the suspected trigger (a freshly started Metro each time). Against ~2 in 15
+  on 2026-09-10. Not a blocker, not closed: a 0/20 cannot tell "fixed" from "rarer than
+  1 in 20", and the code changed in between. `DECISIONS.md` has the numbers and the caveats.
+- **The first release build ever produced**: 112 MB universal, 23.3 MB of arm64 native
+  libraries, minify and resource shrinking off. The `< 15 MB` budget is now a measured
+  problem with a plan, filed against Slice 11. A local release build needs
+  `SENTRY_DISABLE_AUTO_UPLOAD=true`.
+- **Regression rules adopted**, with the audit of which past bugs still have no automatic
+  check. Every textual guard now carries a positive control; three new guards (`config.ts`
+  env reads, the `test:tz` list, device check 1c for `created_at`) were each watched failing.
 
 **Review fixes, 2026-09-10 evening, each verified and watched failing:**
 - **Backups only when a migration is pending.** A failed migration is verified as rolled
@@ -260,12 +373,10 @@ native rebuild after a config change. LogBox's dev-only toast swallowed taps in 
 over the tab bar, and a routine warn of mine raised it every launch. Metro crashed when
 started during a Gradle build — Gradle output is now blocked from its watcher.
 
-**Open:** a native SIGSEGV in React Native's Fabric renderer (`pullTransaction`, a jump
-into heap memory), now seen **twice, on two devices**, both on the first cold start after
-the bundle's source changed. A release-build run alone will not settle it. The plan is a
-100-launch loop per build type, before Slice 2 dogfooding (`DECISIONS.md`, log in
-`docs/crashes/`). The fragile-list triage from the 2026-09-10 review is pending the
-owner's call. Gate 3 (restore) waits for sign-in in Slice 8. Settings holds only the
+**Open:** the Fabric SIGSEGV (`pullTransaction`, a jump into heap memory), seen twice on two
+devices on 2026-09-10 and **not reproduced in 220 measured launches on 2026-09-12**. Watch
+it, do not close it: Sentry's native reporting must be on for release builds, and the loops
+in `DECISIONS.md` are reusable if it recurs. Log in `docs/crashes/`. Gate 3 (restore) waits for sign-in in Slice 8. Settings holds only the
 version and the dev device-pass button.
 
 See `docs/05-BUILD-PLAN.md`.

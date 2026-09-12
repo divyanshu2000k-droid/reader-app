@@ -158,27 +158,31 @@ function code(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')
 }
 
+/** The transaction rules, as a function of one file's source, so a control can drive it. */
+function transactionOffenders(rel: string, rawSource: string): string[] {
+  const offenders: string[] = []
+  const source = code(rawSource)
+  if (/\brunInTransaction\s*\(\s*async\b/.test(source)) {
+    offenders.push(`${rel}: async task passed to runInTransaction`)
+  }
+  if (/\.transaction\s*\(/.test(source)) {
+    offenders.push(`${rel}: drizzle .transaction() instead of runInTransaction`)
+  }
+  if (
+    !SQLITE_ALLOWED.includes(rel) &&
+    /\bwith(Exclusive)?Transaction(Sync|Async)\s*\(/.test(source)
+  ) {
+    offenders.push(`${rel}: expo-sqlite transaction outside client.ts`)
+  }
+  return offenders
+}
+
 test('every transaction goes through runInTransaction, with a synchronous task', () => {
   const offenders: string[] = []
 
   for (const file of walk(SRC)) {
     const rel = relative(process.cwd(), file).replace(/\\/g, '/')
-    const source = code(readFileSync(file, 'utf8'))
-    if (/\brunInTransaction\s*\(\s*async\b/.test(source)) {
-      offenders.push(`${rel}: async task passed to runInTransaction`)
-    }
-    // Drizzle's own helper, sync or async: the rule is one wrapper, not two.
-    if (/\.transaction\s*\(/.test(source)) {
-      offenders.push(`${rel}: drizzle .transaction() instead of runInTransaction`)
-    }
-    // expo-sqlite's transaction entry points, including the async ones, which are exactly
-    // the shape that commits early. Only client.ts may touch the raw handle at all.
-    if (
-      !SQLITE_ALLOWED.includes(rel) &&
-      /\bwith(Exclusive)?Transaction(Sync|Async)\s*\(/.test(source)
-    ) {
-      offenders.push(`${rel}: expo-sqlite transaction outside client.ts`)
-    }
+    offenders.push(...transactionOffenders(rel, readFileSync(file, 'utf8')))
   }
 
   assert.deepEqual(
@@ -186,6 +190,72 @@ test('every transaction goes through runInTransaction, with a synchronous task',
     [],
     'Open transactions only with runInTransaction from db/client.ts, and only with a ' +
       'synchronous task: an async one commits before its statements run.',
+  )
+})
+
+/**
+ * POSITIVE CONTROLS. EVERY TEXTUAL GUARD MUST BE SEEN FLAGGING SOMETHING, EVERY RUN.
+ *
+ * A regex over source text fails in one direction only: it stops matching, passes, and
+ * says nothing. That is how `columnsOf` asserted nothing for two of seven tables for a
+ * whole slice, and how the transaction guard missed `runInTransaction(async …)`, a new
+ * spelling of the bug it was written for. A green guard is evidence only if it is also
+ * known to go red.
+ *
+ * These feed each guard a sample it must reject, and prose it must not. They cost
+ * milliseconds, and they are what stands between a guard and vacuity after the next
+ * rewrite of the code it watches.
+ */
+test('the write guards flag known-bad samples', () => {
+  const writes = [
+    'db.insert(books).values(row).run()',
+    'db.update(books).set({ title }).run()',
+    'db.delete(books).where(eq(books.id, id)).run()',
+    'getDb().insert(books).values(row).run()',
+  ]
+  for (const sample of writes) {
+    assert.ok(
+      FORBIDDEN.some((p) => p.test(sample)),
+      `the write guard no longer flags: ${sample}`,
+    )
+  }
+
+  const raw = ['openDatabaseSync("reader.db")', 'handle.execSync("INSERT INTO books …")']
+  for (const sample of raw) {
+    assert.ok(
+      FORBIDDEN_SQLITE.some((p) => p.test(sample)),
+      `the raw-handle guard no longer flags: ${sample}`,
+    )
+  }
+})
+
+test('the transaction guard flags every shape it exists for, and no comment', () => {
+  const mustFlag = [
+    'runInTransaction(async () => { await write() })',
+    'getDb().transaction((tx) => tx.run(q))',
+    'db.transaction(async (tx) => { await tx.run(q) })',
+    'handle.withTransactionAsync(async () => {})',
+    'handle.withExclusiveTransactionAsync(async () => {})',
+  ]
+  for (const sample of mustFlag) {
+    assert.ok(
+      transactionOffenders('src/features/x.ts', sample).length > 0,
+      `the transaction guard no longer flags: ${sample}`,
+    )
+  }
+
+  // The negative control, and not hypothetical: this guard's first run failed on
+  // client.ts's own comments, which name these shapes in order to warn against them.
+  const prose = [
+    '// never pass an async task: runInTransaction(async () => {})',
+    '/* db.transaction(async …) commits before its statements run */',
+  ].join('\n')
+  assert.deepEqual(transactionOffenders('src/features/x.ts', prose), [])
+
+  // And the one file allowed to open a transaction keeps its call.
+  assert.deepEqual(
+    transactionOffenders('src/db/client.ts', 'openHandle().withTransactionSync(task)'),
+    [],
   )
 })
 
@@ -268,19 +338,39 @@ function columnsOf(schemaSource: string, tableName: string): string {
  * runtime on the first shelf removal. The compiler now catches this via `_shapeCheck` in
  * write.ts; this asserts it at the schema level too, where the mistake is actually made.
  */
-test('every syncable table has an id and the full sync columns', () => {
-  const schemaSource = readFileSync(join(SRC, 'db', 'schema.ts'), 'utf8')
-
-  for (const name of syncableTablesFromSource()) {
-    const columns = columnsOf(schemaSource, name)
-
-    assert.match(columns, /id: text\('id'\)\.primaryKey\(\)/, `${name} needs a UUID id`)
-    assert.ok(
-      columns.includes('...syncColumns'),
+/** What a table's column text is missing. A function, so a control can drive it too. */
+function shapeProblems(name: string, columns: string): string[] {
+  const problems: string[] = []
+  if (!/id: text\('id'\)\.primaryKey\(\)/.test(columns)) {
+    problems.push(`${name} needs a UUID id`)
+  }
+  if (!columns.includes('...syncColumns')) {
+    problems.push(
       `${name} needs created_at, updated_at and deleted_at, or it cannot be soft-deleted ` +
         'and its removal cannot be undone',
     )
   }
+  return problems
+}
+
+test('every syncable table has an id and the full sync columns', () => {
+  const schemaSource = readFileSync(join(SRC, 'db', 'schema.ts'), 'utf8')
+  const problems = syncableTablesFromSource().flatMap((name) =>
+    shapeProblems(name, columnsOf(schemaSource, name)),
+  )
+  assert.deepEqual(problems, [])
+})
+
+test('the shape guard flags a gutted table', () => {
+  // The exact mistake it exists for: `book_shelves` shipped with a composite key, no `id`
+  // and no sync columns, and the first version of this guard read the NEXT table's columns
+  // and passed anyway.
+  assert.equal(shapeProblems('gutted', "bookId: text('book_id').notNull(),").length, 2)
+  assert.equal(shapeProblems('noSync', "id: text('id').primaryKey(),").length, 1)
+  assert.deepEqual(
+    shapeProblems('whole', "id: text('id').primaryKey(),\n  ...syncColumns,"),
+    [],
+  )
 })
 
 /**

@@ -415,7 +415,44 @@ device, and the entry in `DECISIONS.md` says so.
 evaluates `app.config.ts` exactly as the Expo CLI does. `brand-font.test.ts` uses it.
 Reading the file as text, or re-deriving what it should produce, tests a copy.
 
+### Regression tests, guards and their controls
+
+Four rules, from three bugs that came back inside the code that fixed them. The analysis is
+in `CLAUDE.md`; this is what it means while writing code.
+
+1. **Every bug that gets fixed gets a check that fails without the fix.** A node test, a
+   `@ts-expect-error` type assertion, or a device check — whatever is automatic. Where
+   nothing can assert it (a native crash, a timing race), the check is a **counted
+   measurement** with the number written down.
+2. **A type beats a lint rule beats a comment.** Writing "never do X" in a comment is the
+   moment to ask which type makes X not compile.
+3. **A guard counts only once it has been watched failing**, and must be re-watched when
+   the code it guards is rewritten.
+4. **After fixing a bug, look for the same class of bug in the rest of that file.**
+
+**Every textual guard carries a positive control.** A regex over source text fails in one
+direction: it stops matching, and passes. So each one is fed a known-bad sample every run,
+and prose it must not flag. See `no-bypass.test.ts`, `contrast.test.ts` and
+`test-runner.test.ts`. A guard without a control is not a guard.
+
+**Where we still have the weaker form.** Each is a candidate for a type, not an accepted
+state:
+
+| Rule | Enforced by | A structural version would be |
+|---|---|---|
+| Never call `writeRow` and friends inside a transaction | a comment | internal writers taking a transaction token the public API cannot produce |
+| Every day-bucketed aggregate groups on `local_day` | a comment and review | a branded `LocalDay` that the query builders demand |
+| All SQL lives in `queries.ts` | a textual guard | a module boundary the type system can see |
+| Colours, spacing and type come from the theme | ESLint | branded token types on style props |
+| An input in a sheet is keyboard-checked on a phone | a doc rule | nothing automatic; it needs the device |
+
 ### Running the device pass
+
+**It runs on its own database.** With `EXPO_PUBLIC_DEVICE_PASS=1` the app opens
+`devcheck.db` instead of `reader.db`, from launch, and the pass, the gates and the
+migrations all use it. The pass seeds, deletes, renames `sync_queue` and restores backups
+over the live file, and it shared the reader's library until 2026-09-12: it wrote to the
+owner's real library twice. Without the flag the Settings button refuses to run.
 
 Everything above runs in Node. The checks that need a real SQLite connection and a real
 filesystem live in `src/db/devchecks.ts`, are specified in

@@ -630,6 +630,117 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-12 · The first release build: 112 MB universal, and the APK budget needs revisiting
+**Measured, not guessed**, from the first release build this project has ever produced
+(built locally to measure the crash rate, not to ship):
+- **112 MB universal APK**, carrying four ABIs.
+- Native libraries per ABI, uncompressed: **arm64-v8a 23.3 MB**, armeabi-v7a 16.1 MB,
+  x86 24.5 MB, x86_64 23.9 MB.
+- **Minification and resource shrinking are both OFF**: `android/app/build.gradle` reads
+  `android.enableProguardInReleaseBuilds` and `android.enableShrinkResourcesInReleaseBuilds`,
+  and Expo defaults both to false.
+**What this means for the `< 15 MB` download budget in `06-CONVENTIONS.md`:** a Play
+download is one ABI from an AAB, so the right comparison is roughly 23 MB of native
+libraries **before** any JS, fonts or resources. The budget is already exceeded by the
+native floor of React Native with Hermes, Reanimated, SVG, SQLite and screens.
+**Not acting on it now**, deliberately: this is Slice 11 work and it has three levers to
+try before the number means anything — R8 with resource shrinking, an AAB rather than a
+universal APK, and dropping the x86 ABIs, which Play does not serve to phones. **What
+changes today is that the budget is a measured number with a plan, not an aspiration.**
+**Revisit at Slice 11**, with those three levers applied, and set the budget to what the
+platform actually allows rather than to what was hoped for.
+
+## 2026-09-12 · Regression audit: every bug in this log, and whether a check would catch it again
+Rule 1 says every fixed bug gets a check that fails without the fix. This is the audit of
+what we actually have, as of today. It is the backlog for that rule, not a claim of
+coverage.
+
+**Covered, automatically** (a node test, a type assertion, or a device check):
+async transaction (types + guard + controls + device 2a/2b) · `runInTransaction` accepting
+async (`transaction.types.ts`) · `created_at` rewritten (device 1c, added today) · vacuous
+schema guard (extractor test + shape control) · restore silently doing nothing (device 6) ·
+restoring a newer-schema backup (6b) · no-op delete/restore enqueueing (1b) · the
+soft-delete cascade (7, 9a) · restore orphaning a row, refusals, the unique clash (9a–9e) ·
+`local_day` derivation and the `undefined` patch (8a–8d + types) · the recovery sheet
+inventing a duration (`recoveryPolicy.test.ts`) · gate order and the blanked retry
+(`gateOrder.test.ts`) · the kill switch locking readers out (`forceUpdatePolicy.test.ts`) ·
+**public keys read through `expo-constants`** (`config.test.ts`, added today) · light-mode
+contrast (`contrast.test.ts` + control) · the toast dropping an undo, and a silent undo
+failure (`toastQueue.test.ts`) · backwards and half-filled sessions, the recovered session,
+the position off-by-one (`stats.test.ts`) · streak boundaries and DST (`streaks.test.ts`,
+now with a guard that it stays in the `test:tz` list) · the font never reaching the build
+(`brand-font` + `native-fonts`) · the Metro block list · the `npm test` glob (+ control) ·
+the every-launch backup (`migrationPlan.test.ts`) · out-of-order journal timestamps · Node
+globals in app code (the two tsconfigs) · dependencies named only in config
+(`config-deps.test.ts`) · the accent derivation (`theme.test.ts`) · the device pass running
+on the reader's library (device check 0, added today).
+
+**NOT covered. No automatic check would catch these again:**
+
+| Bug | What is there instead | What would cover it |
+|---|---|---|
+| **Migration `0001` could not run on a populated v1 database** | a hand-run procedure in `09-ENVIRONMENT.md` | a node harness: apply `0000`, seed the violating shape, apply `0001`, assert the repair. `node:sqlite` is built in on Node 24 and the migrations are plain SQL, so this is buildable **without a device**. The highest-value gap here |
+| **A `SELECT` holding a lock so the next line's checkpoint failed** (bricked upgrades) | the "relaunch after touching `client.ts`/`backup.ts`/`migrate.ts`" rule | the same harness, run as a sequence rather than as parts. The device pass calls `checkpointWal()` in isolation and passed 14/14 while upgrades were broken |
+| **The splash config and the Sentry plugin never reaching a build** | nothing. The font half is covered | extend `native-fonts.test.ts` to assert the splash resources and `sentry.properties` exist in `android/` |
+| **The backup named with the target version, not the data's** | device 5e asserts the name matches the argument | a test on `migrate.ts`'s choice of argument, which needs that decision extracted as a pure function |
+| **`migrate.ts` actually consulting the plan** | device evidence, once | the same extraction: a pure `decideBackup(plan)` |
+| **`ScreenGlow`'s gradient id colliding between two mounted screens** | nothing | a render test, which this project deliberately does not do. Accept, or make the id structural |
+| **A sheet's input hidden behind the keyboard** | a doc rule and a device check by hand | nothing automatic. It needs the phone |
+| **The Fabric SIGSEGV** | a counted loop, 0/100 on debug today | measurement only, by nature |
+
+**Filed against Slice 2**: the migration harness and the sequence test, because Slice 2
+already owns the 2000-book seed and migrations at scale.
+
+## 2026-09-12 · The device pass runs on its own database
+**The problem:** the pass wrote to the reader's real library. It seeds, soft-deletes,
+renames `sync_queue`, restores backups over the live file and leaves rows and queue entries
+behind. It touched the owner's library twice: once leaving two orphaned sessions from a
+deliberately broken run, and then the repair of those orphans deleted a live WAL holding
+2.3 MB of committed data. Slice 2 is when that library stops being disposable.
+**Chose:** `EXPO_PUBLIC_DEVICE_PASS=1` makes the WHOLE APP open `devcheck.db` from launch —
+gates, migrations, write path and checks — with its own `backups-devcheck/` directory. The
+Settings button refuses to run without the flag and says why, and Settings shows which
+database the build is on.
+**Over:** switching the handle to a second database once the app is running. That mutates
+global state under live queries, which is the class of bug this codebase keeps paying for.
+Deciding once, before anything opens, cannot half-apply.
+**Over, also:** a throwaway in-memory database. The pass's value is that it exercises the
+real modules — migrations, WAL checkpoints, backups, the FK cascade — against a real file.
+Only the file changes.
+**Found while verifying, which is the point of verifying:** with a shared `backups/`
+directory the pass's prune ranged over the library's backups, and its orphaned-sidecar
+check counted `reader-*.db-wal` as orphans. Separate directories. The library keeps the
+original path, so its existing backups are still found.
+**Verified on the phone:** `devcheck.db` created, `reader.db` unchanged by md5 and mtime,
+RUNTIME 24/24.
+
+## 2026-09-12 · Standing rules after three bugs came back inside their own fixes
+**The pattern**, in full in `CLAUDE.md`: each reintroduction was in the code written to fix
+the original, within a few lines, in the same sitting. Each fix moved the hazard behind a
+new name while the guard still named the old one — and every one of those guards was a
+regex over source text, which protects exactly the spelling that existed when it was
+written. Each original bug had no check that ran against the new code, and each fixed file
+had gained a long, correct comment explaining why it was now safe.
+**Adopted, with one amendment I would argue for:**
+1. Every fixed bug gets a check that fails without the fix. **Amendment: "check" includes a
+   type assertion and a device check, and where nothing can assert it — a native crash, a
+   timing race — it is a counted measurement with the number written down.** Otherwise the
+   rule quietly becomes "node test or nothing", and the bugs that hurt most here are the
+   ones node cannot see.
+2. A type beats a lint rule beats a comment. The places we still have the weaker form are
+   listed in `06-CONVENTIONS.md` as candidates.
+3. A guard counts only once watched failing, and is re-watched when the code it guards is
+   rewritten. **Made automatic for textual guards by positive controls**: each is fed a
+   known-bad sample every run, and prose it must not flag.
+4. After fixing a bug, look for the same class in the rest of that file, and say what you
+   found.
+**Plus, and this is the one that saves the most time:** one review pass per slice, fixing
+only what is silent and loses data. Everything else gets an entry filed against the slice
+that needs it. Slice 1's review took longer than Slice 1.
+**New checks this adds:** device check 1c (`created_at` survives an update — the
+regression test bug #4 never had), positive controls in `no-bypass.test.ts`,
+`contrast.test.ts` and `test-runner.test.ts`.
+
 ## 2026-09-10 · INCIDENT: I deleted the phone's live WAL. Recovered, verified, and the recipe now stops.
 **What happened:** repairing two Devcheck orphans that a deliberate mutant run had left on
 the phone, I followed the pull, edit and push recipe. The `adb push` failed: with
@@ -1125,6 +1236,43 @@ generation and never hand-edited — it simply was not being run.
 native project. Recorded in `CLAUDE.md` and `docs/09-ENVIRONMENT.md`.
 **Revisit if:** a check can assert the native project matches the config — e.g. the device
 pass asserting a font file exists in the installed APK — so this cannot silently recur.
+
+## 2026-09-12 · The Fabric crash, measured: 0 in 100 debug and 0 in 100 release cold starts
+**Method**, on the phone (Nothing Phone 2a, arm64, Android 16), per build: `logcat -c -b all`,
+then 100 × (`am force-stop`; `am start -W`; wait 5 s), then count tombstones in the crash
+buffer for this package, `Fatal signal` lines, and `Running "main"` lines so the denominator
+is launches that actually reached JS.
+
+| Build | Launches | Reached JS | Tombstones | ANRs | Rate | Minutes |
+|---|---|---|---|---|---|---|
+| Debug (dev client, warm bundle from Metro) | 100 | 100 | **0** | — | 0/100 | 23.1 |
+| Release (embedded bundle, not debuggable, `flags=0x0`) | 100 | 100 | **0** | 0 | 0/100 | 12.5 |
+| Debug, **fresh Metro per launch** (`--clear`, cold bundle each time) | 20 | 20 | **0** | — | 0/20 | 33.8 |
+
+The third row is the condition both occurrences actually shared: the first cold start
+against a newly started Metro. It was run deliberately, because a 0/100 under the wrong
+condition says nothing about the right one.
+
+**What this settles.** 220 launches, 0 crashes, including 20 under the suspected trigger.
+Against roughly 2 in 15 on 2026-09-10, that is a real change in rate. **Release is not
+blocked**: 0/100 on the release build, and the suspected trigger — switching bundles —
+cannot happen in a release build at all.
+
+**What it does not settle, and I will not pretend otherwise.**
+- **A 0/20 cannot distinguish "fixed" from "rarer than 1 in 20".** At a true rate of 2 in
+  15, twenty clean launches would happen by chance roughly 6% of the time; at 1 in 50, they
+  are unremarkable.
+- **The code changed between the crashes and the measurement** — the whole Slice 1 review,
+  including a rewritten `Toast` on `useReducer` and changes to the launch path. If some
+  mount pattern of ours was provoking a renderer bug, it may simply no longer happen. The
+  tombstone had no app frame, so this is a possibility, not a claim.
+- **Neither crash was ever reproduced on demand.** Both were caught in passing.
+**So: not development noise, not a shipping blocker on this evidence, and not closed.** The
+standing instruction stays: Sentry's native reporting on for release builds, and re-measure
+if it recurs. The 100-launch loops are reusable; they are the measurement this bug gets
+instead of a test.
+**Still open, and not downgraded to noise:** two occurrences, two architectures, a program
+counter in a heap page. The next steps stay as recorded below.
 
 ## 2026-09-10 · OPEN, NOW TWICE ON TWO DEVICES: native crash in React Native Fabric
 **Second occurrence, 2026-09-10 23:18:38 IST.** Pixel_7_API_36 emulator: x86_64, Android 16

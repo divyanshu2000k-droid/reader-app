@@ -69,8 +69,17 @@ export function SessionRecoverySheet({ session, onResolved }: Props) {
         ? await keepOpenSession(session.id, check.minutes * 60)
         : await discardOpenSession(session.id)
     setBusy(null)
-    if (result.ok) onResolved()
-    else setError(`${result.error.message}. ${result.error.safe ?? ''}`.trim())
+    if (!result.ok) {
+      setError(`${result.error.message}. ${result.error.safe ?? ''}`.trim())
+      return
+    }
+    // `ok` is not "something happened". A session that was closed or deleted from
+    // elsewhere reports `changed: false`, and there is then nothing left to recover: the
+    // sheet closes, but it must not be recorded as a save that wrote something.
+    if (!result.value.changed) {
+      console.warn('[launch] the open session was already gone; nothing to recover')
+    }
+    onResolved()
   }
 
   return (

@@ -23,6 +23,7 @@
 
 import { decide, proceed, type ForceUpdateResult } from './forceUpdatePolicy'
 import { androidPackage, appVersion, config } from '@/lib/config'
+import { now } from '@/lib/dates'
 
 /** The 2 second budget from Journey A. Never block launch on a network call. */
 export const FORCE_UPDATE_TIMEOUT_MS = 2000
@@ -63,7 +64,7 @@ export async function checkForceUpdate(): Promise<ForceUpdateResult> {
      * hammers the origin — does not apply here: the chosen host serves static assets with
      * unlimited free requests, and this is one small file fetched once per cold start.
      */
-    const bustedUrl = `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`
+    const bustedUrl = `${url}${url.includes('?') ? '&' : '?'}t=${now()}`
 
     const response = await fetch(bustedUrl, {
       signal: controller.signal,

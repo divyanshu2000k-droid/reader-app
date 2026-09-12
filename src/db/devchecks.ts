@@ -9,25 +9,34 @@
  * in the codebase.
  *
  * HOW IT IS KEPT OUT OF PRODUCTION
- *   - `app/index.tsx` reaches it through `require()` inside an `if (__DEV__)` block.
+ *   - `src/db/devPass.ts` reaches it through `require()` inside an `if (__DEV__)` block.
  *     Metro replaces `__DEV__` with `false` in a production bundle and drops the branch,
  *     so the module is never reachable and never bundled. It deliberately does NOT live
  *     under `__tests__/`: Metro excludes that directory from resolution entirely, so the
  *     module simply would not exist at runtime.
  *   - There is a Slice 11 checklist item to verify that by grepping the release bundle.
  *
- * It writes to the real database. That is deliberate: a check against a throwaway
- * database would not prove the app's own write path works. It cleans up after itself,
- * and everything it creates is soft-deleted.
+ * IT RUNS ON ITS OWN DATABASE, `devcheck.db`, chosen at launch by
+ * `EXPO_PUBLIC_DEVICE_PASS=1` (see DATABASE_NAME in client.ts). It still exercises the
+ * app's real write path, migrations and backup code — the same modules, a different file.
+ * It used to share the reader's library, and it seeds, deletes, renames `sync_queue` and
+ * restores backups over the live database: it wrote to the owner's real library twice.
+ * It still cleans up after itself, and everything it creates is soft-deleted.
  */
 
 import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm'
-import { Directory, File, Paths } from 'expo-file-system'
+import { File, Paths } from 'expo-file-system'
 
 import { checkpointWal, dangerouslyExecDevSql, DATABASE_NAME, getDb } from './client'
 import { books, reads, sessions, syncQueue } from './schema'
 import { restoreRow, softDelete, updateRow, writeRow } from './write'
-import { backupBeforeMigration, listBackups, pruneBackups, restoreNewestBackup } from './backup'
+import {
+  backupBeforeMigration,
+  backupsDirectory,
+  listBackups,
+  pruneBackups,
+  restoreNewestBackup,
+} from './backup'
 import { SCHEMA_VERSION } from './migrate'
 import { seedSampleLibrary, SEEDED_TITLE } from './seed'
 import { now, toLocalDay } from '@/lib/dates'
@@ -77,6 +86,33 @@ async function queueRowsFor(table: string, rowId: string) {
     .select()
     .from(syncQueue)
     .where(and(eq(syncQueue.tableName, table), eq(syncQueue.rowId, rowId)))
+}
+
+/** Resolves once the clock has moved, so two deletes can never share a timestamp. */
+async function nextMs(): Promise<void> {
+  const start = now()
+  while (now() === start) await new Promise((resolve) => setTimeout(resolve, 2))
+}
+
+// ─── 0. THE PASS IS NOT RUNNING ON THE READER'S LIBRARY ──────────────────────
+
+async function checkOwnDatabase() {
+  /**
+   * FIRST, because everything after it is destructive: it seeds, soft-deletes, renames
+   * `sync_queue` and restores backups over the live file. It ran against the reader's real
+   * library until 2026-09-12 and touched it twice. If this check ever fails, the rest of
+   * the pass is writing to somebody's books.
+   */
+  await check('0. the pass is running on its own database', async () => {
+    assert(
+      DATABASE_NAME === 'devcheck.db',
+      `the pass is open on ${DATABASE_NAME}, not devcheck.db: refusing to vouch for anything below`,
+    )
+    const library = new File(Paths.document, 'SQLite', 'reader.db')
+    const mine = new File(Paths.document, 'SQLite', DATABASE_NAME)
+    assert(mine.uri !== library.uri, 'the two databases resolve to the same file')
+    return `${DATABASE_NAME}; the library at ${library.exists ? 'reader.db is untouched' : 'reader.db does not exist here'}`
+  })
 }
 
 // ─── 1. EVERY WRITE LEAVES EXACTLY ONE QUEUE ROW ─────────────────────────────
@@ -145,6 +181,65 @@ async function checkEnqueueOnWrite() {
 
     return 'delete is soft, row survives, restore clears deleted_at, no-ops report no change'
   })
+
+  /**
+   * THE REGRESSION CHECK FOR BUG #4, which never had one: `writeRow` handed the caller's
+   * whole values object to `onConflictDoUpdate`, so every update rewrote `created_at` to
+   * whatever was passed. A library sorted by date added was silently wrong months later.
+   * `RowFor` now omits the column; this asserts the behaviour, in the direction that
+   * matters, against the real database.
+   */
+  await check(
+    '1c. an update never rewrites created_at, and always moves updated_at',
+    async () => {
+      const id = newId()
+      assert(
+        (await writeRow('books', { id, title: 'Devcheck Created At', source: 'manual' })).ok,
+        'create failed',
+      )
+      const first = await getDb().select().from(books).where(eq(books.id, id))
+      const createdAt = first[0]?.createdAt
+      const updatedAt = first[0]?.updatedAt
+      assert(typeof createdAt === 'number', 'created_at was not stamped')
+
+      await nextMs()
+      assert(
+        (
+          await writeRow('books', {
+            id,
+            title: 'Devcheck Created At (edited)',
+            source: 'manual',
+          })
+        ).ok,
+        'upsert failed',
+      )
+      const afterUpsert = await getDb().select().from(books).where(eq(books.id, id))
+      assert(
+        afterUpsert[0]?.createdAt === createdAt,
+        `an UPSERT moved created_at: ${createdAt} -> ${afterUpsert[0]?.createdAt}`,
+      )
+      assert(
+        (afterUpsert[0]?.updatedAt ?? 0) > (updatedAt ?? 0),
+        'an upsert did not move updated_at',
+      )
+
+      await nextMs()
+      assert(
+        (await updateRow('books', id, { title: 'Devcheck Created At (patched)' })).ok,
+        'patch failed',
+      )
+      const afterPatch = await getDb().select().from(books).where(eq(books.id, id))
+      assert(
+        afterPatch[0]?.createdAt === createdAt,
+        `a PATCH moved created_at: ${createdAt} -> ${afterPatch[0]?.createdAt}`,
+      )
+      assert(
+        (afterPatch[0]?.updatedAt ?? 0) > (afterUpsert[0]?.updatedAt ?? 0),
+        'a patch did not move updated_at',
+      )
+      return `created_at held at ${createdAt} across an upsert and a patch`
+    },
+  )
 }
 
 // ─── 2. THE WRITE AND THE ENQUEUE ARE ONE TRANSACTION ────────────────────────
@@ -408,7 +503,7 @@ async function checkBackupAssumptions() {
     assert(after.length === 3, `prune left ${after.length} backups, expected 3`)
 
     // Pruned sidecars must go with their database.
-    const dir = new Directory(Paths.document, 'backups')
+    const dir = backupsDirectory()
     const orphans = dir
       .list()
       .filter((e) => e instanceof File && e.name.endsWith('-wal'))
@@ -665,12 +760,6 @@ async function checkLocalDay() {
 
 // ─── 9. RESTORE UNDOES EXACTLY ITS CASCADE, AND NEVER ORPHANS A ROW ──────────
 
-/** Resolves once the clock has moved, so two deletes can never share a timestamp. */
-async function nextMs(): Promise<void> {
-  const start = now()
-  while (now() === start) await new Promise((resolve) => setTimeout(resolve, 2))
-}
-
 /** A row's `deleted_at`: null when live, undefined when the row does not exist. */
 async function deletedAtOf(table: string, id: string): Promise<number | null | undefined> {
   const rows = await getDb().all<{ deleted_at: number | null }>(
@@ -916,6 +1005,7 @@ export async function runDeviceChecks(): Promise<CheckResult[]> {
   results.length = 0
   // eslint-disable-next-line no-console
   console.log('[devcheck] ===== DEVICE PASS START =====')
+  await checkOwnDatabase()
   await checkEnqueueOnWrite()
   await checkAtomicity()
   await checkLocalOnlyTables()

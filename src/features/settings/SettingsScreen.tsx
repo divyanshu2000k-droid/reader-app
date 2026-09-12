@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 
 import { runDevicePass } from '@/db/devPass'
-import { appVersion } from '@/lib/config'
+import { appName, appVersion, config } from '@/lib/config'
 import { actions, nav } from '@/lib/strings'
 import { Button } from '@/ui/Button'
 import { Header } from '@/ui/Header'
@@ -48,15 +48,27 @@ export function SettingsScreen() {
           maxFontSizeMultiplier={rules.maxFontScale}
           style={[typeStyle(font.secondary), { color: c.textMuted }]}
         >
-          {appVersion ? `Reader ${appVersion}` : 'Reader'}
+          {appVersion ? `${appName} ${appVersion}` : appName}
         </Text>
 
         {__DEV__ ? (
           <View style={styles.dev}>
+            {/* The pass is destructive, so it runs only on its own database. Saying which
+                one the app is on is the difference between "my library is empty" and
+                "this build is not looking at my library". */}
+            <Text
+              maxFontSizeMultiplier={rules.maxFontScale}
+              style={[typeStyle(font.label), { color: c.textMuted }]}
+            >
+              {config.devicePass
+                ? 'Device-pass build: running on devcheck.db, not your library.'
+                : 'Device checks need EXPO_PUBLIC_DEVICE_PASS=1, which opens a separate database.'}
+            </Text>
             <Button
               label="Run device checks"
               busyLabel="Running checks"
               busy={running}
+              disabled={!config.devicePass}
               variant="secondary"
               onPress={() => void devicePass()}
             />

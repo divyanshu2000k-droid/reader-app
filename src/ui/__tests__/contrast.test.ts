@@ -103,6 +103,25 @@ test('non-text marks clear 3:1', () => {
  * borderColor. A placeholder or a label in either would be unreadable, and this is where
  * it is caught, since no ratio test can see which colour a component chose.
  */
+/** True when a line uses a faint token somewhere it could be text. Driven by a control. */
+function faintAsText(line: string): boolean {
+  if (!/c\.text(Faint|Ghost)\b/.test(line)) return false
+  return !/<Icon\b|backgroundColor|borderColor/.test(line)
+}
+
+/**
+ * The positive control. This scan is a regex over source text, so it fails in one
+ * direction: it stops matching and passes. Renaming the tokens, or moving colours into a
+ * variable, would silently retire it. These samples must keep failing it.
+ */
+test('the faint-token scan still flags a faint colour used as text', () => {
+  assert.equal(faintAsText('style={[typeStyle(font.body), { color: c.textMuted }]}'), false)
+  assert.equal(faintAsText('style={{ color: c.textFaint }}'), true)
+  assert.equal(faintAsText('<Text style={{ color: c.textGhost }}>{label}</Text>'), true)
+  assert.equal(faintAsText('<Icon name="book" color={c.textFaint} />'), false)
+  assert.equal(faintAsText('style={{ backgroundColor: c.textGhost }}'), false)
+})
+
 test('the faint tokens are never used as a text colour', () => {
   const offenders: string[] = []
   const walk = (dir: string) => {
@@ -114,9 +133,7 @@ test('the faint tokens are never used as a text colour', () => {
         readFileSync(path, 'utf8')
           .split('\n')
           .forEach((line, i) => {
-            if (!/c\.text(Faint|Ghost)\b/.test(line)) return
-            if (/<Icon\b|backgroundColor|borderColor/.test(line)) return
-            offenders.push(`${path}:${i + 1}: ${line.trim()}`)
+            if (faintAsText(line)) offenders.push(`${path}:${i + 1}: ${line.trim()}`)
           })
       }
     }

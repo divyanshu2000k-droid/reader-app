@@ -79,7 +79,7 @@ export function readPayload(body: unknown): UpdateRequirement | null {
   const message = cleaned && cleaned.length > 0 ? cleaned : null
 
   // There is deliberately NO storeUrl in this payload. The destination is derived from
-  // the app's own package id at build time — see `storeUrlFor` in forceUpdate.ts. A
+  // the app's own package id at build time — see `storeUrl` in forceUpdate.ts. A
   // remote file that can choose where the single button on an undismissable screen sends
   // the reader is a phishing page they cannot leave, and the store link is knowable
   // locally, so trusting the network for it buys nothing.

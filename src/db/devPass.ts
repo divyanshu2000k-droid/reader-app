@@ -10,8 +10,13 @@
 
 import { useEffect } from 'react'
 
+import { config } from '@/lib/config'
+
 export async function runDevicePass(): Promise<string> {
   if (!__DEV__) return 'unavailable'
+  // The pass is destructive by design. It runs only when the app is on its own database,
+  // which `EXPO_PUBLIC_DEVICE_PASS=1` decides at launch (see DATABASE_NAME in client.ts).
+  if (!config.devicePass) return 'refused: restart with EXPO_PUBLIC_DEVICE_PASS=1'
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mod = require('./devchecks') as typeof import('./devchecks')
   const s = mod.summarise(await mod.runDeviceChecks())
@@ -25,7 +30,7 @@ export async function runDevicePass(): Promise<string> {
  */
 export function useDevicePassAutorun(enabled: boolean): void {
   useEffect(() => {
-    if (!__DEV__ || !enabled || process.env.EXPO_PUBLIC_DEVICE_PASS !== '1') return
+    if (!__DEV__ || !enabled || !config.devicePass) return
     const t = setTimeout(() => {
       runDevicePass().catch((e: unknown) => console.warn('[devcheck] crashed:', e))
     }, 0)

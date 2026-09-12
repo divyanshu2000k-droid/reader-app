@@ -16,10 +16,21 @@
 import { Directory, File, Paths } from 'expo-file-system'
 
 import { checkpointWal, closeDatabase, DATABASE_NAME } from './client'
+import { now } from '@/lib/dates'
 import { appError, attempt, err, ok, type Result } from '@/lib/result'
 import { actions } from '@/lib/strings'
 
-const BACKUP_DIR = 'backups'
+/**
+ * `reader` for the library, `devcheck` for the device pass's own database.
+ *
+ * They get SEPARATE DIRECTORIES, not just separate names. Sharing one directory meant the
+ * device pass's prune ranged over a directory holding the reader's backups, and its
+ * orphaned-sidecar check counted the library's `reader-*.db-wal` files as orphans — which
+ * is how this was found, as a failing check rather than as a deleted backup. The library
+ * keeps the original path, so backups taken before this change are still found.
+ */
+const DB_STEM = DATABASE_NAME.replace(/\.db$/, '')
+const BACKUP_DIR = DB_STEM === 'reader' ? 'backups' : `backups-${DB_STEM}`
 const KEEP_NEWEST = 3
 /** Require this multiple of the database size in free space before migrating. */
 const FREE_SPACE_FACTOR = 3
@@ -40,7 +51,7 @@ const WAL_SUFFIXES = ['-wal', '-shm'] as const
  */
 const STAGING_SUFFIX = '.restoring'
 
-function backupsDirectory(): Directory {
+export function backupsDirectory(): Directory {
   return new Directory(Paths.document, BACKUP_DIR)
 }
 
@@ -77,8 +88,8 @@ export type BackupOutcome =
   | { readonly kind: 'made'; readonly backup: BackupInfo }
   | { readonly kind: 'skipped'; readonly reason: 'no database yet' }
 
-/** `reader-<schemaVersion>-<unixMs>.db`, and nothing else counts as a backup. */
-const BACKUP_NAME = /^reader-(\d+)-(\d+)\.db$/
+/** `<db>-<schemaVersion>-<unixMs>.db`, and nothing else counts as a backup. */
+const BACKUP_NAME = new RegExp(String.raw`^${DB_STEM}-(\d+)-(\d+)\.db$`)
 
 /** Narrows the regex result so the caller can index it without a cast. */
 function assertBackupName(
@@ -156,7 +167,7 @@ export async function backupBeforeMigration(
   return attempt(async () => {
     const dir = backupsDirectory()
     if (!dir.exists) dir.create({ intermediates: true })
-    const name = `reader-${schemaVersion}-${Date.now()}.db`
+    const name = `${DB_STEM}-${schemaVersion}-${now()}.db`
     const target = new File(dir, name)
 
     // BELT. Fold the write-ahead log into the main file first. Without this, a copy of
