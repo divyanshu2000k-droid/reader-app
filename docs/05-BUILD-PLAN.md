@@ -140,6 +140,55 @@ that is not silent data loss is filed against the slice that needs it, not fixed
 **Done when:** seeded books display, you can move one between shelves, delete it, and
 restore it — and a 2000-book library migrates cleanly and scrolls at 60fps.
 
+**Status, 2026-09-13.** Built and driven on the phone against a 2000-book sandbox library:
+the Library's status tabs, book detail with sessions and earlier reads, the actions sheet
+(move, re-read, remove with confirm), the undo toast's first real use, and Recently Deleted
+with restore. Migration `0001` against a populated v1 database runs under node, with a
+positive control. The filed items are resolved as follows:
+- **The migration harness:** done.
+- **The startup sequence under node:** not done. It needs expo-sqlite, so it stays a
+  device-only relaunch rule.
+- **The cover fallback:** done.
+- **`cover_color`:** decided as a reader override.
+- **The 500-session delete:** measured, at 701 ms delete and 1188 ms restore on a debug
+  build. Filed below.
+- **The undo toast:** used for real, and verified on the phone.
+
+**Scroll, measured on a RELEASE build, 2000 books:** three runs of 12 fast flings each
+through the Finished tab (about 1,040 rows), about 1,900 frames per run.
+- **The 60fps budget holds.** p95 was 15 ms in every run, p99 17–18 ms, and there was 1
+  missed frame deadline in about 5,700 frames.
+- **It does not hold the phone's 120 Hz**: 28–43% of frames exceed 8.3 ms.
+- **Debug-build numbers are not the budget.** The same flings on a debug build gave a p90 of
+  40 ms.
+
+**Owner-requested review, 2026-09-13** (`DECISIONS.md`): release builds now always open the
+reader's library, a re-read book is listed once, re-read waits for finished or DNF, tabs
+never show each other's rows, double taps are one tap, and the actions sheet opens reliably
+(it had stopped opening, found on the phone). The Finished tab measured above held about 140
+duplicate rows. Verified on the phone in light mode: empty states, seed refusal, re-read,
+the not-in-library deep link, 10/10 sheet open/close. Device pass 28/28.
+**Filed against Slice 11:** a bench build variant with its own package id for scroll
+measurement, since a sandbox release build is now impossible. **Still unexercised:** failure
+renders (need fault injection), and 200% font, 360 dp, TalkBack (need the owner's settings).
+
+**Moved to later slices, because each opens a screen that does not exist yet:**
+- **Slice 3:** the Library row's Continue pill, book detail's Log pages button, and the edit
+  pencil on sessions.
+- **Slice 4:** search, Discover, and Edit details.
+- **Slice 5b:** notes.
+- **Slice 6:** Start timer and the "pick up where you left off" dock.
+- **Slice 7:** the Library's stats strip.
+- **Slice 11:** share.
+
+**The free-form shelf filter** arrives with the slice that first creates shelves.
+
+**Filed against Slice 9, before import is built:**
+- **Per-row statement building makes bulk writes slow:** a 2000-book seed takes 146.7 s, and
+  a 500-session cascade takes 701 ms.
+- **The fix is prepared statements and set-based writes.** It must keep one queue row per
+  row and the shared cascade timestamp, so device checks 9a and 11 must pass unchanged.
+
 ---
 
 ## Slice 3 · The core loop
@@ -165,6 +214,22 @@ restore it — and a 2000-book library migrates cleanly and scrolls at 60fps.
   into view in a sheet taller than the space left above the keyboard. The log-session sheet
   has several fields, so decide here whether that needs `react-native-keyboard-controller`.
   How to check it from a script: `09-ENVIRONMENT.md`, "Driving a phone from a script"
+
+**Deferred here from Slice 2, and required before this slice is done** (`DECISIONS.md`,
+2026-09-13, "Device checks deferred from Slice 2"). They were never run on Slice 2:
+- **A dev-only way to force a failure.** No failure render has ever been seen on a phone.
+  Build it once, in development builds only, and see every failure render so far: the
+  Library's tab query, book detail's load, and an action failing inside the actions sheet.
+  Add this slice's session save failing. Every later slice reuses it.
+- **One combined layout pass over every Slice 2 and Slice 3 screen,** screenshotted:
+  - 200% system font
+  - a 360 dp display size
+  - dark mode
+
+  The owner changes these phone settings; the assistant only captures and checks. The
+  log-session sheet at 200% font with the keyboard open is the most likely break.
+  Nothing may clip or overlap, no row may lose its label, and the four "Move to" chips must
+  wrap rather than overflow.
 
 **Done when:** you can log a session for last Tuesday, edit its date afterwards, and see a
 correct daily pace chart. **Test this specific case, it is the whole thesis.** Test it with
@@ -396,6 +461,15 @@ every book and statistic untouched.
 
 **Filed here by the 2026-09-12 review:**
 
+- **A TalkBack pass over every screen, deferred from Slice 2.** Labels exist in code and
+  have never been heard on a phone. Every tappable must announce what it does, the tab
+  chips their selected state, and a sheet must take focus when it opens and return it when
+  it closes.
+- **Repeat the 200% font / 360 dp / dark-mode pass for the screens built after Slice 3.**
+  Slice 3 does it for Slices 2 and 3.
+- **A bench build variant for scroll measurement,** with its own package id so it can never
+  share a reader's data. A sandbox release build is impossible by design since 2026-09-13,
+  so the 60fps figure cannot be re-measured without it.
 - **The APK budget is wrong and now has numbers.** The first release build ever produced is
   a **112 MB universal APK**, with **23.3 MB of arm64 native libraries alone**, and both
   minification and resource shrinking are off by default. Apply the three levers — R8 with

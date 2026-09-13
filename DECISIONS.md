@@ -630,6 +630,276 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-13 · Slice 2: the Library and book detail, decisions as they were made
+
+**A sandbox database, separate from the device pass.**
+- **Chose:** `EXPO_PUBLIC_SANDBOX_DB=1` opens `devcheck.db`, like the device pass does, but
+  without auto-running the pass. `usesSandboxDatabase` in `lib/config.ts` is true under
+  either flag. The 2000-book seed refuses without it.
+- **Over:** seeding the reader's library, which is what "test on the phone" used to mean and
+  exactly what the owner's library suffered from twice.
+- **Because:** screens need thousands of rows to develop against, and the rule since
+  2026-09-12 is that nothing mass-writes a real library.
+
+**`writeBatch`, and one implementation of an upsert.**
+- **Chose:** `writeBatch(table, rows)` writes N rows and N queue entries in one transaction,
+  all or none. `writeRow` and `writeBatch` both call a private `upsertOne`, which derives
+  `local_day`, writes, checks parents and enqueues.
+- **Over:** a second copy of that logic in the batch function.
+- **Because:** two copies is how a rule holds in one entry point and not the other, which is
+  this codebase's most expensive recurring bug.
+- **Measured, and a warning for Slice 9:** the seed wrote 2000 books, 2126 reads and 11,132
+  sessions **in 146.7 s on the phone**. The time goes to drizzle building a statement per
+  row plus a parent-check SELECT per row, not to SQLite. A 2000-book Goodreads import on this
+  path would take minutes. **Filed against Slice 9:** prepared statements reused across the
+  batch, and a set-based parent check, before import is built. Not optimised now: the only
+  caller is a dev seed.
+
+**The Library shows what works, and nothing that goes nowhere.**
+- **Chose:** status chips (Reading, Want, Finished, DNF), then book rows with cover, title,
+  author and progress. The whole row opens book detail.
+- **Over:** building the rest of `Main.dc.html` now. The Continue pill opens the session
+  logger (Slice 3). Discover and search belong to adding a book (Slice 4). The dock's
+  button starts the timer (Slice 6). The stats strip is Stats' numbers (Slice 7).
+- **Because:** a control that goes nowhere is worse than a control that arrives with its
+  destination. Each is filed in `05-BUILD-PLAN.md` against its slice.
+- **The chips are `reads.status`, not the `shelves` table.** Free-form shelf filtering arrives
+  with the slice that first creates shelves.
+
+**Progress is aggregated in SQL, once, and held equal to the domain rule by a device check.**
+- **Chose:** `db/progressAggregates.ts`, shared by the Library and book detail, grouped by
+  read in the same statement that reads the books.
+- **Over:** a per-row query (2000 queries), or loading every session to call
+  `contribution()` in TypeScript.
+- **Because:** the rule now exists twice, in SQL and in `domain/stats.ts`, and that is a
+  known hazard here. **Device check 10** samples 60 real reads, plus one read built from
+  backwards, half-filled, recovered and timed-audiobook sessions, and asserts pages,
+  minutes, unusable and both positions agree.
+- **Measured on the phone, 2000 books:** Reading 221 ms cold, then 42–74 ms. Want 138 ms.
+  Finished (about 1,040 books) 251 ms. DNF 43 ms. All under the 400 ms threshold, so no
+  skeleton flashes. **Revisit if** a tab passes 400 ms: paginate that one query.
+
+**What progress says lives in `domain/progressDisplay.ts`,** not in the Library feature.
+Book detail needs the same rules, and features may not import from one another. Tested:
+no page count means no bar and never 0%; an audiobook shows time; an unstarted book says
+nothing.
+
+**Book detail and its actions sheet.**
+- **One FlashList for the whole screen**, with the hero and progress as its header and
+  earlier reads as its footer. A read can hold hundreds of sessions, and a ScrollView
+  mounts every one.
+- **Moving to Finished writes only the status, never `finished_at`.** Null means "derive
+  from the sessions", and a computed value there cannot later be told apart from a date the
+  reader chose (03-DATA-MODEL). The finish flow, with its date and rating, is Slice 5.
+- **Remove asks once, in the sheet, then soft-deletes, leaves the screen, and raises the
+  undo toast.** A book takes its sessions and notes with it, which is large enough to
+  confirm even with an undo. The toast rises only if `changed`: a book removed from
+  somewhere else gets no Undo for a delete this screen did not do.
+- **The session rows have no edit pencil yet** (Slice 3). A row that counts for nothing says
+  so. A timed session with broken positions says "only its time counts": its duration is
+  still counted, so "not counted" would be false.
+- **Ratings are drawn with a clip ID per instance.** SVG ids are document-global, which is
+  the bug `ScreenGlow` shipped with. Book detail shows several ratings at once.
+
+**Found on the phone, each fixed and re-verified there:**
+- **Switching tabs kept the previous tab's scroll offset.** After scrolling Finished, the
+  Reading tab opened hundreds of rows down, with its first row clipped under the chips. That
+  is also why a scripted tap on "the first row" silently missed and every later step of that
+  run meant nothing; the run was discarded, not counted. Fix: `key={status}` on the list,
+  one list per tab. Verified: after five flings on Finished, Reading reopens at its first
+  book.
+- **A book with no author left a blank line** where the byline would be. An empty `<Text>`
+  still takes a line's height. The byline now renders only when there is something in it.
+- **Rows touched.** FlashList has no `gap`, so the list uses an `ItemSeparatorComponent`.
+- **Sessions sharing one timestamp listed in arbitrary order**, showing 57 → 76 above
+  76 → 95. The seed stacked sessions by clamping a day counter at zero; the seed now spaces
+  them strictly. The query also tie-breaks on position, because two real sessions logged in
+  the same minute are ordinary.
+
+**Verified end to end on the phone** (2000 books in the sandbox; every step checks its
+precondition and stops if it fails): open a book; the actions sheet; move to DNF, after
+which the hero badge says DNF; remove with confirm; back on the Library with the undo toast;
+Undo brings the book back on the DNF tab; remove again, then find it in Recently deleted,
+Restore, and see "Book restored". No crashes. The library's md5 was unchanged throughout.
+
+**Device checks 10 and 11, RUNTIME 27/27:**
+- **Check 10** found 61 reads agreeing between the SQL aggregate and `contribution()`,
+  including a read built from 7 awkward sessions. **Watched failing:** with
+  the aggregate made to ignore durations, the pass went 26/27 with check 10 red; restored, 27/27.
+- **Check 11: deleting a book with 500 sessions takes 701 ms, and restoring it 1188 ms**, on
+  the JS thread, in a debug build. The cascade is correct at that size (500 delete queue rows,
+  all 500 back). But against "tap to saved under 100 ms" it is a visible freeze for a book
+  with a long history. **Filed against Slice 9**, together with the seed's slowness: both are
+  per-row statement building. The fix is set-based `UPDATE … WHERE read_id IN (…)` plus one
+  `INSERT … SELECT` into `sync_queue`. It must keep per-row queue entries and the exact
+  timestamp that restore keys on, so check 9a must pass unchanged afterwards. Not fixed now:
+  a typical book has tens of sessions, which is tens of milliseconds, and nothing loses data.
+
+**60fps, measured on a release build rather than argued.** The build was a local release with
+the sandbox flag, on the 2000-book library: three runs of 12 flings each through the
+Finished tab.
+- **Missed frame deadlines:** 1, 0 and 0 in 1,890, 1,908 and 1,944 frames.
+- **p50** 8–10 ms, **p90** 13–14 ms, **p95** 15 ms, **p99** 17–18 ms.
+- **The budget in 06-CONVENTIONS is 60fps, and it holds.** The panel runs at 120 Hz, where
+  28–43% of frames exceed 8.3 ms ("Janky frames (legacy)" in gfxinfo). No FlashList tuning
+  was done beyond stable `renderItem` and `keyExtractor` and memoised rows, because none was
+  needed at 60fps.
+- **A debug build is not evidence either way:** its p90 was 40 ms. **Revisit if** a 120 Hz
+  target is ever adopted, or a row gains an image that loads.
+
+**Migration `0001` against a populated v1 database now runs under node**
+(`src/db/__tests__/migrations.test.ts`). It uses 2000 books, duplicate live read numbers, a
+soft-deleted duplicate, sessions, shelves, notes and a queue.
+- **Asserted:** the renumbering is in creation order, and every other table's rows hash the
+  same before and after. The soft-deleted duplicate is untouched, the repaired reads are
+  enqueued, and the indexes exist.
+- **Positive control:** the migration drizzle-kit actually generated, without the repair,
+  must fail on the same fixture.
+- **Watched failing** against three broken versions of `0001`: no renumber, reverse order,
+  and no enqueue. The real file was restored and its md5 matched.
+- This closes the regression audit's highest-value gap. **Still not covered by it:** the
+  startup sequence around a migration, which needs expo-sqlite and stays device-only.
+
+**The cover fallback, filed by the 2026-09-12 review.** A cover whose local file is gone, or
+whose URL fails offline, now falls back to the URL and then to the initial, instead of
+leaving a blank box. The chain is `ui/coverSource.ts`, with tests. The `onError` wiring
+itself is untested until a real cover exists (Slice 4).
+
+**`books.cover_color` is a reader-chosen override, never a stored derivation.** Null means
+derive it from the title at render. That is the `started_at` rule, chosen over dropping a
+column that ships in `0000`, which would cost a migration for nothing.
+
+**The one review pass for this slice, 2026-09-13: no silent data loss found.** Walked
+`writeBatch`, the re-read race (the unique index catches it), remove/undo/restore, the
+missing-route path, and the aggregate against `contribution()` (check 10). Filed, not fixed:
+the 500-session cascade time and seed time (Slice 9); the toast under a sheet (Slice 3,
+unchanged); the Finished tab's 251 ms query (revisit past 400 ms); and stray
+`"/../features/…"` entries in Expo Router's generated route types, which are harmless noise
+from type generation.
+
+**The faint-token guard now allows an SVG `fill={…}` or `stroke={…}`.** The empty half of a
+rating star is decoration drawn in `textGhost`, and a React Native `<Text>` takes no `fill`.
+Two new controls: a `fill={c.textGhost}` path must pass, and a real text colour on a line
+that merely contains the word "fill" must still fail. **Watched failing both ways:** with
+the exemption removed, the Stars component and the control went red. With an exemption
+broad enough to swallow any "fill", only the new control caught it.
+
+## 2026-09-13 · The owner-requested review of Slice 2, and what it found that the slice review did not
+**Context:** the owner asked for a senior-engineer review of Slice 2 covering shortcuts,
+documentation, and the paths that are not the happy one. It came after this slice's own
+review pass, which reported "no silent data loss found". **That was wrong in one place.** A
+re-read book was listed twice, and the Finished-tab scroll measurement above ran over a list
+padded by about 140 duplicate rows. All findings were fixed on the owner's instruction
+("do them all").
+
+**Fixed, each with a check that was watched failing:**
+- **The sandbox and device-pass flags were honoured in release builds.** A release built with
+  either flag exported would have put readers' books in a file the next build never opens.
+  Now `lib/databaseChoice.ts`: a release build opens `reader.db`, always. Tested, including
+  the wiring in `config.ts` and `client.ts`, with a control. The sandbox moved to its own
+  `sandbox.db`, so device passes stop filling it with soft-deleted rows.
+- **A re-read book appeared on two tabs.** Each read was filtered by its own status. Now
+  every list filters with `db/currentRead.ts` (the live read with the highest number).
+  **Re-read could also start while the book was still being read,** creating two reads in
+  progress. `domain/reads.ts` allows it only after finished or DNF. The sheet hides it and
+  `startReread` refuses it. Device check 12 holds the listing.
+- **A tab switch drew the previous tab's rows** under the new chip for up to 251 ms
+  (`features/library/tabData.ts`).
+- **Every screen open ran its query twice,** because `useFocusEffect` also fires on mount
+  (`ui/useOnRefocus.ts`).
+- **A double tap on a Library row opened book detail twice.** Only `Button` debounced.
+  `ui/pressGuard.ts` is now the one rule, used by `Button`, header buttons and rows.
+- **InlineError's safe line measured 4.03:1 in light mode.** It now uses `textSecondary`, and
+  the pair is in the contrast test.
+- **"Audiobook" had three definitions.** It now has one, `isAudiobook` in
+  `domain/progressDisplay.ts`.
+- **Seeding twice doubled the sandbox,** and the seed used random UUIDs. It now refuses a
+  sandbox with live books and derives ids from its seed. A 12-book, no-DNF seed gives the
+  empty-tab state.
+- **Watched failing, node:** 8 mutations went red, one per fix above except the seed. They
+  were: release opens a sandbox; config passes `true`; re-read allowed while reading; a tab
+  shows another tab's rows; double taps accepted; the pending rule off by one; audiobook
+  defined by length alone; the inline error pair measured with the old token.
+- **Watched failing, device:** check 12 went red under `max`→`min` ("the listed read is not
+  the newest"). It went red again with deleted reads counted ("the older read did not become
+  current"). Both runs were 27/28; restored, 28/28.
+
+**Found while verifying the fixes on the phone: Book actions never opened.** Nothing threw,
+Back worked, and it typechecked. Logging showed `mounted` going true, then false again with
+`visible` still true.
+- **Cause, from the logs, not argued:**
+  - `Sheet` derived `mounted` during render. A closed sheet's first exit animation finished
+    on mount and called `setMounted(false)` on a value already false. React bailed out of
+    that render but kept the update queued at default priority.
+  - The tap rendered at sync priority and skipped that update, so the hook's base state
+    stayed false.
+  - React does not carry a render-phase update (`setMounted(true)`) into base state while
+    an update is skipped. The deferred render replayed from false.
+  - `prevVisible`, with nothing skipped, kept its new value, exactly as logged.
+- **Why the Slice 2 run did not see it:** probably the double query. A second load
+  re-rendered the screen and flushed the queued no-op before any tap. Removing it left the
+  update waiting. Not proven.
+- **Chose:** an open sheet renders from `visible` alone. The lagging state (`exiting`) only
+  extends rendering through the exit. A closed-on-mount sheet runs no exit animation. The
+  exit's completion checks the current visibility (`ui/sheetMount.ts`).
+- **Over:** only guarding the completion callback. That was tried first, and the sheet still
+  did not open on the phone, because the bad update was the no-op itself, not a late one.
+- **Because:** losing `exiting` can now only cut an exit animation short. It can never keep
+  a sheet shut.
+- **Held by:** `sheetMount.test.ts`, 7 tests, including a wiring check with a control. It
+  went red under 3 mutations: render from exit state only, exit ignores a reopen, and the
+  original `Sheet.tsx`.
+- **Not held by any automatic check:** the React behaviour itself, since no renderer is
+  installed for node. The phone run below is the evidence.
+- **Reopening during the exit cannot be done by touch.** The closing Modal's scrim covers the
+  screen, so a tap there closes it. A scripted attempt proved only that, and it was
+  discarded, not counted.
+
+**Verified on the phone, sandbox.db, light mode** (every step checks its precondition):
+- **Empty states:** an empty library, an empty Recently Deleted, and an empty DNF tab
+  ("Nothing abandoned").
+- **Seeding:** the 12-book seed, and a second seed refused.
+- **Double tap:** a double tap on a row opens detail once.
+- **Actions sheet:** a book being read has no re-read row. Across 10 open/close cycles,
+  alternating Back and scrim, it opened 10/10 and closed 10/10.
+- **Re-read of a finished book:** the hero says READING · READ 2 and Earlier reads lists
+  read 1. The book is gone from Finished and appears once on Reading. The pulled database
+  agrees: reads (1 finished, 2 reading), and 0 books listed more than once.
+- **Removed book:** a removed book's deep link shows "This book is not in your library", and
+  Back to the library returns.
+- **Device pass on devcheck.db:** RUNTIME 28/28, COMPILE-TIME 1/1. `reader.db` md5 unchanged
+  throughout.
+
+**Corrections to earlier claims:**
+- **The release scroll measurement's Finished tab held about 140 duplicate rows.** The
+  timings stand as a measurement of that list. A sandbox release build is now impossible by
+  design; measuring scroll again needs a bench variant with its own package id (Slice 11).
+- **"The seed is deterministic" was too strong.** Ids, titles and shapes repeat. Dates sit
+  at the same distances from the day it runs.
+- **expo-sqlite bundles SQLite 3.50.3, not 3.49.1.** Both `vendor/sqlite3/sqlite3.h` and
+  check 0 on the phone say so. Node's is 3.51.3, so a migration using syntax newer than 3.50
+  still passes under node and fails on phones. It is run on the device before it ships.
+
+**Still unexercised, and why:**
+- **The sheet's and the Library's failure renders** need fault injection that does not exist.
+- **200% font scale, a 360 dp display, TalkBack, and dark mode for the new states** need
+  the phone's system settings, which the owner changes, not the assistant.
+
+### Device checks deferred from Slice 2
+- **Chose:** the owner deferred the unexercised checks above, filed where they are due:
+  - **Before Slice 3 is done:** a dev-only switch to force failures, and one combined
+    200% font, 360 dp and dark-mode pass over the Slice 2 and 3 screens.
+  - **Slice 11:** a TalkBack pass over every screen.
+- **Over:** running them now, before Slice 3.
+- **Because:** none can lose data, which is the one-review-pass rule's bar. Slice 3 adds
+  the riskiest layout (a form in a sheet with the keyboard up) and the first write failure
+  a reader can hit, so one pass then covers both slices, where a pass now would be repeated
+  anyway.
+- **Revisit if:** a reader reports a layout or accessibility break on a Slice 2 screen
+  before Slice 3 ships.
+- **Recorded, not fixed:** the contrast `SPECIAL` list is not wired to the components
+  (06-CONVENTIONS).
+
 ## 2026-09-12 · The first release build: 112 MB universal, and the APK budget needs revisiting
 **Measured, not guessed**, from the first release build this project has ever produced
 (built locally to measure the crash rate, not to ship):

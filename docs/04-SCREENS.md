@@ -226,6 +226,37 @@ not failure and the data should not treat it as such.
 **Remove** soft deletes, shows an undo toast, and the row appears in Recently Deleted for
 30 days.
 
+**As built in Slice 2:**
+- **The Library** has status chips (Reading, Want, Finished, DNF) over one FlashList. **Each
+  tab opens at its top**; switching tabs must never keep another tab's scroll position.
+  **An empty tab and an empty library say different things**: "No books yet" appears only
+  when there is no live book at all.
+- **A Library row** shows cover, title, the author only when there is one (never "Unknown",
+  never a blank line), and progress: a percentage when the page count is known, pages read
+  when it is not (no bar), time for an audiobook, and nothing at all for an unstarted book.
+  The rules are `domain/progressDisplay.ts`.
+- **Book detail** shows the hero (cover, title, author, rating, status and format badges), a
+  progress card, this read's sessions newest first, and earlier reads. **A book that is not
+  in the library** (deleted elsewhere, or a stale route) gets its own screen with a way back,
+  never a blank.
+- **A session that counts for nothing is marked** in the list. A timed session with broken
+  positions says "only its time counts": its duration is still counted.
+- **The actions sheet**: move to any status (DNF keeps its pages), start a re-read, remove.
+  **Remove asks once, in the sheet**, using the confirm copy, then leaves book detail and
+  raises the undo toast, **only if the delete changed something**. A failed action keeps the
+  sheet open with the reason.
+- **Recently Deleted** is in Settings, and in Slice 2 lists **books only**: removing a book is
+  the only delete a reader can perform yet. Restore brings back exactly what the removal took.
+  Sessions and notes join it with the slices that let a reader delete them.
+- **A book appears once in the Library, on its current read's tab.** A re-read book is on
+  Reading, not also on Finished.
+- **Start a re-read is offered only when the current read is finished or DNF**, and
+  `startReread` refuses otherwise.
+- **A double tap on a row or a header button is one tap.**
+- **Not yet, with the slice that owns each:** the Continue pill and Log pages (3), Start timer
+  and the dock (6), search, Discover and Edit details (4), notes (5b), the stats strip (7),
+  and share (11). None renders as a control that goes nowhere.
+
 ---
 
 ## Journey I · Backup and account

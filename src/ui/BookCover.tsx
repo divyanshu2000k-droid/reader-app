@@ -10,9 +10,11 @@
  * between the list and the detail screen.
  */
 
+import { useState } from 'react'
 import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 
 import { coverFallbacks, font, radius, rules, shadow, size, typeStyle } from './theme'
+import { coverCandidates, nextCoverSource } from './coverSource'
 import { useColors } from './useTheme'
 
 type CoverSize = 'list' | 'header' | 'dock' | 'hero'
@@ -27,6 +29,8 @@ interface Props {
   size?: CoverSize
   style?: StyleProp<ViewStyle>
 }
+
+const EMPTY: ReadonlySet<string> = new Set()
 
 const DIMENSIONS: Record<CoverSize, { w: number; h: number }> = {
   list: size.coverList,
@@ -55,7 +59,11 @@ export function BookCover({
 }: Props) {
   const c = useColors()
   const dims = DIMENSIONS[variant]
-  const source = localPath ?? url ?? null
+  // Each source that fails is skipped; when none is left, the initial is drawn. It used to
+  // render one source and ignore failure, so an offline URL was a blank box (coverSource.ts).
+  const candidates = coverCandidates(localPath ?? null, url ?? null)
+  const [failed, setFailed] = useState<ReadonlySet<string>>(EMPTY)
+  const source = nextCoverSource(candidates, failed)
 
   return (
     <View
@@ -76,7 +84,9 @@ export function BookCover({
     >
       {source ? (
         <Image
+          key={source}
           source={{ uri: source }}
+          onError={() => setFailed((prev) => new Set([...prev, source]))}
           resizeMode="cover"
           style={StyleSheet.absoluteFill}
           accessibilityIgnoresInvertColors

@@ -11,8 +11,10 @@ import { useRouter } from 'expo-router'
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 
+import { DATABASE_NAME } from '@/db/client'
 import { runDevicePass } from '@/db/devPass'
-import { appName, appVersion, config } from '@/lib/config'
+import { seedLargeLibrary } from '@/db/seedLarge'
+import { appName, appVersion, config, usesSandboxDatabase } from '@/lib/config'
 import { actions, nav } from '@/lib/strings'
 import { Button } from '@/ui/Button'
 import { Header } from '@/ui/Header'
@@ -24,6 +26,7 @@ export function SettingsScreen() {
   const c = useColors()
   const router = useRouter()
   const [running, setRunning] = useState(false)
+  const [seeding, setSeeding] = useState(false)
   const [summary, setSummary] = useState<string | null>(null)
 
   async function devicePass() {
@@ -37,6 +40,23 @@ export function SettingsScreen() {
     }
   }
 
+  async function seedAtScale(plan?: Parameters<typeof seedLargeLibrary>[0]) {
+    setSeeding(true)
+    try {
+      const result = await seedLargeLibrary(plan)
+      setSummary(
+        result.ok
+          ? `seeded ${result.value.books} books, ${result.value.reads} reads, ` +
+              `${result.value.sessions} sessions in ${(result.value.ms / 1000).toFixed(1)}s`
+          : `${result.error.message}. ${result.error.safe ?? ''}`.trim(),
+      )
+    } catch (e) {
+      setSummary(e instanceof Error ? `crashed: ${e.message}` : 'crashed')
+    } finally {
+      setSeeding(false)
+    }
+  }
+
   return (
     <Screen>
       <Header
@@ -44,6 +64,13 @@ export function SettingsScreen() {
         right={<Button label={actions.done} variant="ghost" onPress={() => router.back()} />}
       />
       <View style={styles.body}>
+        {/* Journey K: Recently deleted belongs to Settings. The rest of that list arrives
+            with the slices that build each item. */}
+        <Button
+          label="Recently deleted"
+          variant="secondary"
+          onPress={() => router.push('/trash')}
+        />
         <Text
           maxFontSizeMultiplier={rules.maxFontScale}
           style={[typeStyle(font.secondary), { color: c.textMuted }]}
@@ -60,17 +87,37 @@ export function SettingsScreen() {
               maxFontSizeMultiplier={rules.maxFontScale}
               style={[typeStyle(font.label), { color: c.textMuted }]}
             >
-              {config.devicePass
-                ? 'Device-pass build: running on devcheck.db, not your library.'
-                : 'Device checks need EXPO_PUBLIC_DEVICE_PASS=1, which opens a separate database.'}
+              {usesSandboxDatabase
+                ? `Sandbox build: open on ${DATABASE_NAME}, not your library.`
+                : `Open on ${DATABASE_NAME}, your real library. Destructive dev tools are off.`}
             </Text>
             <Button
               label="Run device checks"
               busyLabel="Running checks"
               busy={running}
-              disabled={!config.devicePass}
+              disabled={!config.devicePass || seeding}
               variant="secondary"
               onPress={() => void devicePass()}
+            />
+            <Button
+              label="Seed 2000 books"
+              busyLabel="Seeding"
+              busy={seeding}
+              disabled={!usesSandboxDatabase || running}
+              variant="secondary"
+              onPress={() => void seedAtScale()}
+            />
+            {/* A new reader's library is a dozen books, not two thousand, and its DNF tab is
+                empty: the shapes the big seed never shows. */}
+            <Button
+              label="Seed 12 books, no DNF"
+              busyLabel="Seeding"
+              busy={seeding}
+              disabled={!usesSandboxDatabase || running}
+              variant="secondary"
+              onPress={() =>
+                void seedAtScale({ books: 12, statuses: ['reading', 'want', 'finished'] })
+              }
             />
             {summary ? (
               <Text

@@ -44,6 +44,7 @@ const SPECIAL: readonly (readonly [Token, Token, string])[] = [
   ['text', 'accentSurface', 'a focused field’s value'],
   ['text', 'dangerSurface', 'an errored field’s value'],
   ['danger', 'dangerSurface', 'danger button label'],
+  ['textSecondary', 'dangerSurface', 'an inline error’s safe line'],
   ['ground', 'text', 'a selected chip’s label'],
 ]
 
@@ -99,14 +100,15 @@ test('non-text marks clear 3:1', () => {
 
 /**
  * The ratios above only mean something if the faint tokens stay off text. Every use of
- * textFaint or textGhost must be a non-text one: an <Icon>, a backgroundColor or a
- * borderColor. A placeholder or a label in either would be unreadable, and this is where
+ * textFaint or textGhost must be a non-text one: an <Icon>, a backgroundColor, a
+ * borderColor, or an SVG `fill={…}` / `stroke={…}` attribute (the empty half of a rating
+ * star). A React Native <Text> takes no `fill` or `stroke`, so those cannot be text. A placeholder or a label in either would be unreadable, and this is where
  * it is caught, since no ratio test can see which colour a component chose.
  */
 /** True when a line uses a faint token somewhere it could be text. Driven by a control. */
 function faintAsText(line: string): boolean {
   if (!/c\.text(Faint|Ghost)\b/.test(line)) return false
-  return !/<Icon\b|backgroundColor|borderColor/.test(line)
+  return !/<Icon\b|backgroundColor|borderColor|\b(?:fill|stroke)=\{/.test(line)
 }
 
 /**
@@ -120,6 +122,9 @@ test('the faint-token scan still flags a faint colour used as text', () => {
   assert.equal(faintAsText('<Text style={{ color: c.textGhost }}>{label}</Text>'), true)
   assert.equal(faintAsText('<Icon name="book" color={c.textFaint} />'), false)
   assert.equal(faintAsText('style={{ backgroundColor: c.textGhost }}'), false)
+  // An SVG fill is not text. The word "fill" elsewhere on a line must not exempt real text.
+  assert.equal(faintAsText('<Path d={STAR} fill={c.textGhost} />'), false)
+  assert.equal(faintAsText('<Text style={{ color: c.textFaint }}>fill in later</Text>'), true)
 })
 
 test('the faint tokens are never used as a text colour', () => {

@@ -23,20 +23,39 @@ import {
   space,
   typeStyle,
 } from './theme'
+import { usePressGuard } from './usePressGuard'
 import { useColors } from './useTheme'
 
-export function Header({ title, right }: { title: string; right?: ReactNode }) {
+/**
+ * `title` is optional because book detail's header is only its two buttons: the book's own
+ * title is the hero below it, and repeating it here would say it twice.
+ */
+export function Header({
+  title,
+  left,
+  right,
+}: {
+  title?: string
+  left?: ReactNode
+  right?: ReactNode
+}) {
   const c = useColors()
   return (
     <View style={styles.row}>
-      <Text
-        accessibilityRole="header"
-        numberOfLines={2}
-        maxFontSizeMultiplier={rules.maxFontScale}
-        style={[typeStyle(font.title), styles.title, { color: c.text }]}
-      >
-        {title}
-      </Text>
+      {left ? <View style={styles.right}>{left}</View> : null}
+      {/* No title means a spacer, not an empty Text: TalkBack would announce a blank header. */}
+      {title ? (
+        <Text
+          accessibilityRole="header"
+          numberOfLines={2}
+          maxFontSizeMultiplier={rules.maxFontScale}
+          style={[typeStyle(font.title), styles.title, { color: c.text }]}
+        >
+          {title}
+        </Text>
+      ) : (
+        <View style={styles.title} />
+      )}
       {right ? <View style={styles.right}>{right}</View> : null}
     </View>
   )
@@ -50,12 +69,14 @@ interface IconButtonProps {
 
 export function HeaderIconButton({ icon, accessibilityLabel, onPress }: IconButtonProps) {
   const c = useColors()
+  // A double tap on the settings gear pushed Settings twice (ui/pressGuard.ts).
+  const guarded = usePressGuard(onPress)
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       hitSlop={size.iconButtonHitSlop}
-      onPress={onPress}
+      onPress={guarded}
       style={({ pressed }) => [
         styles.iconButton,
         { backgroundColor: c.surfaceRaised, borderColor: c.borderStrong },

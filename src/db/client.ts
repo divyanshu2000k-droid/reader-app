@@ -19,12 +19,15 @@ import * as SQLite from 'expo-sqlite'
 
 import type { AppliedMigrations } from './migrationPlan'
 import * as schema from './schema'
-import { config } from '@/lib/config'
+import { databaseChoice } from '@/lib/config'
+import { DATABASE_FILES } from '@/lib/databaseChoice'
 
 /**
- * THE DEVICE PASS RUNS ON ITS OWN DATABASE.
+ * THE DEVICE PASS AND THE SANDBOX RUN ON THEIR OWN DATABASES, IN DEVELOPMENT BUILDS ONLY.
  *
- * With `EXPO_PUBLIC_DEVICE_PASS=1` the whole app opens `devcheck.db` instead, from launch:
+ * `EXPO_PUBLIC_DEVICE_PASS=1` opens `devcheck.db`, and `EXPO_PUBLIC_SANDBOX_DB=1` opens
+ * `sandbox.db`. A release build always opens `reader.db` (lib/databaseChoice.ts). With the
+ * device-pass flag, the whole app opens `devcheck.db` instead, from launch:
  * the gates, the migrations, the write path and the checks all use it, and the reader's
  * library is not opened at all.
  *
@@ -37,7 +40,7 @@ import { config } from '@/lib/config'
  * under live queries, which is the class of bug this codebase keeps paying for. Deciding
  * once, before anything opens, cannot half-apply.
  */
-export const DATABASE_NAME = config.devicePass ? 'devcheck.db' : 'reader.db'
+export const DATABASE_NAME = DATABASE_FILES[databaseChoice]
 
 let handle: SQLite.SQLiteDatabase | null = null
 let database: ReturnType<typeof drizzle<typeof schema>> | null = null

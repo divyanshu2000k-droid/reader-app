@@ -38,7 +38,7 @@ export interface AppError {
 export function appError(
   tier: ErrorTier,
   message: string,
-  options: { safe?: string; cause?: unknown } = {},
+  options: { safe?: string | undefined; cause?: unknown } = {},
 ): AppError {
   return { tier, message, safe: options.safe, cause: options.cause }
 }

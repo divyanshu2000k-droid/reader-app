@@ -428,6 +428,49 @@ function enqueue(
     .run()
 }
 
+/**
+ * ONE ROW'S UPSERT: derive, write, check its parents, enqueue. Transaction-internal.
+ *
+ * The single implementation shared by `writeRow` and `writeBatch`. A second copy is how
+ * the derived `local_day`, the parent check or the enqueue ends up holding in one entry
+ * point and not the other — which is this codebase's most expensive recurring mistake.
+ *
+ * `createdAt` is stamped on insert and NEVER touched by the update branch: it used to be
+ * part of the caller's values and part of the conflict `set`, so every edit reset the
+ * row's creation date. `local_day` moves only if the instant moved.
+ */
+function upsertOne<K extends SyncableTable>(
+  db: Database,
+  table: K,
+  values: RowFor<K>,
+  ts: UnixMs,
+): void {
+  const t = tableFor(table)
+  const occurredAt = occurredAtOf(table, values)
+  if (table === 'sessions' && occurredAt === null) {
+    throw new Error('a session cannot be written without occurredAt')
+  }
+  const { id: _identity, ...mutable } = values
+  db.insert(t)
+    .values({
+      ...values,
+      ...(occurredAt === null ? {} : { localDay: toLocalDay(occurredAt) }),
+      createdAt: ts,
+      updatedAt: ts,
+    })
+    .onConflictDoUpdate({
+      target: t.id,
+      set: {
+        ...mutable,
+        ...(occurredAt === null ? {} : { localDay: localDayOnUpdate(occurredAt) }),
+        updatedAt: ts,
+      },
+    })
+    .run()
+  assertParentsLive(db, table, values.id)
+  enqueue(db, table, values.id, 'upsert', ts)
+}
+
 /** Soft-deletes every live descendant of `id`, depth first, enqueueing each. */
 function cascadeDelete(db: Database, table: SyncableTable, id: string, ts: UnixMs): void {
   for (const child of CHILDREN[table] ?? []) {
@@ -501,43 +544,14 @@ export async function writeRow<K extends SyncableTable>(
 ): Promise<Result<void>> {
   return attempt(
     async () => {
-      const t = tableFor(table)
       const ts = now()
-      const occurredAt = occurredAtOf(table, values)
-      if (table === 'sessions' && occurredAt === null) {
-        throw new Error('a session cannot be written without occurredAt')
-      }
-      // One timestamp for the row and the queue entry. Reading the clock twice can
-      // produce two values and makes the pair look like two separate edits.
-      const insertRow = {
-        ...values,
-        ...(occurredAt === null ? {} : { localDay: toLocalDay(occurredAt) }),
-        createdAt: ts,
-        updatedAt: ts,
-      }
-
-      // The conflict branch updates everything the caller supplied EXCEPT the identity
-      // and the creation date. Writing `id` back to itself is harmless; writing
-      // `createdAt` is the bug above. `local_day` moves only if the instant did.
-      const { id: _identity, ...mutable } = values
-      const updateSet = {
-        ...mutable,
-        ...(occurredAt === null ? {} : { localDay: localDayOnUpdate(occurredAt) }),
-        updatedAt: ts,
-      }
-
       const db = getDb()
 
       // Synchronous, inside a real transaction. See runInTransaction in client.ts for
       // why drizzle's own transaction helper with an async callback silently fails to
       // roll back here.
       runInTransaction(() => {
-        db.insert(t)
-          .values(insertRow)
-          .onConflictDoUpdate({ target: t.id, set: updateSet })
-          .run()
-        assertParentsLive(db, table, values.id)
-        enqueue(db, table, values.id, 'upsert', ts)
+        upsertOne(db, table, values, ts)
       })
     },
     (cause) =>
@@ -546,6 +560,39 @@ export async function writeRow<K extends SyncableTable>(
         'Could not save that change',
         'Nothing else in your library was affected.',
       ),
+  )
+}
+
+/**
+ * Insert or update MANY rows, and enqueue every one of them, in ONE transaction.
+ *
+ * All or none. A 2000-book seed, and Slice 9's import, are one atomic action: a partial
+ * library is worse than none, and a partial import cannot be retried honestly.
+ *
+ * It exists for a second reason too: 2000 calls to `writeRow` are 2000 transactions, which
+ * on a phone is minutes rather than seconds. That is not a reason to bypass the write path,
+ * which is why this is IN it — every row still gets its `sync_queue` entry, its parent
+ * check and its derived `local_day`, through the same `upsertOne` that `writeRow` uses.
+ * One implementation, so the rules cannot hold in one place and not the other.
+ *
+ * The caller shows ONE toast for the batch, never one per row (04-SCREENS, global rules).
+ */
+export async function writeBatch<K extends SyncableTable>(
+  table: K,
+  rows: readonly RowFor<K>[],
+): Promise<Result<{ written: number }>> {
+  return attempt(
+    async () => {
+      if (rows.length === 0) return { written: 0 }
+      const ts = now()
+      const db = getDb()
+      runInTransaction(() => {
+        for (const values of rows) upsertOne(db, table, values, ts)
+      })
+      return { written: rows.length }
+    },
+    (cause) =>
+      writeFailure(cause, 'Could not save those changes', 'Your library was not changed.'),
   )
 }
 

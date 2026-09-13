@@ -24,12 +24,14 @@
  * It still cleans up after itself, and everything it creates is soft-deleted.
  */
 
-import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { File, Paths } from 'expo-file-system'
 
 import { checkpointWal, dangerouslyExecDevSql, DATABASE_NAME, getDb } from './client'
 import { books, reads, sessions, syncQueue } from './schema'
-import { restoreRow, softDelete, updateRow, writeRow } from './write'
+import { isCurrentRead } from './currentRead'
+import { progressAggregates } from './progressAggregates'
+import { restoreRow, softDelete, updateRow, writeBatch, writeRow } from './write'
 import {
   backupBeforeMigration,
   backupsDirectory,
@@ -39,6 +41,8 @@ import {
 } from './backup'
 import { SCHEMA_VERSION } from './migrate'
 import { seedSampleLibrary, SEEDED_TITLE } from './seed'
+import { currentPosition } from '@/domain/progress'
+import { totals } from '@/domain/stats'
 import { now, toLocalDay } from '@/lib/dates'
 import { newId } from '@/lib/ids'
 
@@ -111,7 +115,10 @@ async function checkOwnDatabase() {
     const library = new File(Paths.document, 'SQLite', 'reader.db')
     const mine = new File(Paths.document, 'SQLite', DATABASE_NAME)
     assert(mine.uri !== library.uri, 'the two databases resolve to the same file')
-    return `${DATABASE_NAME}; the library at ${library.exists ? 'reader.db is untouched' : 'reader.db does not exist here'}`
+    // The migration harness runs under node's SQLite (3.51.3 on 2026-09-13), which is newer
+    // than the one expo-sqlite bundles (3.50.3 the same day). Printed here so the gap is a number, not a memory.
+    const version = (await getDb().all<{ v: string }>(sql`select sqlite_version() as v`))[0]?.v
+    return `${DATABASE_NAME}; SQLite ${version}; the library at ${library.exists ? 'reader.db is untouched' : 'reader.db does not exist here'}`
   })
 }
 
@@ -955,6 +962,254 @@ async function checkRestoreCascade() {
   })
 }
 
+// ─── 10. THE SQL PROGRESS AGGREGATE AGREES WITH domain/stats.ts ──────────────
+
+/**
+ * `db/progressAggregates.ts` expresses the counting rule a second time, in SQL, so the
+ * Library does not load every session of every book. Two expressions of one rule drift
+ * apart silently, so this holds them equal: for real reads, and for a read built from the
+ * shapes that break counting — backwards, half-filled, recovered, timed audiobook.
+ */
+async function checkProgressAggregate() {
+  await check('10. the SQL progress aggregate agrees with contribution()', async () => {
+    // The awkward shapes, deliberately, so agreement is not only on well-formed seed data.
+    const { readId: awkward } = await devSession('Devcheck Aggregate Shapes', now() - DAY)
+    const shapes: Parameters<typeof writeRow<'sessions'>>[1][] = [
+      {
+        id: newId(),
+        readId: awkward,
+        occurredAt: now() - 2 * DAY,
+        format: 'pages',
+        fromPosition: 120,
+        toPosition: 40,
+        isTimed: 0,
+      },
+      {
+        id: newId(),
+        readId: awkward,
+        occurredAt: now() - 3 * DAY,
+        format: 'pages',
+        fromPosition: 30,
+        toPosition: null,
+        isTimed: 0,
+      },
+      {
+        id: newId(),
+        readId: awkward,
+        occurredAt: now() - 4 * DAY,
+        format: 'pages',
+        fromPosition: null,
+        toPosition: null,
+        durationSeconds: 1500,
+        isTimed: 1,
+      },
+      {
+        id: newId(),
+        readId: awkward,
+        occurredAt: now() - 5 * DAY,
+        format: 'minutes',
+        fromPosition: 0,
+        toPosition: 45,
+        durationSeconds: 1800,
+        isTimed: 1,
+      },
+      {
+        id: newId(),
+        readId: awkward,
+        occurredAt: now() - 6 * DAY,
+        format: 'minutes',
+        fromPosition: 45,
+        toPosition: 90,
+        isTimed: 0,
+      },
+      {
+        id: newId(),
+        readId: awkward,
+        occurredAt: now() - 7 * DAY,
+        format: 'pages',
+        fromPosition: null,
+        toPosition: null,
+        isTimed: 0,
+      },
+      {
+        id: newId(),
+        readId: awkward,
+        occurredAt: now() - 8 * DAY,
+        format: 'pages',
+        fromPosition: 10,
+        toPosition: 30,
+        durationSeconds: 900,
+        isTimed: 1,
+      },
+    ]
+    const wrote = await writeBatch('sessions', shapes)
+    assert(wrote.ok, 'could not write the awkward sessions')
+
+    const sampled = await getDb()
+      .select({ id: reads.id })
+      .from(reads)
+      .where(
+        and(
+          isNull(reads.deletedAt),
+          sql`exists (select 1 from sessions s where s.read_id = ${reads.id} and s.deleted_at is null)`,
+        ),
+      )
+      .orderBy(sql`random()`)
+      .limit(60)
+    const ids = [awkward, ...sampled.map((r) => r.id).filter((id) => id !== awkward)]
+
+    const aggregated = await getDb()
+      .select({ readId: reads.id, ...progressAggregates })
+      .from(reads)
+      .leftJoin(sessions, and(eq(sessions.readId, reads.id), isNull(sessions.deletedAt)))
+      .where(inArray(reads.id, ids))
+      .groupBy(reads.id)
+    const byRead = new Map(aggregated.map((a) => [a.readId, a]))
+
+    const mismatches: string[] = []
+    for (const readId of ids) {
+      const rows = await getDb()
+        .select({
+          format: sessions.format,
+          fromPosition: sessions.fromPosition,
+          toPosition: sessions.toPosition,
+          durationSeconds: sessions.durationSeconds,
+          occurredAt: sessions.occurredAt,
+          localDay: sessions.localDay,
+        })
+        .from(sessions)
+        .where(and(eq(sessions.readId, readId), isNull(sessions.deletedAt)))
+      const domain = totals(rows)
+      const sqlSide = byRead.get(readId)
+      if (!sqlSide) {
+        mismatches.push(`${readId.slice(0, 8)}: missing from the aggregate`)
+        continue
+      }
+      const pairs: [string, number | null, number | null][] = [
+        ['pages', domain.pages, sqlSide.pagesRead],
+        ['minutes', Math.round(domain.minutes * 1000), Math.round(sqlSide.minutesRead * 1000)],
+        ['unusable', domain.unusable, sqlSide.unusable],
+        ['page', currentPosition(rows, 'pages'), sqlSide.page],
+        ['minute', currentPosition(rows, 'minutes'), sqlSide.minute],
+      ]
+      for (const [name, a, b] of pairs) {
+        if (a !== b) mismatches.push(`${readId.slice(0, 8)} ${name}: domain ${a}, sql ${b}`)
+      }
+    }
+    assert(
+      mismatches.length === 0,
+      `SQL and domain disagree:\n${mismatches.slice(0, 8).join('\n')}`,
+    )
+    return `${ids.length} reads agree, including 7 awkward sessions`
+  })
+}
+
+// ─── 11. A BOOK WITH 500 SESSIONS: THE CASCADE, CORRECT AND MEASURED ─────────
+
+/**
+ * Filed by the Slice 0 review: "measure a 500-session delete before changing the cascade".
+ * The cascade runs synchronously on the JS thread, one UPDATE and one queue row per child,
+ * against a budget of 100ms perceived for a tap. This asserts it is CORRECT at that size,
+ * and records how long it takes so the decision about optimising it is made on a number.
+ */
+async function checkLargeCascade() {
+  await check('11. deleting and restoring a book with 500 sessions', async () => {
+    const { bookId, readId } = await devBook('Devcheck Cascade 500')
+    const rows: Parameters<typeof writeRow<'sessions'>>[1][] = []
+    for (let i = 0; i < 500; i += 1) {
+      rows.push({
+        id: newId(),
+        readId,
+        occurredAt: now() - (500 - i) * 60 * 1000,
+        format: 'pages',
+        fromPosition: i,
+        toPosition: i + 1,
+        isTimed: 0,
+      })
+    }
+    const wrote = await writeBatch('sessions', rows)
+    assert(wrote.ok, 'could not write 500 sessions')
+
+    const liveSessions = async () =>
+      (
+        await getDb()
+          .select({ n: sql<number>`count(*)` })
+          .from(sessions)
+          .where(and(eq(sessions.readId, readId), isNull(sessions.deletedAt)))
+      )[0]?.n ?? -1
+    const deletes = async () =>
+      (
+        await getDb()
+          .select({ n: sql<number>`count(*)` })
+          .from(syncQueue)
+          .where(and(eq(syncQueue.tableName, 'sessions'), eq(syncQueue.operation, 'delete')))
+      )[0]?.n ?? -1
+
+    const deletesBefore = await deletes()
+    const t0 = Date.now()
+    const del = await softDelete('books', bookId)
+    const deleteMs = Date.now() - t0
+    assert(del.ok && del.value.changed, 'the delete failed')
+    assert((await liveSessions()) === 0, 'sessions survived their deleted book')
+    const queued = (await deletes()) - deletesBefore
+    assert(queued === 500, `expected 500 session delete rows, got ${queued}`)
+
+    const t1 = Date.now()
+    const res = await restoreRow('books', bookId)
+    const restoreMs = Date.now() - t1
+    assert(res.ok && res.value.changed, 'the restore failed')
+    const back = await liveSessions()
+    assert(back === 500, `restore brought back ${back} of 500 sessions`)
+
+    return `delete ${deleteMs}ms, restore ${restoreMs}ms, 500 sessions each way`
+  })
+}
+
+// ─── 12. A BOOK IS LISTED ONCE, BY ITS CURRENT READ ──────────────────────────
+
+/**
+ * A book with a finished first read and a second read in progress appeared on both the
+ * Finished and the Reading tabs, because lists filtered each read by its own status. Every
+ * list of books now filters with `isCurrentRead`. This builds that shape and asserts the
+ * predicate selects exactly one read per book, the newest, including when an older read has
+ * been deleted.
+ */
+async function checkCurrentRead() {
+  await check('12. a re-read book is listed once, by its current read', async () => {
+    const { bookId, readId: first } = await devBook('Devcheck Current Read')
+    const finished = await updateRow('reads', first, { status: 'finished' })
+    assert(finished.ok && finished.value.changed, 'could not finish the first read')
+    const second = newId()
+    const wrote = await writeRow('reads', {
+      id: second,
+      bookId,
+      status: 'reading',
+      readNumber: 2,
+    })
+    assert(wrote.ok, 'could not start the second read')
+
+    const listed = async () =>
+      getDb()
+        .select({ id: reads.id, status: reads.status })
+        .from(reads)
+        .where(and(eq(reads.bookId, bookId), isNull(reads.deletedAt), isCurrentRead))
+    const now2 = await listed()
+    assert(now2.length === 1, `the book is listed ${now2.length} times`)
+    assert(now2[0]?.id === second, 'the listed read is not the newest')
+    assert(now2[0]?.status === 'reading', 'the book is on the wrong tab')
+
+    // Deleting the newest read makes the first one current again: nothing is hidden.
+    const gone = await softDelete('reads', second)
+    assert(gone.ok && gone.value.changed, 'could not delete the second read')
+    const after = await listed()
+    assert(
+      after.length === 1 && after[0]?.id === first,
+      'the older read did not become current',
+    )
+    return 'one row per book, the newest read; the older one takes over when the newest is deleted'
+  })
+}
+
 // ─── CLEANUP ─────────────────────────────────────────────────────────────────
 
 async function cleanup() {
@@ -1014,6 +1269,9 @@ export async function runDeviceChecks(): Promise<CheckResult[]> {
   await checkRestore()
   await checkLocalDay()
   await checkRestoreCascade()
+  await checkProgressAggregate()
+  await checkLargeCascade()
+  await checkCurrentRead()
   await cleanup()
 
   const runtime = results.filter((r) => r.kind === 'runtime')

@@ -67,7 +67,12 @@ export const books = sqliteTable(
     coverUrl: text('cover_url'),
     /** Downloaded copy. Covers must survive offline. */
     coverLocalPath: text('cover_local_path'),
-    /** Hex fallback derived from the title when there is no cover. */
+    /**
+     * A colour the READER chose for the no-cover fallback. NULL means derive it from the
+     * title at render (`coverColorFor` in ui/BookCover.tsx), and nothing ever stores the
+     * derived one: the same rule as `reads.started_at`. Decided in Slice 2, when books are
+     * first written, instead of dropping a column that ships in migration 0000.
+     */
     coverColor: text('cover_color'),
     publisher: text('publisher'),
     publishedYear: integer('published_year'),

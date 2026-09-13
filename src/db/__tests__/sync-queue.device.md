@@ -64,7 +64,7 @@ exercises it rather than reasoning about it. Assert on a device:
 
 ## 6. Restore, in both directions
 
-**6.** After restoring, a row written *after* the backup is gone and a row written before
+**6.** After restoring, a row written _after_ the backup is gone and a row written before
 it survives. This is what proves `closeDatabase()` is doing its job: on Android, deleting
 an open file leaves the connection on the unlinked inode, so without it the restore
 silently does nothing while reporting success.

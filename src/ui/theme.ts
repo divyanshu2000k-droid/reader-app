@@ -322,6 +322,8 @@ export const iconSize = {
   notice: 27,
   /** The plus on the raised Add tab. */
   raised: 23,
+  /** A rating star on book detail. */
+  star: 17,
 } as const
 
 /** Stroke weights: navigation icons at 1.9, emphasis heavier. */
@@ -485,6 +487,8 @@ export const rules = {
   loadingThresholdMs: 400,
   /** Undo toast lifetime. */
   toastMs: 5000,
+  /** A second press inside this window is the other half of a double tap. ui/pressGuard.ts */
+  pressDebounceMs: 600,
   /** Soft-deleted rows are purged after this. */
   trashRetentionDays: 30,
   /** Search input debounce. */

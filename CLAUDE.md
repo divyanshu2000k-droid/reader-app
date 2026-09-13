@@ -286,7 +286,13 @@ npm run format:check      # Prettier owns formatting; theme.ts is the one except
 
 EXPO_PUBLIC_DEVICE_PASS=1 npx expo start --clear   # runs the device pass on launch
 adb logcat -d | grep devcheck                      # its results
+EXPO_PUBLIC_SANDBOX_DB=1 npx expo start --clear    # a sandbox library; seed it from Settings
 ```
+
+**Both flags are honoured in development builds only.** A release build opens `reader.db`
+whatever was exported when it was built (`src/lib/databaseChoice.ts`). The first version
+honoured them everywhere, which could have shipped an app that put readers' books in a file
+the next build never opens.
 
 **That flag makes the whole app open `devcheck.db`, not your library**, and the pass
 refuses to run without it. The pass is destructive: it seeds, soft-deletes, renames
@@ -308,11 +314,49 @@ Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
-**Slice 1 is verified on a physical phone** (Nothing Phone 2a, Android 16, arm64 — the first
-arm64 build, earlier than Slice 6 planned). Typecheck, lint, Prettier clean. **139 tests
-pass under both `cmd` and POSIX `sh`**, 34 in each of UTC, IST and US Central; every count
-before 2026-09-10 was Windows-only (see item 13). Device pass on the phone:
-**RUNTIME 25/25 · COMPILE-TIME 1/1**, on `devcheck.db`, with the library's md5 unchanged.
+**Slice 2 is built and verified on the phone** (Nothing Phone 2a) against a 2000-book sandbox
+library: the Library's status tabs, book detail with sessions and earlier reads, the actions
+sheet (move, re-read, remove with confirm), the undo toast, and Recently Deleted with restore.
+Typecheck, lint, Prettier clean. **185 tests pass under both `cmd` and POSIX `sh`**, 34 in
+each of three time zones. Device pass: **RUNTIME 28/28 · COMPILE-TIME 1/1** on `devcheck.db`,
+with the library's md5 unchanged.
+
+**Owner-requested review, 2026-09-13, fixed and verified** (details in `DECISIONS.md`):
+- **Release builds ignore the sandbox and device-pass flags** (`lib/databaseChoice.ts`).
+  The sandbox is now `sandbox.db`.
+- **A book is listed once, on its current read** (`db/currentRead.ts`, device check 12,
+  watched failing twice). Re-read only after finished or DNF.
+- **`Sheet` had stopped opening:** a React render-phase update lost to a skipped no-op
+  update. An open sheet now renders from `visible` alone (`ui/sheetMount.ts`).
+- **Also:** tabs never show another tab's rows, one query per open, double taps are one
+  tap, InlineError contrast, one audiobook definition, a seed that refuses to double.
+- **Seen on the phone, light mode:** empty library, empty Recently Deleted and empty DNF;
+  seed refusal; double tap; the sheet 10/10; re-read (hero, Earlier reads, one row on
+  Reading, database agrees); the not-in-library deep link.
+- **Not seen, deferred by the owner and filed:** failure renders, and 200% font, 360 dp
+  and dark mode for the new states, are **required before Slice 3 is done**. TalkBack goes
+  to Slice 11. See `05-BUILD-PLAN.md`.
+
+**Slice 2, measured:**
+- **60fps holds on a release build:** p95 15 ms, and 1 missed deadline in about 5,700
+  frames flinging 1,040 rows. 120 Hz does not hold.
+- **Tab queries:** 42–251 ms at 2000 books, under the 400 ms skeleton threshold.
+- **Slow bulk writes, filed against Slice 9, before import:** a 500-session book deletes in
+  701 ms and restores in 1188 ms (debug). The 2000-book seed takes 146.7 s.
+
+**New since Slice 1:**
+- `EXPO_PUBLIC_SANDBOX_DB=1` for a seeded library that is not yours, in `sandbox.db`,
+  development builds only.
+- `writeBatch`.
+- Migration `0001` tested against a populated v1 database under node, with a positive
+  control.
+- Device check 10 holds the SQL progress aggregate equal to `domain/stats.ts`, and was
+  watched failing.
+- Found on the phone and fixed: tabs kept each other's scroll position, a missing author
+  left a blank line, and same-instant sessions listed backwards.
+
+**Next: Slice 3, the core loop (log a session).** Its first job is the Continue pill and Log
+pages, which Slice 2 left out rather than render going nowhere.
 
 **2026-09-12, the last review of this slice** (one pass per slice from here — see the rule
 above):

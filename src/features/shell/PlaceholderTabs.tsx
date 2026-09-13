@@ -17,7 +17,7 @@ export function AddScreen() {
       <Header title={nav.add.title} />
       <EmptyState
         title="Search, scan or type it in"
-        body="Finding books by title, ISBN or barcode arrives in the next update. Everything you add stays on this phone."
+        body="Finding books by title, ISBN or barcode is on its way. Everything you add will stay on this phone."
       />
     </Screen>
   )

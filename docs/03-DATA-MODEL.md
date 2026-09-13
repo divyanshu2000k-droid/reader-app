@@ -65,7 +65,7 @@ The work. Contains no progress and no dates, deliberately.
 | `total_minutes` | INTEGER | Audiobook length. Nullable |
 | `cover_url` | TEXT | Remote URL |
 | `cover_local_path` | TEXT | Downloaded copy. Covers must survive offline |
-| `cover_color` | TEXT | Hex fallback derived from the title when there is no cover |
+| `cover_color` | TEXT | A colour the **reader chose** for the no-cover fallback. NULL means derive it from the title at render; the derived colour is never stored (same rule as `reads.started_at`, decided in Slice 2) |
 | `publisher` | TEXT | |
 | `published_year` | INTEGER | |
 | `source` | TEXT | `google` · `openlibrary` · `manual` · `import` |
@@ -357,6 +357,22 @@ Parents, for this rule: `reads → books`, `sessions → reads`, `notes → book
 
 Enforced in `src/db/write.ts` and nowhere else. A `queries.ts` file cannot delete.
 
+**Many rows at once: `writeBatch(table, rows)`.** All rows and all their queue entries in one
+transaction, all or none, through the same `upsertOne` that `writeRow` uses, so every row
+still gets its derived `local_day`, its parent check and its sync entry. For seeds and
+import. **Measured slow at scale:** 2000 books, 2126 reads and 11,132 sessions took 146.7 s
+on the phone, dominated by per-row statement building. Slice 9 must fix that before import.
+
+**A book's current read is its live read with the highest `read_number`**
+(`src/db/currentRead.ts`). Every list of books filters with it, so a book appears once, on its
+current read's status. A new read can start only when the current one is finished or DNF.
+
+**How progress is aggregated for lists.** `src/db/progressAggregates.ts` holds the SQL that
+groups a read's sessions into pages read, minutes read, positions and uncountable sessions,
+shared by the Library and book detail. It expresses the counting rule in `domain/stats.ts`
+a second time, on purpose, so a list does not load every session. **Device check 10 holds
+the two equal** on sampled reads and on deliberately awkward sessions.
+
 ---
 
 ## Sync rules
@@ -372,7 +388,10 @@ Enforced in `src/db/write.ts` and nowhere else. A `queries.ts` file cannot delet
    pending entry in `sync_queue` is skipped. The un-pushed local edit is the newer one and
    will become authoritative on the next drain
 5. Deletes propagate as `deleted_at` being set, never as row removal
-6. A purge job removes rows with `deleted_at` older than 30 days, on both ends
+6. A purge job removes rows with `deleted_at` older than 30 days, on both ends. **Not built
+   until Slice 8.** Until then nothing is ever removed for good, and Recently Deleted lists
+   every deleted book rather than hiding those past 30 days: a row hidden but not purged is
+   data the reader can no longer see and has not lost
 7. `last_sync_at` lives in MMKV, not SQLite, so a database reset forces a full resync.
    It stores a **server** timestamp, taken from the pull response, never a local clock read
 

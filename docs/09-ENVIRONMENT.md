@@ -344,6 +344,33 @@ Two further constraints that are easy to trip over, both learned the hard way:
 - The emulator stays for the case where no phone is available at all. It is not the default
   and it is not worth an hour.
 
+## A sandbox library of 2000 books
+
+For building and measuring screens at scale without touching the reader's library:
+
+```
+EXPO_PUBLIC_SANDBOX_DB=1 npx expo start --dev-client --clear
+```
+
+The app then opens `sandbox.db`; Settings says so in its dev block. The device pass has its own
+file, `devcheck.db`, so passes do not fill the sandbox with soft-deleted rows.
+- **Seed 2000 books** writes 2000 books, about 2100 reads and 11,000 sessions through the real
+  write path, and takes **about two and a half minutes** on the Nothing Phone 2a.
+- **Seed 12 books, no DNF** is a new reader's library: small, with an empty DNF tab.
+- **Either refuses a sandbox that already has books.** Seeding twice would double it.
+- The same seed produces the same ids, titles and shapes; dates sit at the same distances
+  from the day it runs.
+
+**Release builds ignore both flags** and open the reader's library. The 2026-09-13 release
+scroll measurement used a sandbox release build, which is now impossible by design. Measuring
+scroll at Slice 11 needs a separate bench variant with its own package id, so it can never
+share a reader's data. Filed against Slice 11.
+
+**Measuring a list's scroll:** `adb shell dumpsys gfxinfo com.example.reader reset`, fling with
+`adb shell input swipe 540 1900 540 500 120` a dozen times, then `dumpsys gfxinfo` again.
+Report "Janky frames" and the percentiles. **A debug build's numbers are not the release
+budget**: measure 60fps on a release build.
+
 ## Running the device pass
 
 **It runs on its own database, and will not run on yours.** `EXPO_PUBLIC_DEVICE_PASS=1`

@@ -28,6 +28,8 @@
 
 import Constants from 'expo-constants'
 
+import { chooseDatabase, type DatabaseChoice } from './databaseChoice'
+
 /** Unset, or the empty string an unset `.env` line produces, both mean "not configured". */
 function value(raw: string | undefined): string | null {
   return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : null
@@ -41,10 +43,30 @@ export const config = {
    * db/client.ts. A pass that shares the reader's library has written to it twice.
    */
   devicePass: value(process.env.EXPO_PUBLIC_DEVICE_PASS) === '1',
+  /**
+   * A SANDBOX LIBRARY, for developing screens against thousands of seeded books without
+   * writing a single row to the reader's own library. Its own file, `sandbox.db`, separate
+   * from the device pass's, which leaves soft-deleted rows behind on every run. Honoured in
+   * development builds only: see `databaseChoice` below.
+   */
+  sandboxDb: value(process.env.EXPO_PUBLIC_SANDBOX_DB) === '1',
   supabaseUrl: value(process.env.EXPO_PUBLIC_SUPABASE_URL),
   supabaseAnonKey: value(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
   forceUpdateUrl: value(process.env.EXPO_PUBLIC_FORCE_UPDATE_URL),
 } as const
+
+/**
+ * Which database this build opens. `__DEV__` comes first: a release build opens the reader's
+ * library whatever flags were exported when it was built (lib/databaseChoice.ts).
+ */
+export const databaseChoice: DatabaseChoice = chooseDatabase(__DEV__, config)
+
+/**
+ * True when the app is NOT open on the reader's library: the device pass (`devcheck.db`) or a
+ * sandbox (`sandbox.db`). Every destructive dev tool refuses unless this is true, and it can
+ * only be true in a development build.
+ */
+export const usesSandboxDatabase: boolean = databaseChoice !== 'library'
 
 /**
  * The app's own version, as shown to the reader and as compared against the force-update
@@ -64,16 +86,16 @@ export const appVersion: string | null =
     ? Constants.expoConfig.version
     : null
 
-/**
- * The Android package id, used to derive the Play Store URL locally rather than trusting
- * a remote payload to name where the update button sends the reader. A build-time fact.
- */
 /** The app's name, from app.config.ts. One source, so a rename is one edit. */
 export const appName: string =
   typeof Constants.expoConfig?.name === 'string' && Constants.expoConfig.name.length > 0
     ? Constants.expoConfig.name
     : 'Reader'
 
+/**
+ * The Android package id, used to derive the Play Store URL locally rather than trusting
+ * a remote payload to name where the update button sends the reader. A build-time fact.
+ */
 export const androidPackage: string | null =
   typeof Constants.expoConfig?.android?.package === 'string'
     ? Constants.expoConfig.android.package

@@ -20,7 +20,18 @@ import type { ColorValue } from 'react-native'
 import { iconSize, iconStroke } from './theme'
 
 export type IconName =
-  'book' | 'plus' | 'chart' | 'settings' | 'download' | 'restore' | 'alert' | 'clock'
+  | 'book'
+  | 'plus'
+  | 'chart'
+  | 'settings'
+  | 'download'
+  | 'restore'
+  | 'alert'
+  | 'clock'
+  | 'back'
+  | 'more'
+  | 'reread'
+  | 'trash'
 
 interface Props {
   name: IconName
@@ -110,6 +121,38 @@ function paths(name: IconName) {
         <>
           <Circle cx="12" cy="12" r="9" />
           <Path d="M12 7.5V12l3 2" />
+        </>
+      )
+    // Book detail's header, from BookDetail.dc.html.
+    case 'back':
+      return (
+        <>
+          <Path d="M19 12H5" />
+          <Path d="M12 19l-7-7 7-7" />
+        </>
+      )
+    case 'more':
+      return (
+        <>
+          <Circle cx="12" cy="5" r="1" />
+          <Circle cx="12" cy="12" r="1" />
+          <Circle cx="12" cy="19" r="1" />
+        </>
+      )
+    // The actions sheet, from BookActions.dc.html.
+    case 'reread':
+      return (
+        <>
+          <Path d="M3 12a9 9 0 109-9" />
+          <Path d="M3 4v5h5" />
+        </>
+      )
+    case 'trash':
+      return (
+        <>
+          <Path d="M4 7h16" />
+          <Path d="M6 7l1 13h10l1-13" />
+          <Path d="M9 7V4h6v3" />
         </>
       )
   }

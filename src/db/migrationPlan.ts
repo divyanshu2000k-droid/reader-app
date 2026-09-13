@@ -36,13 +36,21 @@ export interface MigrationPlan {
   readonly fresh: boolean
 }
 
+/**
+ * Drizzle's rule for ONE journal entry: it applies when its `when` is later than the newest
+ * applied migration. Exported so the node migration harness applies migrations by this rule
+ * rather than by its own copy of it, which would drift from the one the app relies on.
+ */
+export function isPending(when: number, lastAppliedAt: number | null): boolean {
+  return lastAppliedAt === null || when > lastAppliedAt
+}
+
 /** @param journalWhens each journal entry's `when`, in journal order. */
 export function planMigrations(
   journalWhens: readonly number[],
   applied: AppliedMigrations,
 ): MigrationPlan {
   const last = applied.lastAppliedAt
-  const pending =
-    last === null ? journalWhens.length : journalWhens.filter((w) => w > last).length
+  const pending = journalWhens.filter((w) => isPending(w, last)).length
   return { pending, fresh: applied.count === 0 }
 }

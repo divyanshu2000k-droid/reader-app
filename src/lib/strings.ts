@@ -19,6 +19,8 @@ export const actions = {
   done: 'Done',
   notNow: 'Not now',
   tryAgain: 'Try again',
+  /** Present participle, so a retry button keeps its width while it works. */
+  tryingAgain: 'Trying again',
   undo: 'Undo',
   delete: 'Delete',
   remove: 'Remove',
@@ -75,6 +77,14 @@ export const session = {
   toMinutes: 'Now at minute',
 } as const
 
+/** `reads.status`, as the reader sees it. The Library's chips and the actions sheet. */
+export const status = {
+  reading: 'Reading',
+  want: 'Want',
+  finished: 'Finished',
+  dnf: 'DNF',
+} as const
+
 export const empty = {
   library: {
     title: 'No books yet',
@@ -104,6 +114,28 @@ export const empty = {
   trash: {
     title: 'Nothing deleted',
     body: 'Anything you remove waits here for 30 days.',
+  },
+  /**
+   * One per status tab. A tab that is empty is not the library being empty, and saying
+   * "No books yet" on the DNF tab of a 2000-book library would be a lie.
+   */
+  tab: {
+    reading: {
+      title: 'Nothing on the go',
+      body: 'Move a book to Reading from its page, and it will show up here.',
+    },
+    want: {
+      title: 'Nothing on the list',
+      body: 'Books you mean to read next live here.',
+    },
+    finished: {
+      title: 'Nothing finished yet',
+      body: 'Finished books collect here, with what you thought of them.',
+    },
+    dnf: {
+      title: 'Nothing abandoned',
+      body: 'Books you stop reading go here. The pages you did read still count.',
+    },
   },
 } as const
 
@@ -174,7 +206,7 @@ export const launch = {
      */
     body: 'Your books are still on this phone and nothing was deleted.',
     action: actions.tryAgain,
-    busy: 'Trying again',
+    busy: actions.tryingAgain,
   },
   /**
    * The app only knows when a timed session STARTED. It never claims to know how long the

@@ -19,32 +19,49 @@ src/
       add.tsx
       stats.tsx
     settings.tsx
-    book/[id].tsx
-    session/log.tsx
-    onboarding/
+    trash.tsx             Recently deleted (Slice 2)
+    book/[id].tsx         Book detail (Slice 2)
+    session/log.tsx       (Slice 3)
+    onboarding/           (Slice 11)
   features/               The real code.
-    library/
+    launch/               Gates, recovery sheet, kill switch (Slice 1)
+    library/              Status tabs and the list (Slice 2)
       components/
       hooks/
       queries.ts          All SQL for this feature
-    session/
-    import/
-    sync/
-    timer/
+      tabData.ts          Pure: a tab never shows another tab's rows
+    book/                 Detail, sessions, actions sheet (Slice 2)
+      sessionLine.ts      Pure: what a session row says
+    trash/                Recently deleted (Slice 2)
+    settings/
+    session/  import/  sync/  timer/     (later slices)
   db/
     schema.ts             Drizzle schema, single source of truth
     migrations/
-    client.ts
+    client.ts             The only raw SQLite handle
+    write.ts              The only write path: writeRow, writeBatch, updateRow, softDelete, restoreRow
+    progressAggregates.ts Shared SQL: a read's progress. Held equal to domain/stats.ts by check 10
+    currentRead.ts        Shared SQL: a book's current read. Every list of books filters with it
+    migrationPlan.ts      Pure: what is pending, by drizzle's rule
+    devchecks.ts          The device pass (dev only)
   ui/                     Shared primitives from the design system sheet
-    Button.tsx
-    Card.tsx
+    Button.tsx  Card.tsx  Sheet.tsx  Toast.tsx  InlineError.tsx  Stars.tsx  ...
+    pressGuard.ts         Pure: a double tap is one tap (usePressGuard)
+    sheetMount.ts         Pure: an open sheet always renders
+    useOnRefocus.ts       Reload on return, not on first mount
+    coverSource.ts        Pure: a cover's fallback chain
     theme.ts              Every token. No colour exists outside this file.
   domain/                 Business logic shared across features.
     progress.ts           Current page, percent complete
+    progressDisplay.ts    What progress says, and the ONE definition of an audiobook
+    reads.ts              When a re-read may start
     streaks.ts            Streak and goal calculation
     stats.ts              Aggregations, pages and hours kept separate
   lib/                    Generic utilities with no domain knowledge.
+    config.ts             The only reader of the environment
+    databaseChoice.ts     Pure: which database a build opens. Release: always the library
     dates.ts              All date handling. UTC in, local out.
+    devLog.ts             Dev diagnostics that do not raise LogBox
     ids.ts                UUID generation
     result.ts             Result type for fallible operations
     strings.ts            Shared and repeated copy only
@@ -370,7 +387,11 @@ Not comprehensive. Targeted at the things that silently corrupt data.
   journal's timestamps strictly increase
 - Import parsing against real Goodreads exports, including malformed ones
 - Sync queue replay idempotency
-- Migrations against a 2000 book seeded database
+- **Migrations against a populated database of the previous schema**, under node:
+  `src/db/__tests__/migrations.test.ts` runs the real SQL files the way drizzle's migrator
+  does, against 2000 books holding the shapes a new constraint forbids, with a positive control
+  that the unrepaired migration fails on the same fixture. Watched failing against three broken
+  versions of `0001`
 - **Anything the app records on the reader's behalf without their input** must be bounded
   by what the app actually knows. `recoveryPolicy.test.ts` is the model: the recovered
   session's elapsed time is an upper bound, never a duration
@@ -407,6 +428,9 @@ the I/O and calls it. The pattern, in `src/features/launch/`:
 - `gateOrder.ts` beside `useLaunchGates.ts`
 - `src/db/migrationPlan.ts` beside `migrate.ts`
 - `src/ui/toastQueue.ts` beside `Toast.tsx`
+- `src/ui/coverSource.ts` beside `BookCover.tsx`
+- `src/domain/progressDisplay.ts`, shared by the Library row and book detail
+- `src/features/book/sessionLine.ts` beside `SessionRow.tsx`
 
 What stays untested is the hook's state transition itself; that half is verified on a
 device, and the entry in `DECISIONS.md` says so.
@@ -445,6 +469,36 @@ state:
 | All SQL lives in `queries.ts` | a textual guard | a module boundary the type system can see |
 | Colours, spacing and type come from the theme | ESLint | branded token types on style props |
 | An input in a sheet is keyboard-checked on a phone | a doc rule | nothing automatic; it needs the device |
+
+**Every list of books filters with `isCurrentRead`** (`db/currentRead.ts`). A book's tab is
+its current read's status. Filtering each read by its own status put a re-read book on two
+tabs. Device check 12 holds it.
+
+**Every tappable that navigates or writes goes through `usePressGuard`**, or through
+`Button`, which uses it. A double tap on a Library row used to open book detail twice.
+
+**Never let whether something is shown depend on state derived during render.** `Sheet`
+derived `mounted` from `visible` with a render-phase `setState`. React dropped that update
+behind a skipped no-op one, and the actions sheet never opened. Render from the prop and let
+derived state only extend it (`ui/sheetMount.ts`).
+
+**A screen that loads in an effect reloads on return with `useOnRefocus`, never with a bare
+`useFocusEffect`.** That one also fires on mount, and every open ran its query twice.
+
+**The contrast test's `SPECIAL` list is not wired to the components.** It proves a pair is
+readable, not that a component uses that pair. When a component draws text on a coloured
+surface, add the pair, and name the component in the pair's label. A component quietly
+switching to another token is not caught.
+
+**A rule expressed twice needs a check that holds the copies equal.** The counting rule
+lives in `domain/stats.ts` and, for lists, in `db/progressAggregates.ts`. Device check 10
+asserts they agree. Do not add a third expression; import one of the two.
+
+**Mass-writing dev tools run on a sandbox database only, in development builds only.**
+`EXPO_PUBLIC_SANDBOX_DB=1` opens `sandbox.db`, and the device-pass flag opens `devcheck.db`.
+A release build ignores both (`lib/databaseChoice.ts`, tested, wiring included). The seeds
+refuse on the library, and refuse a sandbox that already has books. Nothing seeds,
+bulk-deletes or restores over the reader's library.
 
 ### Running the device pass
 

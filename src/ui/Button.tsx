@@ -11,7 +11,6 @@
  *     size, so the layout never jumps.
  */
 
-import { useCallback, useRef } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -23,7 +22,7 @@ import {
 } from 'react-native'
 
 import { font, motion, opacity, radius, rules, size, space, typeStyle } from './theme'
-import { now } from '@/lib/dates'
+import { usePressGuard } from './usePressGuard'
 import { useColors } from './useTheme'
 
 /**
@@ -50,9 +49,6 @@ interface Props {
   style?: StyleProp<ViewStyle>
 }
 
-/** Ignore repeat presses inside this window. One tap, one session. */
-const DEBOUNCE_MS = 600
-
 export function Button({
   label,
   onPress,
@@ -64,14 +60,8 @@ export function Button({
   style,
 }: Props) {
   const c = useColors()
-  const lastPress = useRef(0)
-
-  const handlePress = useCallback(() => {
-    const t = now()
-    if (t - lastPress.current < DEBOUNCE_MS) return
-    lastPress.current = t
-    onPress()
-  }, [onPress])
+  // One tap, one session. The rule and its window are shared with every other tappable.
+  const handlePress = usePressGuard(onPress)
 
   const isDisabled = disabled || busy
   /**

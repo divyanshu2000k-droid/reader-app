@@ -12,7 +12,7 @@
  * hardware back button, and the caller decides whether to warn before discarding.
  */
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Keyboard,
   Modal,
@@ -33,6 +33,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { font, motion, opacity, radius, rules, scrim, size, space, typeStyle } from './theme'
+import { shouldRenderSheet, shouldUnmountAfterExit } from './sheetMount'
 import { useColors } from './useTheme'
 
 interface Props {
@@ -50,29 +51,43 @@ export function Sheet({ visible, onClose, title, children, dismissable = true }:
   const { height } = useWindowDimensions()
   const reduced = useReducedMotion()
 
-  // The Modal must stay mounted through the exit animation, so `mounted` lags `visible`
-  // on the way out. Adjusting it during render rather than in an effect is React's
-  // documented pattern for deriving state from changed props, and avoids the cascading
-  // render that a setState-in-effect would cause.
+  // The Modal stays mounted through the exit animation, so `exiting` lags `visible` on the
+  // way out. An OPEN sheet never depends on that state: see sheetMount.ts for the render-phase
+  // update React dropped, which kept Book actions from ever appearing. Losing `exiting` can
+  // only cut an exit animation short.
   const [prevVisible, setPrevVisible] = useState(visible)
-  const [mounted, setMounted] = useState(visible)
+  const [exiting, setExiting] = useState(false)
   if (prevVisible !== visible) {
     setPrevVisible(visible)
-    if (visible) setMounted(true)
+    setExiting(!visible)
   }
 
   const progress = useSharedValue(visible ? 1 : 0)
 
+  // The exit completion runs later, on the UI thread, and must not end the exit of a sheet
+  // that has since been reopened.
+  const visibleRef = useRef(visible)
+  const endExitIfStillHidden = useCallback((finished: boolean | undefined) => {
+    if (shouldUnmountAfterExit(finished, visibleRef.current)) setExiting(false)
+  }, [])
+
+  // A sheet that mounts closed runs no exit animation: there is nothing to animate, and its
+  // completion would dispatch a no-op state update, which is what set up the dropped update.
+  const hasOpened = useRef(visible)
+
   useEffect(() => {
+    visibleRef.current = visible
+    if (visible) hasOpened.current = true
+    if (!hasOpened.current) return
     const duration = reduced ? motion.reducedMotionDuration : motion.sheetUp.duration
     if (visible) {
       progress.value = withTiming(1, { duration })
       return
     }
     progress.value = withTiming(0, { duration }, (finished) => {
-      if (finished) runOnJS(setMounted)(false)
+      runOnJS(endExitIfStillHidden)(finished)
     })
-  }, [visible, reduced, progress])
+  }, [visible, reduced, progress, endExitIfStillHidden])
 
   const scrimStyle = useAnimatedStyle(() => ({
     opacity: withTiming(progress.value, {
@@ -106,7 +121,7 @@ export function Sheet({ visible, onClose, title, children, dismissable = true }:
     }
   }, [])
 
-  if (!mounted) return null
+  if (!shouldRenderSheet(visible, exiting)) return null
 
   return (
     <Modal
