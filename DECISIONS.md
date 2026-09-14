@@ -630,6 +630,255 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-14 · Descriptions, genres and "Read a sample": planned by the owner
+**The owner's decision, after seeing what Google actually returns.** Book metadata richer than
+title and author feeds three later features, so it is captured from Slice 5, not when each
+feature is built. Every book added before then would otherwise need a backfill.
+
+**What the real responses hold** (20 volumes each for "piranesi clarke" and "godaan"):
+- **Description:** 6 and 11 of 20. It is optional: a book without one shows nothing.
+- **Categories:** 15 and 20 of 20.
+- **Average rating:** 1 and 4 of 20, from 1 or 2 ratings each. **Rejected:** noise presented as
+  a verdict.
+- **Readable preview:** sample pages 5 and 8; the whole book 11 and 0, and all 11 were
+  out-of-copyright catalogues; nothing 4 and 12.
+
+**Slice 5 (planned):**
+- **Store `books.description` and `books.categories`**, in a migration, tested against a
+  populated database like `0001`. Both are reader-editable like every metadata field.
+- **Short summary on book detail:** a few lines, expandable. Nothing at all when there is none.
+- **"Read a sample" as a link to Google's preview page**, opened in the browser. Shown only when
+  Google says pages are viewable (`accessInfo.viewability` is PARTIAL or ALL_PAGES). A link to
+  a page with nothing to read is a broken promise.
+- **Open Library:** its search gives `subject` (messy, hundreds per work) and no description;
+  that needs one request to the work (`/works/<id>.json`). Decide in the slice whether that
+  request is worth it or whether Google alone supplies descriptions.
+- **Books already in the library:** fill description and categories when their detail is next
+  opened online, once per launch, the way covers are retried. Never overwrite a reader's edit.
+
+**Slice 7 (planned): genre breakdown and a genre filter on the Library.** Slice 7 already listed
+a genre breakdown, and nothing supplied genres; this is where they come from.
+- **Raw categories are not genres.** Google's are like "Fiction / Fantasy / General", and Open
+  Library's subjects run from "Fiction" to "Accessible book". A pure, tested function maps them
+  to a short genre list.
+- **The reader can set or correct a genre in Edit details.** A manual book has none otherwise.
+- **Both stay free** (08-MONETISATION: a reader's own genres are never sold).
+
+**Slice 11 (planned): the Embedded Viewer API, read the sample inside the app.**
+- **Why it waits:** it is a JavaScript API for web pages, so it needs a WebView, a native module
+  and a rebuild. It needs the network, in an app that otherwise works fully offline. And most
+  books have nothing to show (12 of 20 for "godaan").
+- **Until then:** Slice 5's browser link.
+- **Before launch:** read Google's Books API terms and Branding Guidelines, which may require
+  attribution wherever Google's data is shown. That would affect book detail's layout.
+
+## 2026-09-14 · Google Books quota is shared by every reader: filed against launch
+**Raised by the owner.** The key is in the app, so its daily quota (about 1,000 requests by
+default; see the project's Quotas page) is shared by every install. It is not per reader.
+- **How fast it goes:** a search is one Google request after a 300 ms pause in typing. Finding
+  and adding a book is typically 2 to 5 requests. A few hundred readers adding books on one day
+  would use it up, well before the app is popular.
+- **What happens today when it runs out:** Google returns 429, which the app treats as
+  "unavailable". Search still works from Open Library, but every search that day shows "Google
+  Books did not answer". No data is lost and nothing crashes. It is a degraded, noisy search.
+- **Already in the app's favour:** no automatic retries (`retry: 0`), a repeated term is served
+  from memory for the session, and 2 characters minimum.
+
+**Filed against Slice 11 (before launch), in this order:**
+1. **Quota exhausted is its own state, not an error.** On a 429 carrying Google's quota reason,
+   stop asking Google until the quota resets (midnight Pacific), and say nothing: Open Library
+   alone is a normal search. A pure function with a test on a captured 429, like the offline
+   classifier.
+2. **Ask Google for a higher quota** from the Books API Quotas page, with the expected numbers.
+3. **Measure requests per added book** from real use once there is any, instead of this estimate.
+
+**Filed against Slice 8 (the backend exists then), only if the numbers say so:** send searches
+through a Supabase Edge Function. The key leaves the APK, it can be rotated without an app update,
+and popular searches are shared across readers. Before building it, read Google's terms on caching
+API results; a shared cache may not be allowed. Not now: it puts a server between the reader and
+search, and there is no traffic to justify one.
+
+## 2026-09-14 · Google Books switched on: real responses, and a key restriction that would have broken it
+**The owner created a key; it is in `.env` (gitignored), and Google Books is verified on the phone.**
+- **On the phone (sandbox):** "godaan" showed "Searching Google Books and Open Library" and settled
+  in 5.7 s. Google's editions came first, with covers, publishers and page counts, and Devanagari
+  titles were intact.
+- **Adding a Google result:** "Godaan (Hindi)" was added to Want to read. The pulled database had
+  `source` `google`, ISBN-13 and ISBN-10, the publisher, 2018 and 414 pages. The cover was saved to
+  the phone as an 11,791 B file, so Google's http-to-https cover link downloads.
+
+**Real responses captured, replacing guesses** (`google-real-*.json`, trimmed to the fields the
+parser reads, and labelled as captures).
+- **What the tests now assert:** all 20 volumes are read. Also: an OTHER identifier ("STANFORD:…")
+  is no ISBN; a missing imageLinks, missing identifiers, pageCount 0 and missing authors are
+  absent, not values. One book from both real sources is one result.
+- **Retired:** the hand-written empty response; the real one has the same shape. The hand-written
+  Piranesi fixture stays, relabelled, only for shapes the captures lack (ISBN-10 only).
+- **Watched failing:** no https upgrade on the cover (2 failures), and skipping volumes without
+  authors (5). 321 of 321 clean.
+
+**The key is restricted to the Books API only, NOT to the Android app. Correcting what Slice 4
+wrote.**
+- **What Slice 4 wrote:** restrict the key to the app's package and signing certificate.
+- **Why that breaks search:** with that restriction Google only accepts requests carrying
+  `X-Android-Package` and `X-Android-Cert` headers. Google's own Android client libraries send
+  them; the app's plain `fetch` does not, so every Google search would be refused.
+- **Why it would have been silent:** a refused request is "unavailable", and Open Library still
+  answers. Search would have looked fine, with a "Google Books did not answer" line nobody reads
+  as a broken key.
+- **Why the package restriction is not possible yet anyway:** the package is still the placeholder
+  `com.example.reader`.
+- **Filed against Slice 11 (release):** once the real package id and upload certificate exist,
+  send both headers from `features/add/api.ts`, restrict the key to them, and check on a release
+  build that Google still answers.
+- **Until then the risk is quota, not data:** the key is in the bundle and could be copied, but it
+  can only spend this project's Books API quota.
+
+**Seen in real results, filed and not fixed (one review pass; this is ranking polish):** for
+"godaan", Premchand's plain "Godaan" ranked 7th. "Godaan: Screenplays by Gulzar" and an Indonesian
+title containing the word ranked above it. Every result matching all typed words has the same
+score, so the order is the order the sources returned. A title that IS the typed words should
+rank first. Filed against the next time search is touched.
+
+## 2026-09-14 · Tab screens padded twice for the navigation bar
+**Found on the phone, pointed out by the owner** ("the footer space is increased"). `TabBar`
+pads itself by the system inset, and `Screen` also padded every screen by that inset plus 22 dp,
+tab screens included. **Library, Add and Stats each lost about 75 dp** to an empty band above
+the tab bar, with the Library's rows cut off above it. Present since Slice 1; nothing measured
+it.
+- **Chose:** `Screen` takes `above="tabBar"` on the three tab screens, which drops the bottom
+  padding. Every other screen keeps it: the logger and forms have no tab bar, and their Save
+  must clear the navigation bar. The Library list gained a section gap after its last row.
+- **Measured on the phone:** the Library and Add lists ended at y=1996 px and now end at 2117,
+  meeting the tab bar. The logger's Save still ends at 2230, above the navigation bar at 2349.
+- **Held by:** `ui/__tests__/screenInsets.test.ts`. It reads the `(tabs)` routes, follows each
+  to its feature screen, requires `above="tabBar"` there and forbids it everywhere else. It
+  carries a control, and went red with Stats padding again.
+
+## 2026-09-14 · Slice 4: adding books, decisions as they were made, and what the phone found
+**State: built and verified on the phone** (Nothing Phone 2a, sandbox library), online and in
+airplane mode, including the two cases the owner named:
+- the network killed mid-search, with Add manually still working;
+- a searched book still fully usable offline, cover and metadata, after a cold start.
+
+Phone checks and results are in `docs/device-checks/slice-4.md`.
+
+**Found on the phone: offline search said the database was broken.**
+- **What the screen showed:** in airplane mode every search displayed "Could not reach the book
+  database" and Try again, not the offline banner and the books searched before.
+- **Why the tests missed it:** `searchStatus.test.ts` passed. It asserted that a `TypeError`
+  means offline, which is what React Native's old fetch threw.
+- **What the phone actually threw:** a logged probe showed Expo's fetch rejects with a
+  `FetchError`, name "Error", message `fetch failed: java.net.UnknownHostException: Unable to
+  resolve host "openlibrary.org": No address associated with hostname`.
+- **Fixed:** `failureKind` now reads what happened: no DNS, no route or no connection is
+  offline; a bad status or a timeout is unavailable.
+- **Held by:** a test using that exact message and error shape. It was watched failing with the
+  fix removed.
+- **Re-verified on the phone** from a fresh launch and with the network killed mid-search: the
+  banner in 3 s, remembered results, no error card.
+- Added to the silent-bug list in `CLAUDE.md` (item 17).
+
+**Google Books needs an API key; without one it is not asked.**
+- **What happened:** unkeyed requests were refused outright on 2026-09-14 (HTTP 429, quota
+  limit 0).
+- **Chose:** `EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY`, read in `config.ts`. Unset, search uses Open
+  Library alone and says "Searching Open Library".
+- **Over:** asking Google anyway, which would fail on every keystroke and show "Google Books did
+  not answer" on every search.
+- **The owner's action:** create a key (Google Cloud, Books API). The Google parser was tested
+  against a fixture HAND-WRITTEN from the documented schema. **Superseded the same day:** the key
+  exists, real responses are captured, and the key is restricted to the Books API only, not the
+  app (see "Google Books switched on" above).
+
+**Open Library returns works, not editions, and fuzzy matches.**
+- **An Open Library hit carries no ISBN and no publisher of its own.** Its ISBNs (every
+  edition's) are kept for merging and for recognising a book already in the library. Storing
+  one would invent which edition the reader holds. Page count is the median across editions,
+  kept because the reader can edit it.
+- **"piranesi clarke" returned Gibbon and Dickens.** Results matching none of the typed words
+  are dropped, and those matching every word rank first, for both sources (`searchMerge.ts`).
+  A mutation found the Google half untested; the test was added and watched failing.
+- Merged by ISBN, then by title and first author, with Google first (ADR 005).
+
+**A result already in the library opens that book** (by any ISBN, then title and author)
+instead of adding a second copy, which would split its sessions across two books. Another
+edition of the same work counts as the same book.
+
+**Every result is remembered in `metadata_cache`, and offline search reads it.**
+- **Where it is written:** `cacheSearchResults` lives in `write.ts`, the only file allowed to
+  write. It is local only: no queue row, no change signal. Device check 14b holds that.
+- **Offline:** the Add screen shows books searched before, and says so.
+
+**A book and its first read are written together: `writeTogether`.**
+- **The risk:** two calls could leave a book with no read, which no list shows and no screen
+  opens.
+- **Held by:** device check 14a, where a colliding read rolls back the new book too. Watched
+  failing: with one transaction per row, "the new book survived its failed read".
+
+**Covers are downloaded to the app's documents on add** (`db/coverFiles.ts`).
+- Best effort and never blocking.
+- Retried when the book is next opened online, at most once per launch.
+- **On the phone:** a 16.7 KB local file was recorded. After a cold start in airplane mode, with
+  React Native's memory cache gone, the real cover showed from that file.
+- **Held by:** device check 14c. Watched failing with the path never recorded.
+- **Noted:** the device pass's own test covers land in the same `covers/` folder, named by book
+  id. Harmless, and cleaned up with the purge in Slice 8.
+
+**Search your library matches in TypeScript, not SQL `LIKE`.**
+- **Why:** SQLite's LIKE ignores case only for ASCII and never ignores accents.
+- **On the phone:** "toibin" found Tóibín and highlighted it.
+- **Shared rule:** both searches use `domain/searchText.ts`, one rule in one place.
+- **Every word must match, as a prefix.** Seen on the phone: "offline" did not find
+  "ovOffline", correctly.
+
+**Manual entry and Edit details are one full-screen form** (`BookFormScreen.tsx`).
+- **Required:** only the title.
+- **Length:** pages for print, minutes for an audiobook, never both.
+- **ISBN:** must pass its checksum.
+- **Cover:** a colour, not a photo. Photo covers are Plus's "custom covers" (08-MONETISATION).
+- **Keyboard, seen on the phone:** with the keyboard up on the last field, "Add to library"
+  stays on screen above it.
+
+**"I already finished it" moves the book to Finished, status only**, as Slice 3's "I finished
+the book" does. The finish flow with rating and date is Slice 5's.
+
+**Not built, deliberately:**
+- **The barcode button:** no scanner this slice, and a button that does nothing is worse than
+  none.
+- **"More editions":** each result is already an edition or a work, and grouping needs data
+  neither API returns reliably.
+- **The logging FAB:** the Add tab stays Add a book (Slice 3's revisit, closed).
+
+**Forced failures gained two:** a search server error, which shows the error card and not the
+offline banner (seen on the phone), and a failed add or edit, which keeps the form and title and
+asks before discarding (seen).
+
+**Watched failing, node:** 10 of 10 mutations went red after the added test:
+1. Non-matching results kept.
+2. An Open Library publisher.
+3. Library match without ISBN.
+4. A bad ISBN checksum.
+5. An edit rewriting the page count.
+6. The phone's offline error as unavailable.
+7. Library search needing one word.
+8. A corrupt remembered result accepted.
+9. `writeTogether` without the change signal.
+10. The narrow-row pill rule.
+
+Clean: 313 of 313.
+
+**Watched failing, device:** 14a and 14c as above, each 31/32. Clean 32/32 before and after,
+with sources byte-identical and `reader.db` md5 unchanged throughout.
+
+**My script errors, discarded, not counted:**
+- **An accidental save:** a swipe started over the Save button with the keyboard up and saved a
+  half-filled "Godaan". The app saved exactly what was entered.
+- **An uncleared title:** too few backspaces left the prefilled title in place.
+- **A mid-animation tap:** a fault chip was tapped during Settings' opening animation.
+
+Each was re-run with the step checking its state.
+
 ## 2026-09-14 · Slice 3 on the phone, part two: layout, light mode and a timezone
 **The owner changed the settings.** The phone reports:
 - **Font scale 1.3.** That is the largest the phone's Display setting reached, so **200% is

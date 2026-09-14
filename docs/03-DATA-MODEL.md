@@ -76,6 +76,10 @@ The work. Contains no progress and no dates, deliberately.
 
 Every metadata field is user editable. This is a product requirement, not a nicety.
 
+**Planned for Slice 5, not yet in the schema:** `description` (TEXT, nullable) and `categories`
+(the source's raw categories; the exact shape is decided in the slice). Genres are derived from
+categories in Slice 7, plus a genre the reader sets. See `DECISIONS.md`, 2026-09-14.
+
 ### `reads`
 
 One pass through a book. This table is what makes re-reads work.
@@ -233,6 +237,22 @@ Keyed by source and source id, with the raw JSON payload and a fetch timestamp.
 books. When a user adds a book, the relevant fields are copied into `books` and that copy
 is authoritative from then on. Refreshing metadata later never overwrites a field the user
 has edited. Local only, never syncs.
+
+**As built in Slice 4:**
+- **Written only by `cacheSearchResults` in `write.ts`**, which queues nothing and signals no
+  library change.
+- **Each payload is one normalised search result.** It is read back defensively: a payload
+  that is not one is ignored, never half-read.
+- **Offline, the Add screen searches it.**
+- **An Open Library result is a work:** its `books` copy has no ISBN and no publisher, rather
+  than one edition's picked at random.
+
+**`books.cover_local_path` is filled by a download**, into the app's documents under
+`covers/<book id>.jpg`, after a book is added from search. It is retried when the book is next
+opened online. Adding never waits for it.
+
+**A new book and its first read are written by `writeTogether`,** one transaction for rows of
+different tables. Written separately, a failure between them left a book with no read.
 
 ---
 

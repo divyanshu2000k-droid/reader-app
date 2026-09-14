@@ -1,0 +1,5 @@
+{
+  "_captured": "REAL response from the Google Books v1 volumes API, 2026-09-14, q=\"zzqxjvwkplm qqzzxv\", maxResults=20, printType=books, as the app requests it. Trimmed to the volumeInfo fields the parser reads; accessInfo, saleInfo, searchInfo, etag, selfLink and description removed. Item order and every kept value are as returned.",
+  "kind": "books#volumes",
+  "totalItems": 0
+}

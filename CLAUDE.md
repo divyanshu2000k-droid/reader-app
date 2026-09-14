@@ -101,6 +101,12 @@ The four, as evidence:
    the row back and the restore queued; book detail, focused the whole time, had no reason to
    re-read. Every part worked. Found only by tapping Undo on a phone and looking at the list.
    `write.ts` now signals every committed change (`db/changes.ts`).
+17. **Offline search told the reader the book database was broken.** The test said a
+   `TypeError` means offline, which is what React Native's old fetch threw, and it passed. The
+   fetch Expo installs rejects with a `FetchError` named "Error". In airplane mode every search
+   showed "Could not reach the book database" and Try again, instead of the offline banner and
+   the books searched before. Found only by turning the network off on a phone and logging the
+   real error; the test now uses that exact error.
 
 Add another if the theme counts: `font.family` was declared from the first commit and
 applied by nothing, so the entire app rendered in the wrong typeface without a single
@@ -318,6 +324,26 @@ Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
+**Slice 4 is built and verified on the phone, online and in airplane mode.**
+- **What it does:** search Open Library (and Google Books, once an API key is set) with results
+  merged, ranked by the typed words, and remembered; "Which shelf?"; Add manually and Edit
+  details as one form; Search your library; the offline banner and remembered results.
+- **Covers:** downloaded on add, so they show offline.
+- **Checks:** 321 tests pass under `cmd` and `sh`. Device pass RUNTIME 32/32 · COMPILE-TIME 1/1, with check 14
+  watched failing two ways.
+- **The owner's cases, both passed:** the network killed mid-search showed the banner in 3 s,
+  remembered results and Add manually. A searched book showed its real cover and metadata after
+  a cold start in airplane mode.
+- **Found on the phone and fixed:** offline search showed a broken-database error (item 17
+  above).
+- **Google Books is on and verified on the phone:** the owner's key is in `.env`, restricted to
+  the Books API only. Restricting it to the app would break search until `api.ts` sends the
+  Android headers (Slice 11). Tests run on real Google captures; 321 tests pass.
+
+**Next: Slice 5, finishing a book.** "I finished the book" and "I already finished it" move a
+read to Finished with no rating or date until then. The owner added book descriptions and
+categories, a summary on detail, and a "Read a sample" link to it (`05-BUILD-PLAN.md`).
+
 **Slice 3 is built and verified on the phone, except four checks that need the owner to change
 phone settings.**
 - **What it does:** log a session for any past date and time (Android's pickers), edit and
@@ -379,9 +405,6 @@ with the library's md5 unchanged.
   watched failing.
 - Found on the phone and fixed: tabs kept each other's scroll position, a missing author
   left a blank line, and same-instant sessions listed backwards.
-
-**Next: Slice 3, the core loop (log a session).** Its first job is the Continue pill and Log
-pages, which Slice 2 left out rather than render going nowhere.
 
 **2026-09-12, the last review of this slice** (one pass per slice from here — see the rule
 above):

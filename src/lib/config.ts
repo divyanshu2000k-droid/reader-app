@@ -53,6 +53,12 @@ export const config = {
   supabaseUrl: value(process.env.EXPO_PUBLIC_SUPABASE_URL),
   supabaseAnonKey: value(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
   forceUpdateUrl: value(process.env.EXPO_PUBLIC_FORCE_UPDATE_URL),
+  /**
+   * Google Books, for search (02-ARCHITECTURE, ADR 005). Unset = Google is not asked and search
+   * uses Open Library alone: unkeyed requests were refused outright on 2026-09-14. A public key,
+   * meant to be restricted to this app's package and signing certificate in Google Cloud.
+   */
+  googleBooksApiKey: value(process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY),
 } as const
 
 /**

@@ -1,0 +1,471 @@
+{
+  "_captured": "REAL response from the Google Books v1 volumes API, 2026-09-14, q=\"godaan\", maxResults=20, printType=books, as the app requests it. Trimmed to the volumeInfo fields the parser reads; accessInfo, saleInfo, searchInfo, etag, selfLink and description removed. Item order and every kept value are as returned.",
+  "kind": "books#volumes",
+  "totalItems": 300,
+  "items": [
+    {
+      "kind": "books#volume",
+      "id": "xUzVEQAAQBAJ",
+      "volumeInfo": {
+        "title": "Godaan (Hindi)",
+        "authors": ["Munshi Premchand"],
+        "publisher": "Prakash Books India Pvt Ltd",
+        "publishedDate": "2018-02-01",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9789362140944"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "9362140942"
+          }
+        ],
+        "pageCount": 414,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=xUzVEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=xUzVEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "hi"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "3KohEAAAQBAJ",
+      "volumeInfo": {
+        "title": "Godaan: Screenplays by Gulzar",
+        "authors": ["Gulzar"],
+        "publisher": "Roli Books Private Limited",
+        "publishedDate": "2017-04-19",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9789351941118"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "9351941116"
+          }
+        ],
+        "pageCount": 239,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=3KohEAAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=3KohEAAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "oeKP-bZHO08C",
+      "volumeInfo": {
+        "title": "Munshi Premchand's Godaan",
+        "subtitle": "Masterpiece of Hindi Literature",
+        "authors": ["Premacanda"],
+        "publisher": "Pustak Mahal",
+        "publishedDate": "2009",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9788122310672"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "8122310672"
+          }
+        ],
+        "pageCount": 314,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=oeKP-bZHO08C&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=oeKP-bZHO08C&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "624xEQAAQBAJ",
+      "volumeInfo": {
+        "title": "Godaan (Hindi) - गोदान",
+        "authors": ["Premchand"],
+        "publisher": "Eka",
+        "publishedDate": "2023",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9789357767651"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "9357767657"
+          }
+        ],
+        "pageCount": 454,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=624xEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=624xEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "hi"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "99Qe0jfpQMMC",
+      "volumeInfo": {
+        "title": "Godaan / गोदान",
+        "authors": ["Premchand"],
+        "publisher": "Orient Paperbacks",
+        "publishedDate": "2012",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_10",
+            "identifier": "8122204996"
+          },
+          {
+            "type": "ISBN_13",
+            "identifier": "9788122204995"
+          }
+        ],
+        "pageCount": 308,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=99Qe0jfpQMMC&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=99Qe0jfpQMMC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "hi"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "sTCOAAAAMAAJ",
+      "volumeInfo": {
+        "title": "NU, khittah, dan godaan politik",
+        "publishedDate": "1994",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015032351192"
+          }
+        ],
+        "pageCount": 108,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=sTCOAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=sTCOAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "id"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "CU3VEQAAQBAJ",
+      "volumeInfo": {
+        "title": "Godan",
+        "authors": ["Premchand"],
+        "publisher": "Prakash Books India Pvt Ltd",
+        "publishedDate": "2025-02-28",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9789362144942"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "9362144948"
+          }
+        ],
+        "pageCount": 418,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=CU3VEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=CU3VEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "hi"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "H3pjAAAAMAAJ",
+      "volumeInfo": {
+        "title": "Indian Literature",
+        "publishedDate": "2005",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015066019483"
+          }
+        ],
+        "pageCount": 690,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=H3pjAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=H3pjAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "V4TAijRyKikC",
+      "volumeInfo": {
+        "title": "Godaan",
+        "authors": ["Premchand"],
+        "publisher": "Rajpal & Sons",
+        "publishedDate": "2016-12-26",
+        "pageCount": 332,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=V4TAijRyKikC&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=V4TAijRyKikC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "hi"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "GnksAAAAYAAJ",
+      "volumeInfo": {
+        "title": "The Book Review",
+        "publishedDate": "2003",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UVA:X004817432"
+          }
+        ],
+        "pageCount": 496,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=GnksAAAAYAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=GnksAAAAYAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "nwPJ0QEACAAJ",
+      "volumeInfo": {
+        "title": "Godaan in Hindi by Munshi Premchandra [Paperback] MUNSHI PREMCHAND",
+        "authors": ["Munshi Premchand"],
+        "publisher": "DD Sales and Distributors",
+        "publishedDate": "2022-10-19",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_10",
+            "identifier": "9395279036"
+          },
+          {
+            "type": "ISBN_13",
+            "identifier": "9789395279031"
+          }
+        ],
+        "pageCount": 0,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=nwPJ0QEACAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=nwPJ0QEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "hi"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "NT0qAQAAIAAJ",
+      "volumeInfo": {
+        "title": "Encyclopaedia of Great Indian Novels and Novelists",
+        "authors": ["Ravi Narayan Pandey"],
+        "publishedDate": "2008",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "STANFORD:36105210604919"
+          }
+        ],
+        "pageCount": 270,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=NT0qAQAAIAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=NT0qAQAAIAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "KrZjAAAAMAAJ",
+      "volumeInfo": {
+        "title": "Terms of Address and Second Person Pronominal Usage in Hindi",
+        "subtitle": "A Sociolinguistic Study",
+        "authors": ["K. S. Misra"],
+        "publisher": "Chandigarh : Bahri Publications",
+        "publishedDate": "1977",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015012284058"
+          }
+        ],
+        "pageCount": 100,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=KrZjAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=KrZjAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "tXoHAQAAMAAJ",
+      "volumeInfo": {
+        "title": "Hindi",
+        "subtitle": "Language, Discourse, [and] Writing",
+        "publishedDate": "2000",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "IND:30000075053441"
+          }
+        ],
+        "pageCount": 654,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=tXoHAQAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=tXoHAQAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "tBozEQAAQBAJ",
+      "volumeInfo": {
+        "title": "Godan - Premchand",
+        "authors": ["Premchand"],
+        "publisher": "Bookly Digital",
+        "publishedDate": "2024-11-22",
+        "pageCount": 617,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=tBozEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=tBozEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "m9tlAAAAMAAJ",
+      "volumeInfo": {
+        "title": "John Steinbeck and His Contemporaries",
+        "authors": ["Stephen K. George", "Barbara A. Heavilin"],
+        "publisher": "Scarecrow Press",
+        "publishedDate": "2007-10-02",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015074296974"
+          }
+        ],
+        "pageCount": 352,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=m9tlAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=m9tlAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "WH7YAAAAMAAJ",
+      "volumeInfo": {
+        "title": "Prajna pundarika",
+        "publishedDate": "2004",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015066129423"
+          }
+        ],
+        "pageCount": 820,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=WH7YAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=WH7YAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "id"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "rNDYAAAAMAAJ",
+      "volumeInfo": {
+        "title": "Bahana",
+        "subtitle": "Bulanan Kristiani popular",
+        "publishedDate": "2004",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015064822037"
+          }
+        ],
+        "pageCount": 532,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=rNDYAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=rNDYAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "id"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "RUkKAQAAMAAJ",
+      "volumeInfo": {
+        "title": "Studi kepustakaan tentang himpunan Pitutur Luhur",
+        "publishedDate": "1980",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015079785831"
+          }
+        ],
+        "pageCount": 910,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=RUkKAQAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=RUkKAQAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "id"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "yqRjAAAAMAAJ",
+      "volumeInfo": {
+        "title": "The Gift of a Cow",
+        "publisher": "London : Allen & Unwin",
+        "publishedDate": "1968",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015046416676"
+          }
+        ],
+        "pageCount": 456,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=yqRjAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=yqRjAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "en"
+      }
+    }
+  ]
+}

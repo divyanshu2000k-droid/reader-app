@@ -32,6 +32,11 @@ src/
       queries.ts          All SQL for this feature
       tabData.ts          Pure: a tab never shows another tab's rows
     book/                 Detail, sessions, actions sheet (Slice 2)
+    add/                  Add a book: search, Which shelf?, Add manually / Edit details (Slice 4)
+      searchSources.ts    Pure: the two APIs' requests and parsers, tested on captured responses
+      searchMerge.ts      Pure: merge, rank by typed words, library match, remembered results
+      searchStatus.ts     Pure: offline vs unavailable vs partial, from what the request failed with
+      bookForm.ts         Pure: manual entry and edit rules
     session/              Logger, editor, Session complete (Slice 3)
       sessionForm.ts      Pure: what saves, what is refused, what is only pointed out, what is written
       sessionComplete.ts  Pure: what Session complete says, following the edit
@@ -49,10 +54,12 @@ src/
     progressAggregates.ts Shared SQL: a read's progress. Held equal to domain/stats.ts by check 10
     currentRead.ts        Shared SQL: a book's current read. Every list of books filters with it
     changes.ts            "The library changed": write.ts signals every committed change
+    coverFiles.ts         A local copy of every cover, downloaded after adding
     migrationPlan.ts      Pure: what is pending, by drizzle's rule
     devchecks.ts          The device pass (dev only)
   ui/                     Shared primitives from the design system sheet
     Button.tsx  Card.tsx  Sheet.tsx  Toast.tsx  InlineError.tsx  Stars.tsx  ConfirmSheet.tsx  ...
+    SearchField.tsx  OfflineBanner.tsx
     keyboardOverlap.ts    Pure: how much of a full-screen form the keyboard covers
     useUnsavedGuard.ts    Ask before any route leaves a dirty form
     pressGuard.ts         Pure: a double tap is one tap (usePressGuard)
@@ -66,6 +73,8 @@ src/
     progressDisplay.ts    What progress says, and the ONE definition of an audiobook
     reads.ts              When a re-read may start
     sessionLine.ts        Pure: what a session row says (book detail, Recently Deleted)
+    isbn.ts               Pure: ISBN-10/13, checksums, one canonical form
+    searchText.ts         Pure: how both searches compare text (case and accents)
     streaks.ts            Streak and goal calculation
     stats.ts              Aggregations, pages and hours kept separate
   lib/                    Generic utilities with no domain knowledge.
@@ -259,8 +268,9 @@ the silent-pass hazard in `CLAUDE.md`.
   put an input in your own `Modal`: it gets none of this. A sheet taller than the space
   left above the keyboard does not yet scroll the focused field into view. **A full-screen
   form measures instead** (`useKeyboardOverlap`): how far its bottom sits below the keyboard's
-  top, so it pads by the right amount whether or not Android resized the window. The session
-  logger is the first; unverified on the phone until its Slice 3 checks run
+  top, so it pads by the right amount whether or not Android resized the window. **Verified on
+  the phone** for the session logger (Slice 3) and for Add manually with the keyboard up on its
+  last field (Slice 4)
 - Sibling groups use flex with `gap`, never margins on children
 - Motion values come from the States sheet. One `motion` object, no magic numbers
 
@@ -448,6 +458,9 @@ the I/O and calls it. The pattern, in `src/features/launch/`:
 - `src/features/session/sessionForm.ts` and `sessionComplete.ts` beside the logger and Session
   complete; `src/features/stats/paceChart.ts` beside `StatsScreen.tsx`
 - `src/ui/keyboardOverlap.ts` beside `useKeyboardOverlap.ts`; `src/lib/faults.ts`
+- `src/features/add/searchSources.ts`, `searchMerge.ts`, `searchStatus.ts` and `bookForm.ts`
+  beside the Add and form screens; `src/features/library/librarySearch.ts` and `rowLayout.ts`;
+  `src/domain/isbn.ts` and `searchText.ts`
 
 What stays untested is the hook's state transition itself; that half is verified on a
 device, and the entry in `DECISIONS.md` says so.
@@ -509,6 +522,22 @@ renders beneath a Modal, so an Undo raised under an open sheet is invisible (`Co
 **A failure render is seen, not assumed.** Read paths call `throwIfFault(name)` and write paths
 check `isFaultArmed(name)` (`lib/faults.ts`), armed from Settings' dev block. `setFault` is only
 ever called with `__DEV__` literally, which `faults.test.ts` holds with a control.
+
+**A tab screen is `<Screen above="tabBar">`; every other screen keeps the default.** The tab bar
+pads itself for the navigation bar, and padding twice left a ~75 dp empty band above it.
+`screenInsets.test.ts` holds both directions.
+
+**Offline is decided by what the request failed with, and the phone decides the patterns.** A
+network call's failure is `offline` (no DNS, no route, no connection) or `unavailable` (a bad
+status or a timeout), in a pure function tested with the exact error a phone produced
+(`features/add/searchStatus.ts`). Never `error instanceof TypeError`: Expo's fetch does not
+throw one, and that test passed while every offline search looked like a broken server.
+
+**Queries to the network use TanStack Query with `networkMode: 'always'`.** Nothing tells
+TanStack about connectivity; the default would pause an offline query as a spinner forever.
+
+**Parsers of third-party JSON take `unknown` and are tested against captured responses**, in
+`__tests__/fixtures`. A fixture that is not a real capture says so in its `_captured` field.
 
 **A screen that shows the reader's books or sessions reloads with `useReloadOnChange`.** A
 write can come from something that is not another screen: an Undo toast on this one restored a

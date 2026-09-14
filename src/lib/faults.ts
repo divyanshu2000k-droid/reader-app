@@ -20,13 +20,16 @@
  * forgotten armed fault cannot survive into the next launch.
  */
 
-export type FaultName = 'libraryQuery' | 'bookDetail' | 'bookAction' | 'sessionSave'
+export type FaultName =
+  'libraryQuery' | 'bookDetail' | 'bookAction' | 'sessionSave' | 'bookSearch' | 'bookSave'
 
 export const FAULTS: readonly { readonly name: FaultName; readonly label: string }[] = [
   { name: 'libraryQuery', label: 'Library list fails to load' },
   { name: 'bookDetail', label: 'Book detail fails to load' },
   { name: 'bookAction', label: 'Actions sheet action fails' },
   { name: 'sessionSave', label: 'Saving a session fails' },
+  { name: 'bookSearch', label: 'Book search gets a server error' },
+  { name: 'bookSave', label: 'Adding or editing a book fails' },
 ]
 
 const armed = new Set<FaultName>()

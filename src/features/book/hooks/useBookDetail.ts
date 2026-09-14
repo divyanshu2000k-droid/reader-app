@@ -18,6 +18,7 @@ import {
   type BookDetail,
   type SessionEntry,
 } from '../queries'
+import { ensureLocalCover } from '@/db/coverFiles'
 import { devTimed } from '@/lib/devLog'
 import { appError, type AppError } from '@/lib/result'
 import { useReloadOnChange } from '@/ui/useReloadOnChange'
@@ -55,6 +56,12 @@ export function useBookDetail(bookId: string): BookDetailData {
         setDetail(next)
         setSessions(nextSessions)
         setError(null)
+        // A cover that did not download when the book was added (offline then, or a server
+        // error) is tried again now, once per launch. Covers must survive offline
+        // (db/coverFiles.ts); the write it makes reloads this screen with the local copy.
+        if (next && next.book.coverUrl !== null && next.book.coverLocalPath === null) {
+          void ensureLocalCover(next.book.id, next.book.coverUrl)
+        }
       } catch (cause) {
         if (cancelled || !alive.current) return
         setError(

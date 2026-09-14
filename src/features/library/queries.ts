@@ -15,12 +15,13 @@
  * rules equal to `contribution()` in domain/stats.ts.
  */
 
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 
 import { getDb } from '@/db/client'
 import { isCurrentRead } from '@/db/currentRead'
 import { progressAggregates } from '@/db/progressAggregates'
 import { books, reads, sessions, type ReadStatus } from '@/db/schema'
+import type { IndexedBook } from './librarySearch'
 import type { UnixMs } from '@/lib/dates'
 import { throwIfFault } from '@/lib/faults'
 
@@ -48,6 +49,8 @@ export interface LibraryRow {
   readonly unusable: number
   readonly sessionCount: number
   readonly lastSessionAt: UnixMs | null
+  /** Set only when the reader chose a finish date (03-DATA-MODEL, `reads`). */
+  readonly finishedAt: UnixMs | null
 }
 
 /**
@@ -59,26 +62,7 @@ export interface LibraryRow {
  */
 export async function getLibraryRows(status: ReadStatus): Promise<LibraryRow[]> {
   throwIfFault('libraryQuery')
-  const rows = await getDb()
-    .select({
-      readId: reads.id,
-      bookId: books.id,
-      title: books.title,
-      author: books.author,
-      coverUrl: books.coverUrl,
-      coverLocalPath: books.coverLocalPath,
-      coverColor: books.coverColor,
-      status: reads.status,
-      readNumber: reads.readNumber,
-      pageCount: books.pageCount,
-      totalMinutes: books.totalMinutes,
-      ...progressAggregates,
-    })
-    .from(reads)
-    .innerJoin(books, eq(reads.bookId, books.id))
-    .leftJoin(sessions, and(eq(sessions.readId, reads.id), isNull(sessions.deletedAt)))
-    // A book's tab is its CURRENT read's status. Without this, a re-read book appeared on
-    // two tabs, or twice on one (db/currentRead.ts).
+  const rows = await libraryRowSelect()
     .where(
       and(
         eq(reads.status, status),
@@ -95,6 +79,72 @@ export async function getLibraryRows(status: ReadStatus): Promise<LibraryRow[]> 
     )
 
   return rows
+}
+
+/** The Library row select, shared by the tabs and by Search your library. */
+function libraryRowSelect() {
+  return getDb()
+    .select({
+      readId: reads.id,
+      bookId: books.id,
+      title: books.title,
+      author: books.author,
+      coverUrl: books.coverUrl,
+      coverLocalPath: books.coverLocalPath,
+      coverColor: books.coverColor,
+      status: reads.status,
+      readNumber: reads.readNumber,
+      pageCount: books.pageCount,
+      totalMinutes: books.totalMinutes,
+      finishedAt: reads.finishedAt,
+      ...progressAggregates,
+    })
+    .from(reads)
+    .innerJoin(books, eq(reads.bookId, books.id))
+    .leftJoin(sessions, and(eq(sessions.readId, reads.id), isNull(sessions.deletedAt)))
+  // Every caller filters with `isCurrentRead`: a book's tab is its CURRENT read's status.
+  // Without it, a re-read book appeared on two tabs, or twice on one (db/currentRead.ts).
+}
+
+/**
+ * Every live book's title, author and current status: what Search your library matches against
+ * (librarySearch.ts). No progress, so it stays small for 2000 books.
+ */
+export async function getLibraryIndex(): Promise<IndexedBook[]> {
+  throwIfFault('libraryQuery')
+  return getDb()
+    .select({
+      bookId: books.id,
+      title: books.title,
+      author: books.author,
+      status: reads.status,
+    })
+    .from(reads)
+    .innerJoin(books, eq(reads.bookId, books.id))
+    .where(and(isNull(reads.deletedAt), isNull(books.deletedAt), isCurrentRead))
+    .orderBy(asc(books.title))
+}
+
+/** The Library rows of the given books, in the order given. */
+export async function getLibraryRowsFor(bookIds: readonly string[]): Promise<LibraryRow[]> {
+  if (bookIds.length === 0) return []
+  const rows = await libraryRowSelect()
+    .where(
+      and(
+        inArray(books.id, [...bookIds]),
+        isNull(reads.deletedAt),
+        isNull(books.deletedAt),
+        isCurrentRead,
+      ),
+    )
+    .groupBy(reads.id)
+  const byBook = new Map<string, LibraryRow>(rows.map((r) => [r.bookId, r]))
+  const ordered: LibraryRow[] = []
+  for (const id of bookIds) {
+    const row = byBook.get(id)
+    if (row) ordered.push(row)
+  }
+  return ordered
 }
 
 /**

@@ -1,3 +1,3 @@
-import { AddScreen } from '@/features/shell/PlaceholderTabs'
+import { AddScreen } from '@/features/add/AddScreen'
 
 export default AddScreen

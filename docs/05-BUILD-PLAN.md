@@ -290,6 +290,18 @@ launch costs five months.
 - Search your library, separate from search the internet
 - Error and offline states from the States sheet
 
+**Status, 2026-09-14: built and verified on the phone, online and in airplane mode.**
+- **The owner's two cases:** the network killed mid-search, and a searched book used offline
+  after a cold start. Both pass.
+- **The rest:** add from search with a local cover, "In your library", manual add with the
+  keyboard up, Edit details, Search your library, and both new forced failures. Device pass
+  32/32.
+- **Fixed on the phone:** offline search showed a broken-database error.
+- **Google Books:** verified on the phone with the owner's key (search, add, local cover), and
+  tested on real captures. The key restricted to the app waits for the Android headers, Slice 11.
+- **Filed against Slice 11:** 200% font, 360 dp and TalkBack for these screens.
+- Details: `DECISIONS.md`, 2026-09-14, and `docs/device-checks/slice-4.md`.
+
 **Done when:** search works, killing the network still lets you add a book manually, and
 a searched book stays fully usable offline afterwards.
 
@@ -302,6 +314,13 @@ a searched book stays fully usable offline afterwards.
 - Auto move off Currently Reading, which Fable users complain it does not do
 - Re-read creating a new `reads` row that leaves the old one intact
 - The finish note and finish date are inputs: same keyboard check as Slice 3
+- **Descriptions and categories, added by the owner 2026-09-14** (`DECISIONS.md`):
+  - `books.description` and `books.categories`, in a migration tested against a populated database.
+  - Filled from search on add. For books already in the library, filled when detail next opens
+    online, never over a reader's edit.
+  - A short, expandable summary on book detail; nothing when there is none.
+- **"Read a sample"**: a link to Google's preview page, opened in the browser, only when Google
+  says pages are viewable. The in-app viewer is Slice 11
 
 **Done when:** finishing then re-reading a book produces two reads with separate ratings
 and dates, and both count in their own years.
@@ -383,6 +402,10 @@ feature will break.
   migration, with the data repair a constraint-adding migration requires. Filed by the
   2026-09-12 review
 - Daily pace chart, genre breakdown, year switcher
+- **Genres come from Slice 5's `books.categories`**, mapped to a short genre list by a pure,
+  tested function (raw categories are "Fiction / Fantasy / General" and "Accessible book").
+  The reader can set or correct a genre in Edit details
+- **A genre filter on the Library**, added by the owner 2026-09-14. Free, like the breakdown
 - Empty state for a library with too little data
 - Everything free, no gating
 
@@ -453,6 +476,11 @@ every book and statistic untouched.
 - Every empty state
 - Every loading skeleton and error state from the States sheet
 - Widget, if Slice 6 did not exhaust your patience for native work
+- **Read a sample inside the app, with Google's Embedded Viewer API**, replacing Slice 5's browser
+  link. It needs a WebView (a native module and a rebuild) and the network. Added by the owner
+  2026-09-14
+- **Google Books terms and Branding Guidelines**, read before launch: attribution may be required
+  wherever Google's data is shown
 - Play Store listing, screenshots, privacy policy hosted somewhere
 - **Walk every screen at 200% system font scale** (Settings → Display → Font size, max).
   Nothing clips, nothing overlaps, no row loses its label. The primitives carry

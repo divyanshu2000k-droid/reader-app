@@ -361,6 +361,17 @@ file, `devcheck.db`, so passes do not fill the sandbox with soft-deleted rows.
 - The same seed produces the same ids, titles and shapes; dates sit at the same distances
   from the day it runs.
 
+**Testing offline on the phone.** Airplane mode is a phone setting, so the owner switches it.
+Metro keeps serving the bundle over USB (`adb reverse`), so the app keeps reloading with the
+network off. Confirm it is really off with `adb shell ping -c 1 -W 2 8.8.8.8` failing. A cold
+start (`am force-stop`, then launch) empties React Native's image memory cache, which is what
+makes "the cover still shows" a test of the local file. Google Books refuses unkeyed requests;
+set `EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY` in `.env` and restart Metro with `--clear`.
+
+**A Gradle build from the assistant's shell** needs `TEMP` and `TMP` pointed at a long path
+(`C:\Temp`): the shell's 8.3 short temp path breaks Gradle's loopback socket
+(`DECISIONS.md`, 2026-09-03 correction).
+
 **Release builds ignore both flags** and open the reader's library. The 2026-09-13 release
 scroll measurement used a sandbox release build, which is now impossible by design. Measuring
 scroll at Slice 11 needs a separate bench variant with its own package id, so it can never

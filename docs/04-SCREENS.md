@@ -161,6 +161,30 @@ resumable if the app dies mid-commit.
 Search failure shows the recoverable error from the States sheet. Offline shows the offline
 banner and manual entry still works completely.
 
+**As built in Slice 4:**
+- **Results match what was typed.** A result containing none of the words is dropped; one with
+  every word ranks first. Merged by ISBN, then by title and first author.
+- **Progress line:** "Searching Open Library" (and Google Books, with a key). When one source
+  failed and the other answered, the results show with a line naming the missing one.
+- **Offline:** the banner, plus books searched before ("Showing books you searched for
+  before"). Never the error card: that is for a database that answered badly.
+- **A result already in the library** says "In your library" and opens that book.
+- **"Which shelf?"** Start reading it now, Want to read, I already finished it. Finished is
+  status only until Slice 5's finish flow. Book detail opens after adding.
+- **Add manually / Edit details form:**
+  - Title (required), author, Print or Audiobook, and length in pages or minutes.
+  - "Add to" chips when adding; publisher, year and ISBN (checksum-checked).
+  - A cover colour.
+  - Save rides above the keyboard, and leaving with input asks first.
+- **Edit details** is in the book actions sheet.
+- **Search your library** is the search icon on the Library header:
+  - Instant and offline, and accent-insensitive.
+  - Every word must match as a prefix.
+  - Scope chips narrow it, and each result carries a status badge.
+  - "Not in your library?" hands the words to Add.
+- **Not built:** the barcode button, "More editions", and a photographed cover (Plus, custom
+  covers).
+
 ---
 
 ## Journey E · The core loop
@@ -283,6 +307,11 @@ not failure and the data should not treat it as such.
 - **Not yet, with the slice that owns each:** the Continue pill and Log pages (3), Start timer
   and the dock (6), search, Discover and Edit details (4), notes (5b), the stats strip (7),
   and share (11). None renders as a control that goes nowhere.
+- **Planned, 2026-09-14:**
+  - **Slice 5:** a short, expandable summary on book detail, and "Read a sample" opening Google's
+    preview in the browser, only when pages are viewable.
+  - **Slice 7:** a genre filter on the Library.
+  - **Slice 11:** the sample read inside the app.
 
 ---
 
@@ -321,7 +350,7 @@ Settings holds the yearly goal, theme with a system option, one notification tog
 import, export, recently deleted, and account. Nothing else.
 
 Stats shows three separate numbers, a daily pace chart, and a genre breakdown, with a year
-switcher. **Slice 3 ships the pace chart alone**: the last 14 days by `local_day`, pages or
+switcher. Genres come from book categories captured since Slice 5 (see `05-BUILD-PLAN.md`). **Slice 3 ships the pace chart alone**: the last 14 days by `local_day`, pages or
 time as separate charts, a bar for every day. Slice 7 adds the rest. All free. The empty state explains that charts need a few sessions rather than
 implying something is locked.
 

@@ -78,7 +78,7 @@ export function StatsScreen() {
   const chart = rows === null ? null : paceChart(dailyTotals(rows), today, metric)
 
   return (
-    <Screen>
+    <Screen above="tabBar">
       <Header title={nav.stats.title} />
       {error ? <InlineError error={error} onRetry={reload} /> : null}
       <SkeletonGate loading={rows === null && error === null} fallback={null}>

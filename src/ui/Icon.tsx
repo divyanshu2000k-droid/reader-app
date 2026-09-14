@@ -36,6 +36,10 @@ export type IconName =
   | 'chevron'
   | 'minus'
   | 'close'
+  | 'search'
+  | 'wifi'
+  | 'image'
+  | 'check'
 
 interface Props {
   name: IconName
@@ -178,6 +182,41 @@ function paths(name: IconName) {
         <>
           <Path d="M18 6L6 18" />
           <Path d="M6 6l12 12" />
+        </>
+      )
+    // The search fields, from AddBook.dc.html and LibrarySearch.dc.html.
+    case 'search':
+      return (
+        <>
+          <Circle cx="11" cy="11" r="7" />
+          <Path d="M20 20l-3.5-3.5" />
+        </>
+      )
+    // The offline banner, from States.dc.html.
+    case 'wifi':
+      return (
+        <>
+          <Path d="M2 8.8a16 16 0 0120 0" />
+          <Path d="M5 12.5a11 11 0 0114 0" />
+          <Path d="M8.5 16a6 6 0 017 0" />
+          <Path d="M12 20v.01" />
+        </>
+      )
+    // The cover picker, from ManualEntry.dc.html.
+    case 'image':
+      return (
+        <>
+          <Path d="M5.5 4h13A2.5 2.5 0 0121 6.5v11a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 17.5v-11A2.5 2.5 0 015.5 4z" />
+          <Circle cx="8.5" cy="9.5" r="1.8" />
+          <Path d="M21 15l-5-4-6 5" />
+        </>
+      )
+    // Manual entry's reassurance line, from ManualEntry.dc.html.
+    case 'check':
+      return (
+        <>
+          <Path d="M9 12l2 2 4-4" />
+          <Circle cx="12" cy="12" r="9" />
         </>
       )
   }

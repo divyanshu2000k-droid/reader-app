@@ -26,6 +26,7 @@ import {
   bookShelves,
   books,
   goals,
+  metadataCache,
   notes,
   reads,
   sessions,
@@ -597,6 +598,92 @@ export async function writeBatch<K extends SyncableTable>(
     },
     (cause) =>
       writeFailure(cause, 'Could not save those changes', 'Your library was not changed.'),
+  )
+}
+
+/** One row for one syncable table, with the table and the row's type tied together. */
+export type WriteEntry = {
+  [K in SyncableTable]: { readonly table: K; readonly values: RowFor<K> }
+}[SyncableTable]
+
+function upsertEntry<K extends SyncableTable>(
+  db: Database,
+  entry: { readonly table: K; readonly values: RowFor<K> },
+  ts: UnixMs,
+): void {
+  upsertOne(db, entry.table, entry.values, ts)
+}
+
+/**
+ * Rows of DIFFERENT tables, in ONE transaction, in the order given. All or none.
+ *
+ * A book added from search or by hand is a `books` row and its first `reads` row. Written as
+ * two calls, a failure between them left a book with no read, which no list shows and no
+ * screen can open: a book the reader added and cannot find. Parents first: each row's parent
+ * check runs as it is written.
+ */
+export async function writeTogether(entries: readonly WriteEntry[]): Promise<Result<void>> {
+  return attempt(
+    async () => {
+      if (entries.length === 0) return
+      const ts = now()
+      const db = getDb()
+      runInTransaction(() => {
+        for (const entry of entries) upsertEntry(db, entry, ts)
+      })
+      notifyDataChanged()
+    },
+    (cause) => writeFailure(cause, 'Could not add that', 'Your library was not changed.'),
+  )
+}
+
+// ─── LOCAL ONLY: THE SEARCH CACHE ────────────────────────────────────────────
+
+export interface CacheEntry {
+  readonly source: string
+  readonly sourceId: string
+  /** The normalised search result, as JSON. */
+  readonly payload: string
+}
+
+/**
+ * Remember search results permanently, in `metadata_cache` (02-ARCHITECTURE, ADR 005).
+ *
+ * Here and not in a `queries.ts` file because this is the only file allowed to write to the
+ * database (no-bypass.test.ts). It does NOT enqueue and does NOT signal a change: the cache is
+ * local only, never syncs, and is not the reader's library. A book the reader adds is copied
+ * into `books`, and that copy is authoritative from then on.
+ */
+export async function cacheSearchResults(
+  entries: readonly CacheEntry[],
+): Promise<Result<void>> {
+  return attempt(
+    async () => {
+      if (entries.length === 0) return
+      const ts = now()
+      const db = getDb()
+      runInTransaction(() => {
+        for (const e of entries) {
+          db.insert(metadataCache)
+            .values({
+              source: e.source,
+              sourceId: e.sourceId,
+              payload: e.payload,
+              fetchedAt: ts,
+            })
+            .onConflictDoUpdate({
+              target: [metadataCache.source, metadataCache.sourceId],
+              set: { payload: e.payload, fetchedAt: ts },
+            })
+            .run()
+        }
+      })
+    },
+    (cause) =>
+      appError('recoverable', 'Could not remember those results', {
+        safe: 'Search still works. Your library is unaffected.',
+        cause,
+      }),
   )
 }
 

@@ -42,7 +42,14 @@ describe('when a screen re-reads', () => {
 })
 
 // Textual, so it carries a control: every public write function notifies.
-const WRITERS = ['writeRow', 'writeBatch', 'softDelete', 'restoreRow', 'updateRow']
+const WRITERS = [
+  'writeRow',
+  'writeBatch',
+  'writeTogether',
+  'softDelete',
+  'restoreRow',
+  'updateRow',
+]
 
 function silentWriters(source: string): string[] {
   const bodies = source.split(/export async function /).slice(1)
@@ -61,6 +68,12 @@ describe('write.ts wiring', () => {
   test('control: a write function without the signal is flagged', () => {
     const bad = `export async function writeRow<K>(t: K) { runInTransaction(() => {}) }
 export async function softDelete(t: string) { notifyDataChanged() }`
-    assert.deepEqual(silentWriters(bad), ['writeRow', 'writeBatch', 'restoreRow', 'updateRow'])
+    assert.deepEqual(silentWriters(bad), [
+      'writeRow',
+      'writeBatch',
+      'writeTogether',
+      'restoreRow',
+      'updateRow',
+    ])
   })
 })

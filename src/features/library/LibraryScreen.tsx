@@ -70,16 +70,23 @@ export function LibraryScreen() {
   const keyExtractor = useCallback((item: LibraryRow) => item.readId, [])
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} above="tabBar">
       <View style={styles.head}>
         <Header
           title={nav.library.title}
           right={
-            <HeaderIconButton
-              icon="settings"
-              accessibilityLabel={nav.settings.title}
-              onPress={() => router.push('/settings')}
-            />
+            <>
+              <HeaderIconButton
+                icon="search"
+                accessibilityLabel="Search your library"
+                onPress={() => router.push('/search')}
+              />
+              <HeaderIconButton
+                icon="settings"
+                accessibilityLabel={nav.settings.title}
+                onPress={() => router.push('/settings')}
+              />
+            </>
           }
         />
         <StatusTabs value={status} onChange={setStatus} />
@@ -145,5 +152,10 @@ const styles = StyleSheet.create({
   head: { paddingHorizontal: space.screen },
   error: { paddingBottom: space.row },
   list: { paddingHorizontal: space.screen, gap: space.row, paddingTop: space.row },
-  listContent: { paddingHorizontal: space.screen, paddingTop: space.row },
+  // The last row clears the tab bar by a section gap when scrolled to the end.
+  listContent: {
+    paddingHorizontal: space.screen,
+    paddingTop: space.row,
+    paddingBottom: space.section,
+  },
 })

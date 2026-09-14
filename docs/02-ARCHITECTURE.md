@@ -221,6 +221,16 @@ and Open Library for coverage gaps. Cache every result permanently in local SQLi
 > **Get a free Google Books API key in Slice 4.** Unkeyed requests are rate limited by IP
 > and you will hit that during development. Set a descriptive User-Agent on Open Library
 > requests, which they ask for.
+>
+> **As built (2026-09-14):**
+> - **Google refused unkeyed requests outright** (429, quota 0), so without
+>   `EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY` it is not asked and search is Open Library alone.
+> - **Open Library returns works, not editions, and matches fuzzily.** A hit keeps no ISBN or
+>   publisher of its own, and results matching none of the typed words are dropped.
+> - **Offline is told apart from a broken server by what the request failed with.** Expo's
+>   fetch rejects offline with a `FetchError`, not a `TypeError`.
+>
+> See `DECISIONS.md`, 2026-09-14.
 
 ### Why
 

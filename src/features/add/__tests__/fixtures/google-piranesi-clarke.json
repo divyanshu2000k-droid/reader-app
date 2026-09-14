@@ -1,0 +1,69 @@
+{
+  "_captured": "HAND-WRITTEN from the documented Google Books v1 volumes schema, 2026-09-14, before a key existed. Real captures are the google-real-*.json files; this one is kept only for shapes they lack: an edition listing an ISBN-10 and no ISBN-13, and a non-ISBN identifier on a volume that also has no cover.",
+  "kind": "books#volumes",
+  "totalItems": 3,
+  "items": [
+    {
+      "kind": "books#volume",
+      "id": "pgFGEAAAQBAJ",
+      "volumeInfo": {
+        "title": "Piranesi",
+        "authors": ["Susanna Clarke"],
+        "publisher": "Bloomsbury Publishing USA",
+        "publishedDate": "2020-09-15",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9781635575637"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "163557563X"
+          }
+        ],
+        "pageCount": 272,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=pgFGEAAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=pgFGEAAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "x7nNzQEACAAJ",
+      "volumeInfo": {
+        "title": "Piranesi",
+        "subtitle": "The Times Book of the Year",
+        "authors": ["Susanna Clarke"],
+        "publisher": "Bloomsbury",
+        "publishedDate": "2021",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_10",
+            "identifier": "1526622432"
+          }
+        ],
+        "printType": "BOOK",
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "noIsbnNoAuthor",
+      "volumeInfo": {
+        "title": "Piranesi: A Study",
+        "publishedDate": "1994-03",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "OCLC:12345"
+          }
+        ],
+        "pageCount": 0,
+        "printType": "BOOK"
+      }
+    }
+  ]
+}

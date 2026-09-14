@@ -29,10 +29,19 @@ import { File, Paths } from 'expo-file-system'
 
 import { subscribeDataChanges } from './changes'
 import { checkpointWal, dangerouslyExecDevSql, DATABASE_NAME, getDb } from './client'
+import { ensureLocalCover } from './coverFiles'
 import { books, reads, sessions, syncQueue } from './schema'
 import { isCurrentRead } from './currentRead'
 import { progressAggregates } from './progressAggregates'
-import { restoreRow, softDelete, updateRow, writeBatch, writeRow } from './write'
+import {
+  cacheSearchResults,
+  restoreRow,
+  softDelete,
+  updateRow,
+  writeBatch,
+  writeRow,
+  writeTogether,
+} from './write'
 import {
   backupBeforeMigration,
   backupsDirectory,
@@ -59,6 +68,8 @@ import {
   newSessionRow,
   sessionPatch,
 } from '@/features/session/sessionForm'
+import { addFromSearch, searchRemembered } from '@/features/add/queries'
+import type { SearchResult } from '@/features/add/searchMerge'
 import { getSessionsSince } from '@/features/stats/queries'
 import { getDeletedItems } from '@/features/trash/queries'
 import { addDays, now, todayLocalDay, toLocalDay, withLocalTime } from '@/lib/dates'
@@ -1354,6 +1365,159 @@ async function checkBackdatedSession() {
   )
 }
 
+// ─── 14. ADDING A BOOK ───────────────────────────────────────────────────────
+
+async function checkAddingBooks() {
+  await check(
+    '14a. a book and its first read are written together, or not at all',
+    async () => {
+      const { bookId: existing } = await devBook('Devcheck Together Existing')
+      const orphan = newId()
+      // The second row collides with the existing book's read 1, so the transaction must fail,
+      // and the first row, a brand-new book, must not survive it.
+      const failed = await writeTogether([
+        {
+          table: 'books',
+          values: { id: orphan, title: 'Devcheck Together Orphan', source: 'manual' },
+        },
+        {
+          table: 'reads',
+          values: { id: newId(), bookId: existing, status: 'reading', readNumber: 1 },
+        },
+      ])
+      assert(!failed.ok, 'a colliding read was accepted')
+      const left = await getDb()
+        .select({ id: books.id })
+        .from(books)
+        .where(eq(books.id, orphan))
+      assert(left.length === 0, 'the new book survived its failed read: a book with no read')
+      const queued = await queueRowsFor('books', orphan)
+      assert(queued.length === 0, 'the rolled-back book was still queued for sync')
+
+      const bookId = newId()
+      const done = await writeTogether([
+        {
+          table: 'books',
+          values: { id: bookId, title: 'Devcheck Together Book', source: 'manual' },
+        },
+        { table: 'reads', values: { id: newId(), bookId, status: 'want', readNumber: 1 } },
+      ])
+      assert(done.ok, 'the good pair failed')
+      const listed = await getDb()
+        .select({ status: reads.status })
+        .from(reads)
+        .where(and(eq(reads.bookId, bookId), isNull(reads.deletedAt), isCurrentRead))
+      assert(
+        listed.length === 1 && listed[0]?.status === 'want',
+        'the added book is not listed once, on Want',
+      )
+      return 'the collision rolled back both rows and queued nothing; the good pair lists once'
+    },
+  )
+
+  await check(
+    '14b. remembered search results never touch the sync queue, and are found again',
+    async () => {
+      const before = (await getDb().select({ id: syncQueue.id }).from(syncQueue)).length
+      const sourceId = `devcheck-${newId()}`
+      const result: SearchResult = {
+        key: `openlibrary:${sourceId}`,
+        source: 'openlibrary',
+        sourceId,
+        title: 'Devcheck Godāna Remembered',
+        subtitle: null,
+        authors: ['Munshi Premchand'],
+        publisher: null,
+        publishedYear: 1936,
+        pageCount: 365,
+        isbn13: null,
+        isbn10: null,
+        isbns: [],
+        coverUrl: null,
+        sources: ['openlibrary'],
+      }
+      const cached = await cacheSearchResults([
+        { source: result.source, sourceId, payload: JSON.stringify(result) },
+      ])
+      assert(cached.ok, 'the cache write failed')
+      const after = (await getDb().select({ id: syncQueue.id }).from(syncQueue)).length
+      assert(after === before, `the cache queued ${after - before} sync rows`)
+      // Accent-free, lower case, and a prefix: how a reader types it offline.
+      const found = await searchRemembered('devcheck godana premch')
+      assert(
+        found.some((r) => r.sourceId === sourceId),
+        'the remembered result was not found',
+      )
+      dangerouslyExecDevSql(`DELETE FROM metadata_cache WHERE source_id = '${sourceId}'`)
+      return 'cached without a queue row; found by "devcheck godana premch"'
+    },
+  )
+
+  await check(
+    '14c. a book added from search keeps a local cover that survives offline',
+    async () => {
+      // A real Open Library cover (Piranesi). This check needs a network, as adding does.
+      const coverUrl = 'https://covers.openlibrary.org/b/id/10226290-M.jpg'
+      const added = await addFromSearch(
+        {
+          key: 'openlibrary:devcheck-cover',
+          source: 'openlibrary',
+          sourceId: 'devcheck-cover',
+          title: 'Devcheck Cover Book',
+          subtitle: null,
+          authors: ['Susanna Clarke'],
+          publisher: null,
+          publishedYear: 2020,
+          pageCount: 272,
+          isbn13: null,
+          isbn10: null,
+          isbns: [],
+          coverUrl,
+          sources: ['openlibrary'],
+        },
+        'reading',
+      )
+      assert(added.ok, 'addFromSearch failed')
+      const bookId = added.value.bookId
+      // The add starts the download without waiting; ask again, which waits for this one.
+      let local: string | null = null
+      for (let i = 0; i < 40 && local === null; i += 1) {
+        const row = await getDb()
+          .select({ p: books.coverLocalPath })
+          .from(books)
+          .where(eq(books.id, bookId))
+        local = row[0]?.p ?? null
+        if (local === null) await new Promise((r) => setTimeout(r, 250))
+      }
+      assert(local !== null, 'no local cover recorded within 10 s (is the phone online?)')
+      const file = new File(local)
+      assert(
+        file.exists && (file.size ?? 0) > 1000,
+        `the cover file is missing or empty (${file.size ?? 0} B)`,
+      )
+      const row = await getDb()
+        .select({
+          url: books.coverUrl,
+          source: books.source,
+          sourceId: books.sourceId,
+          pages: books.pageCount,
+        })
+        .from(books)
+        .where(eq(books.id, bookId))
+      assert(
+        row[0]?.url === coverUrl && row[0]?.source === 'openlibrary',
+        'the book lost its metadata',
+      )
+      // A second attempt in the same launch does nothing: no re-download on every open.
+      assert(
+        (await ensureLocalCover(bookId, coverUrl)) === null,
+        'the cover was downloaded twice',
+      )
+      return `cover saved locally (${file.size} B), metadata kept (${row[0]?.pages} pages)`
+    },
+  )
+}
+
 // ─── CLEANUP ─────────────────────────────────────────────────────────────────
 
 async function cleanup() {
@@ -1417,6 +1581,7 @@ export async function runDeviceChecks(): Promise<CheckResult[]> {
   await checkLargeCascade()
   await checkCurrentRead()
   await checkBackdatedSession()
+  await checkAddingBooks()
   await cleanup()
 
   const runtime = results.filter((r) => r.kind === 'runtime')

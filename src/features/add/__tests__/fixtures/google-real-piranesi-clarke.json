@@ -1,0 +1,477 @@
+{
+  "_captured": "REAL response from the Google Books v1 volumes API, 2026-09-14, q=\"piranesi clarke\", maxResults=20, printType=books, as the app requests it. Trimmed to the volumeInfo fields the parser reads; accessInfo, saleInfo, searchInfo, etag, selfLink and description removed. Item order and every kept value are as returned.",
+  "kind": "books#volumes",
+  "totalItems": 300,
+  "items": [
+    {
+      "kind": "books#volume",
+      "id": "pPa0DwAAQBAJ",
+      "volumeInfo": {
+        "title": "Piranesi",
+        "subtitle": "WINNER OF THE WOMEN'S PRIZE 2021",
+        "authors": ["Susanna Clarke"],
+        "publisher": "Bloomsbury Publishing",
+        "publishedDate": "2020-09-15",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9781526622440"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "1526622440"
+          }
+        ],
+        "pageCount": 231,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=pPa0DwAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=pPa0DwAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "-kAeEQAAQBAJ",
+      "volumeInfo": {
+        "title": "Ambiguity and Narratology",
+        "subtitle": "Interdisciplinary Perspectives and Diachronic Case Studies",
+        "authors": ["Simon Grund", "Robert Kirstein", "Julian Wagner"],
+        "publisher": "Walter de Gruyter GmbH & Co KG",
+        "publishedDate": "2024-10-21",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9783111502700"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "3111502708"
+          }
+        ],
+        "pageCount": 337,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=-kAeEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=-kAeEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "5kYoEQAAQBAJ",
+      "volumeInfo": {
+        "title": "Ghost Stories",
+        "subtitle": "Architecture and the Intangible",
+        "authors": ["Peter J. Baldwin"],
+        "publisher": "John Wiley & Sons",
+        "publishedDate": "2024-07-15",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9781394185085"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "1394185081"
+          }
+        ],
+        "pageCount": 147,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=5kYoEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=5kYoEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "LcJmEQAAQBAJ",
+      "volumeInfo": {
+        "title": "The Routledge Companion to Literature and Cognitive Studies",
+        "authors": ["Jan Alber", "Ralf Schneider"],
+        "publisher": "Taylor & Francis",
+        "publishedDate": "2025-07-31",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9781040345979"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "1040345972"
+          }
+        ],
+        "pageCount": 578,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=LcJmEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=LcJmEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "0GlDEQAAQBAJ",
+      "volumeInfo": {
+        "title": "Meanjin Vol 80, No 1",
+        "authors": ["Meanjin Quarterly"],
+        "publisher": "Simon and Schuster",
+        "publishedDate": "2021-03-16",
+        "industryIdentifiers": [
+          {
+            "type": "ISBN_13",
+            "identifier": "9780522877441"
+          },
+          {
+            "type": "ISBN_10",
+            "identifier": "0522877443"
+          }
+        ],
+        "pageCount": 464,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=0GlDEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=0GlDEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "eNMfAQAAIAAJ",
+      "volumeInfo": {
+        "title": "Austin Clarke 1896-1974",
+        "subtitle": "A Critical Introduction",
+        "authors": ["Maurice Harmon"],
+        "publishedDate": "1989",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "STANFORD:36105038558156"
+          }
+        ],
+        "pageCount": 328,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=eNMfAQAAIAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=eNMfAQAAIAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "JY4djmmD9NIC",
+      "volumeInfo": {
+        "title": "A Descriptive Catalogue of the Books Forming the Library of Clarence H. Clark ...",
+        "authors": ["Clarence Howard Clark"],
+        "publishedDate": "1888",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015033647549"
+          }
+        ],
+        "pageCount": 958,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=JY4djmmD9NIC&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=JY4djmmD9NIC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "-s05AAAAMAAJ",
+      "volumeInfo": {
+        "title": "Book-prices Current",
+        "subtitle": "A Record of Prices at which Books Have Been Sold at Auction",
+        "authors": ["John Herbert Slater", "William Roberta", "F. Partridge"],
+        "publishedDate": "1900",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015067190325"
+          }
+        ],
+        "pageCount": 788,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=-s05AAAAMAAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=-s05AAAAMAAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "oEJCzwEACAAJ",
+      "volumeInfo": {
+        "title": "Piranesi by Susanna Clarke",
+        "authors": ["William J. Collopy"],
+        "publishedDate": "2022",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "OCLC:1330203474"
+          }
+        ],
+        "pageCount": 13,
+        "printType": "BOOK",
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "I5xJAAAAYAAJ",
+      "volumeInfo": {
+        "title": "Book-prices Current",
+        "subtitle": "A Record of Prices at which Books Have Been Sold at Auction",
+        "publishedDate": "1900",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "PRNC:32101076186558"
+          }
+        ],
+        "pageCount": 786,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=I5xJAAAAYAAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=I5xJAAAAYAAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "VF76qsJJ_JIC",
+      "volumeInfo": {
+        "title": "Reference Catalogue of Current Literature",
+        "publishedDate": "1928",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UIUC:30112125869963"
+          }
+        ],
+        "pageCount": 1472,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=VF76qsJJ_JIC&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=VF76qsJJ_JIC&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "UW1HAAAAYAAJ",
+      "volumeInfo": {
+        "title": "Catalogue of the Parliamentary Library of South Australia",
+        "authors": [
+          "Parliamentary Library of South Australia",
+          "South Australia. Parliamentary Library"
+        ],
+        "publishedDate": "1871",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "COLUMBIA:0037127101"
+          }
+        ],
+        "pageCount": 236,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=UW1HAAAAYAAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=UW1HAAAAYAAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "J7cOAQAAMAAJ",
+      "volumeInfo": {
+        "title": "Dictionary Catalog of the William Andrews Clark Memorial Library",
+        "authors": ["William Andrews Clark Memorial Library"],
+        "publishedDate": "1974",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015051447764"
+          }
+        ],
+        "pageCount": 798,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=J7cOAQAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=J7cOAQAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "0lI0AAAAMAAJ",
+      "volumeInfo": {
+        "title": "A General Catalog of Books Offered to the Public at the Affixed Prices",
+        "authors": ["Bernard Quaritch (Firm)"],
+        "publishedDate": "1884",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UOM:39015058392328"
+          }
+        ],
+        "pageCount": 584,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=0lI0AAAAMAAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=0lI0AAAAMAAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "hp4IAAAAQAAJ",
+      "volumeInfo": {
+        "title": "CATALOGUE OF GREEK AND LATIN CLASSICS",
+        "authors": ["MODERN LATINISTS AND HELLENISTS MACARONI"],
+        "publishedDate": "1884",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "OXFORD:555061208"
+          }
+        ],
+        "pageCount": 568,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=hp4IAAAAQAAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=hp4IAAAAQAAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "5mJcb7F9wEcC",
+      "volumeInfo": {
+        "title": "Bookseller and the Stationery Trades' Journal",
+        "publishedDate": "1891",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "CORNELL:31924078875238"
+          }
+        ],
+        "pageCount": 1344,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=5mJcb7F9wEcC&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=5mJcb7F9wEcC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "jKHHPQB1G3gC",
+      "volumeInfo": {
+        "title": "The Bookseller",
+        "subtitle": "A Newspaper of British and Foreign Literature",
+        "publishedDate": "1910",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "IND:30000111793554"
+          }
+        ],
+        "pageCount": 1200,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=jKHHPQB1G3gC&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=jKHHPQB1G3gC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "Enc_AAAAIAAJ",
+      "volumeInfo": {
+        "title": "S. Paul's Cathedral Library",
+        "subtitle": "A Catalogue of Bibles, Rituals, and Rare Books; Works Relating to London and Especially to S. Paul's Cathedral, Including a Large Collection of Paul's Cross Sermons; Maps, Plans, and Views of London, and of S. Paul's Cathedral",
+        "authors": [
+          "St. Paul's Cathedral (London, England). Library",
+          "William Sparrow Simpson"
+        ],
+        "publishedDate": "1893",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UCAL:$B142451"
+          }
+        ],
+        "pageCount": 314,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=Enc_AAAAIAAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=Enc_AAAAIAAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "trvlOlpsHlsC",
+      "volumeInfo": {
+        "title": "General Catalogue",
+        "authors": ["Bernard Quaritch"],
+        "publishedDate": "1880",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "UBBE:UBBE-00156723"
+          }
+        ],
+        "pageCount": 588,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=trvlOlpsHlsC&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=trvlOlpsHlsC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    },
+    {
+      "kind": "books#volume",
+      "id": "n2VWAAAAYAAJ",
+      "volumeInfo": {
+        "title": "A General Catalogue of Books Offered to the Public at the Affixed Prices by Bernard Quaritch ...",
+        "publishedDate": "1883",
+        "industryIdentifiers": [
+          {
+            "type": "OTHER",
+            "identifier": "NYPL:33433089889376"
+          }
+        ],
+        "pageCount": 594,
+        "printType": "BOOK",
+        "imageLinks": {
+          "smallThumbnail": "http://books.google.com/books/content?id=n2VWAAAAYAAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
+          "thumbnail": "http://books.google.com/books/content?id=n2VWAAAAYAAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
+        },
+        "language": "en"
+      }
+    }
+  ]
+}

@@ -40,6 +40,8 @@ interface Props {
   onReread: () => Promise<Result<unknown>>
   /** Resolves ok once the book is removed; the screen then leaves and raises the toast. */
   onRemove: () => Promise<Result<unknown>>
+  /** Opens Edit details. The sheet closes first. */
+  onEdit: () => void
 }
 
 type Busy = ReadStatus | 'reread' | 'remove' | null
@@ -52,6 +54,7 @@ export function BookActionsSheet({
   onMove,
   onReread,
   onRemove,
+  onEdit,
 }: Props) {
   const c = useColors()
   const [confirming, setConfirming] = useState(false)
@@ -146,6 +149,13 @@ export function BookActionsSheet({
               onPress={() => void run('reread', onReread)}
             />
           ) : null}
+          <ActionRow
+            icon="pencil"
+            title="Edit details"
+            detail="Title, author, page count, cover colour"
+            disabled={busy !== null}
+            onPress={onEdit}
+          />
           <ActionRow
             icon="trash"
             title={actions.remove}

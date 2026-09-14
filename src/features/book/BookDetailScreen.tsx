@@ -171,6 +171,10 @@ export function BookDetailScreen() {
               onMove={onMove}
               onReread={onReread}
               onRemove={onRemove}
+              onEdit={() => {
+                setSheetOpen(false)
+                router.push({ pathname: '/book/edit', params: { id: bookId } })
+              }}
             />
           </>
         ) : null}
