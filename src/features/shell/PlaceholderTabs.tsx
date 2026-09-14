@@ -1,12 +1,10 @@
 /**
- * The Add and Stats tabs, as Slice 1 ships them: real screens in the real shell, so the
- * tab bar and navigation are exercised end to end, each with an honest empty state.
- *
- * Add is filled in Slice 2 (search, scan, manual entry) and Stats in Slice 7. Neither
- * pretends to have content it does not.
+ * The Add tab, as Slice 1 ships it: a real screen in the real shell, with an honest empty
+ * state. Add is filled in Slice 4 (search, scan, manual entry). Stats moved to
+ * `features/stats` in Slice 3, with the daily pace chart.
  */
 
-import { empty, nav } from '@/lib/strings'
+import { nav } from '@/lib/strings'
 import { EmptyState } from '@/ui/EmptyState'
 import { Header } from '@/ui/Header'
 import { Screen } from '@/ui/Screen'
@@ -19,15 +17,6 @@ export function AddScreen() {
         title="Search, scan or type it in"
         body="Finding books by title, ISBN or barcode is on its way. Everything you add will stay on this phone."
       />
-    </Screen>
-  )
-}
-
-export function StatsScreen() {
-  return (
-    <Screen>
-      <Header title={nav.stats.title} />
-      <EmptyState title={empty.stats.title} body={empty.stats.body} />
     </Screen>
   )
 }

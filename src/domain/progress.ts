@@ -96,6 +96,42 @@ export function isBackwards(session: ProgressSession): boolean {
 }
 
 /**
+ * ROUGHLY HOW LONG IS LEFT, in seconds, or null when the app does not know.
+ *
+ * Session complete shows "~4h left to go". Two honest sources, and no third:
+ *   - **An audiobook** knows exactly: its remaining minutes (at 1x, which is what the book's
+ *     length means).
+ *   - **A print book** knows only from the reader's own timed page sessions: seconds per page
+ *     across them, times the pages left. Sessions logged by hand have no duration, so a
+ *     reader who never used the timer gets null, and the screen shows pages left instead.
+ *
+ * Never a guessed reading speed. A "~6h left" built on an average reader is a number about
+ * somebody else, and this app does not record or display numbers it does not know.
+ */
+export function secondsLeft(
+  sessions: readonly ProgressSession[],
+  format: SessionFormat,
+  position: number | null,
+  total: number | null,
+): number | null {
+  if (position === null || total === null || total <= 0 || position >= total) return null
+  const remaining = total - position
+  if (format === 'minutes') return remaining * 60
+
+  let seconds = 0
+  let pages = 0
+  for (const s of sessions) {
+    if (s.format !== 'pages' || s.durationSeconds === null || s.durationSeconds <= 0) continue
+    const span = sessionAmount(s)
+    if (span === null || span <= 0) continue
+    seconds += s.durationSeconds
+    pages += span
+  }
+  if (pages === 0) return null
+  return Math.round((seconds / pages) * remaining)
+}
+
+/**
  * Positions covered by one session (pages, or audiobook minutes), or NULL when that cannot
  * honestly be computed: either end unknown, or the session runs backwards. This is the
  * position span only; how a session counts towards the totals is `contribution` in

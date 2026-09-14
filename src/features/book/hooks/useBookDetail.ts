@@ -20,7 +20,7 @@ import {
 } from '../queries'
 import { devTimed } from '@/lib/devLog'
 import { appError, type AppError } from '@/lib/result'
-import { useOnRefocus } from '@/ui/useOnRefocus'
+import { useReloadOnChange } from '@/ui/useReloadOnChange'
 
 export interface BookDetailData {
   readonly detail: BookDetail | null | undefined
@@ -70,9 +70,10 @@ export function useBookDetail(bookId: string): BookDetailData {
     }
   }, [bookId, nonce])
 
-  // Returning from another screen, where this book may have changed. Not on first focus,
-  // which would repeat the load the effect above has just started (ui/useOnRefocus.ts).
-  useOnRefocus(reload)
+  // A write anywhere, including an Undo toast on this very screen: reload now if focused,
+  // else when it is focused again (ui/useReloadOnChange.ts). Undo restoring a session used
+  // to leave it missing from this list, because the screen never lost focus.
+  useReloadOnChange(reload)
 
   return { detail, sessions, error, reload }
 }

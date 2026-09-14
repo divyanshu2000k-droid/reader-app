@@ -262,6 +262,7 @@ counts break progress and statistics silently, which is worse than an obvious er
 | Notifications | expo-notifications plus a custom foreground service plugin | The timer notification is a designed feature, see the States sheet |
 | Widgets | react-native-android-widget | Only real option. Treat as v1.1 if it resists |
 | Dates | date-fns with explicit timezone handling | Bookly scrambles sessions across timezones. Store UTC, render local, always |
+| Date and time pickers | `@react-native-community/datetimepicker`, Android's own dialogs (Slice 3) | The session date is the most important control in the app, and the native dialogs are accessible and localised for free. A native module: adding it needs a native rebuild. Its config plugin only themes the dialog and is not used. See `DECISIONS.md`, 2026-09-13 |
 
 ---
 

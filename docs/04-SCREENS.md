@@ -188,6 +188,32 @@ streak, percent and time remaining. Two actions: Done, or I finished the book.
 
 **Editing.** Every session is editable and deletable from book detail, forever.
 
+**As built in Slice 3:**
+- **The logger is a full screen** (`session/log`), for a new session (`?book=`) or an edit
+  (`?session=`). A new session opens with "Now on page" focused. Save rides above the keyboard.
+- **Opens from** the Library's Continue pill (Reading tab only) and book detail's Log pages.
+  On a narrow window for its text size (width ÷ font scale under 360 dp), the pill sits below
+  the progress line so the title and author keep their words.
+  There is no FAB: the raised tab is Add a book (Slice 4).
+- **Any past date and time; never the future.** Date then time, in Android's dialogs. A time
+  later than now is refused with a reason.
+- **Refused:** an end at or before the start, and anything that is not a whole number.
+  **Saved, with a hint:** an end past the book's length ("its page count may be wrong"), and a
+  range overlapping another session of the read, naming that session's date.
+- **Logging on a Want book moves it to Reading.**
+- **Session complete** (`session/complete`) shows the saved session, a stepper for the end
+  page, the date with Change, streak, percent through, and time left: from the reader's own
+  timed sessions, else pages left, never an average reader's speed. Edits and the note are
+  written on Done. Every number follows the edit before Done. **I finished the book** moves
+  the read to Finished, status only, until Slice 5's finish flow.
+- **Editing** opens from any session row on book detail (the pencil). **Delete** asks once,
+  leaves, then raises the undo toast on book detail.
+- **Leaving with unsaved input asks first**, by any route, and never after a save.
+- **Undo redraws the screen it is on.** A restored session reappears on book detail, and a
+  restored book on the Library tab, without leaving the screen.
+- **A session's date always says its day**: "Today, 9:40 pm", "Tue 8 Sep, 11:00 pm", and the
+  year when it is not this one.
+
 **Undo can fail, and says so.** An undo toast's action returns a `Result`. The toast stays
 up while it runs. If it fails (the book it belonged to is deleted too, or something added
 since takes its place), the toast is replaced by what happened and what to do. It never
@@ -245,9 +271,10 @@ not failure and the data should not treat it as such.
   **Remove asks once, in the sheet**, using the confirm copy, then leaves book detail and
   raises the undo toast, **only if the delete changed something**. A failed action keeps the
   sheet open with the reason.
-- **Recently Deleted** is in Settings, and in Slice 2 lists **books only**: removing a book is
-  the only delete a reader can perform yet. Restore brings back exactly what the removal took.
-  Sessions and notes join it with the slices that let a reader delete them.
+- **Recently Deleted** is in Settings. It lists removed books and, since Slice 3, sessions
+  deleted on their own, each named by its pages, book and date. A session deleted with its
+  book is not listed: restoring the book brings it back. Restore brings back exactly what the
+  removal took. Notes join it with Slice 5b.
 - **A book appears once in the Library, on its current read's tab.** A re-read book is on
   Reading, not also on Finished.
 - **Start a re-read is offered only when the current read is finished or DNF**, and
@@ -294,7 +321,8 @@ Settings holds the yearly goal, theme with a system option, one notification tog
 import, export, recently deleted, and account. Nothing else.
 
 Stats shows three separate numbers, a daily pace chart, and a genre breakdown, with a year
-switcher. All free. The empty state explains that charts need a few sessions rather than
+switcher. **Slice 3 ships the pace chart alone**: the last 14 days by `local_day`, pages or
+time as separate charts, a bar for every day. Slice 7 adds the rest. All free. The empty state explains that charts need a few sessions rather than
 implying something is locked.
 
 ---

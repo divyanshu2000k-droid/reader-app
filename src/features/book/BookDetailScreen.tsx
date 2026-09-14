@@ -39,6 +39,7 @@ import { Screen } from '@/ui/Screen'
 import { SkeletonBookRow, SkeletonGate } from '@/ui/Skeleton'
 import { font, rules, space, typeStyle } from '@/ui/theme'
 import { useToast } from '@/ui/Toast'
+import { usePressGuard } from '@/ui/usePressGuard'
 import { useColors } from '@/ui/useTheme'
 
 export function BookDetailScreen() {
@@ -55,9 +56,23 @@ export function BookDetailScreen() {
     else router.replace('/')
   }, [router])
 
+  const openLog = usePressGuard(
+    useCallback(
+      () => router.push({ pathname: '/session/log', params: { book: bookId } }),
+      [router, bookId],
+    ),
+  )
+  const editSession = usePressGuard(
+    useCallback(
+      (sessionId: string) =>
+        router.push({ pathname: '/session/log', params: { session: sessionId } }),
+      [router],
+    ),
+  )
+
   const renderItem = useCallback(
-    ({ item }: { item: SessionEntry }) => <SessionRow session={item} />,
-    [],
+    ({ item }: { item: SessionEntry }) => <SessionRow session={item} onEdit={editSession} />,
+    [editSession],
   )
   const keyExtractor = useCallback((item: SessionEntry) => item.id, [])
 
@@ -132,7 +147,7 @@ export function BookDetailScreen() {
               ListHeaderComponent={
                 <View style={styles.header}>
                   <BookHero book={detail.book} read={detail.current} />
-                  <ProgressCard book={detail.book} read={detail.current} />
+                  <ProgressCard book={detail.book} read={detail.current} onLog={openLog} />
                   {sessions.length > 0 ? (
                     <Text
                       accessibilityRole="header"

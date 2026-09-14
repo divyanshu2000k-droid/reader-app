@@ -1,6 +1,6 @@
 /**
- * Recently Deleted, reachable from Settings (Journey K). Where a removed book waits, and
- * where it comes back from.
+ * Recently Deleted, reachable from Settings (Journey K). Where a removed book or a deleted
+ * session waits, and where it comes back from.
  *
  * Restoring brings back exactly what the removal took: the reads, sessions, notes and shelf
  * assignments deleted with it, and nothing deleted before it (write.ts, the cascade). A
@@ -12,8 +12,9 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { memo, useCallback, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 
-import { getDeletedBooks, restoreDeletedBook, type DeletedBook } from './queries'
-import { formatRelativeDay } from '@/lib/dates'
+import { getDeletedItems, restoreDeleted, type DeletedItem } from './queries'
+import { sessionLine } from '@/domain/sessionLine'
+import { formatRelativeDay, formatWhen } from '@/lib/dates'
 import { appError, type AppError } from '@/lib/result'
 import { actions, empty, toasts } from '@/lib/strings'
 import { BookCover } from '@/ui/BookCover'
@@ -30,13 +31,13 @@ import { useColors } from '@/ui/useTheme'
 export function RecentlyDeletedScreen() {
   const router = useRouter()
   const toast = useToast()
-  const [rows, setRows] = useState<DeletedBook[] | null>(null)
+  const [rows, setRows] = useState<DeletedItem[] | null>(null)
   const [error, setError] = useState<AppError | null>(null)
   const [restoring, setRestoring] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      setRows(await getDeletedBooks())
+      setRows(await getDeletedItems())
       setError(null)
     } catch (cause) {
       setError(
@@ -55,26 +56,28 @@ export function RecentlyDeletedScreen() {
   )
 
   const restore = useCallback(
-    async (book: DeletedBook) => {
+    async (item: DeletedItem) => {
       if (restoring !== null) return
-      setRestoring(book.id)
-      const result = await restoreDeletedBook(book.id)
+      setRestoring(item.id)
+      const result = await restoreDeleted(item)
       setRestoring(null)
       if (!result.ok) {
         setError(result.error)
         return
       }
       setError(null)
-      if (result.value.changed) toast.show(toasts.bookRestored)
+      if (result.value.changed) {
+        toast.show(item.kind === 'book' ? toasts.bookRestored : toasts.sessionRestored)
+      }
       await load()
     },
     [load, restoring, toast],
   )
 
   const renderItem = useCallback(
-    ({ item }: { item: DeletedBook }) => (
+    ({ item }: { item: DeletedItem }) => (
       <DeletedRow
-        book={item}
+        item={item}
         busy={restoring === item.id}
         disabled={restoring !== null}
         onRestore={restore}
@@ -105,7 +108,7 @@ export function RecentlyDeletedScreen() {
           <FlashList
             data={rows ?? []}
             renderItem={renderItem}
-            keyExtractor={(b) => b.id}
+            keyExtractor={(item) => `${item.kind}:${item.id}`}
             extraData={restoring}
             contentContainerStyle={styles.list}
             ItemSeparatorComponent={RowGap}
@@ -117,36 +120,47 @@ export function RecentlyDeletedScreen() {
 }
 
 interface RowProps {
-  book: DeletedBook
+  item: DeletedItem
   busy: boolean
   disabled: boolean
-  onRestore: (book: DeletedBook) => void
+  onRestore: (item: DeletedItem) => void
 }
 
-const DeletedRow = memo(function DeletedRow({ book, busy, disabled, onRestore }: RowProps) {
+const DeletedRow = memo(function DeletedRow({ item, busy, disabled, onRestore }: RowProps) {
   const c = useColors()
+  const removed = `${formatRelativeDay(item.deletedAt).toLowerCase()}`
+  // A session is named by what it was and which book it was for: "28 pages · 184 → 212" alone
+  // cannot tell two deleted sessions apart.
+  const title = item.kind === 'book' ? item.title : sessionLine(item).amount
+  const detail =
+    item.kind === 'book'
+      ? `Removed ${removed}`
+      : `${item.bookTitle} · ${formatWhen(item.occurredAt)} · deleted ${removed}`
   return (
     <View style={styles.row}>
-      <BookCover
-        title={book.title}
-        localPath={book.coverLocalPath}
-        url={book.coverUrl}
-        color={book.coverColor}
-        size="dock"
-      />
+      {item.kind === 'book' ? (
+        <BookCover
+          title={item.title}
+          localPath={item.coverLocalPath}
+          url={item.coverUrl}
+          color={item.coverColor}
+          size="dock"
+        />
+      ) : null}
       <View style={styles.text}>
         <Text
-          numberOfLines={2}
+          // Three lines: at large text and a narrow screen, two cut the title to one word.
+          numberOfLines={3}
           maxFontSizeMultiplier={rules.maxFontScale}
           style={[typeStyle(font.bodyStrong), { color: c.text }]}
         >
-          {book.title}
+          {title}
         </Text>
         <Text
           maxFontSizeMultiplier={rules.maxFontScale}
           style={[typeStyle(font.secondary), { color: c.textMuted }]}
         >
-          {`Removed ${formatRelativeDay(book.deletedAt).toLowerCase()}`}
+          {detail}
         </Text>
       </View>
       <Button
@@ -155,8 +169,8 @@ const DeletedRow = memo(function DeletedRow({ book, busy, disabled, onRestore }:
         busy={busy}
         disabled={disabled}
         variant="secondary"
-        accessibilityLabel={`${actions.restore} ${book.title}`}
-        onPress={() => onRestore(book)}
+        accessibilityLabel={`${actions.restore} ${title}, ${detail}`}
+        onPress={() => onRestore(item)}
       />
     </View>
   )

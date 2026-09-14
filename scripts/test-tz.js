@@ -16,6 +16,11 @@ const SUITES = [
   'src/lib/__tests__/dates.test.ts',
   'src/domain/__tests__/stats.test.ts',
   'src/domain/__tests__/streaks.test.ts',
+  // Slice 3: a backdated session's day, the streak on Session complete, and the pace chart's
+  // bars all depend on the zone the reader is in.
+  'src/features/session/__tests__/sessionForm.test.ts',
+  'src/features/session/__tests__/sessionComplete.test.ts',
+  'src/features/stats/__tests__/paceChart.test.ts',
 ]
 
 let failed = false

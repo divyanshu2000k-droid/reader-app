@@ -231,6 +231,20 @@ renders (need fault injection), and 200% font, 360 dp, TalkBack (need the owner'
   Nothing may clip or overlap, no row may lose its label, and the four "Move to" chips must
   wrap rather than overflow.
 
+**Status, 2026-09-14: verified on the phone, except what needs the owner's phone settings.**
+The backdated edit passes all ten steps, the rest of the loop, all four forced failures, dark
+mode, and the device pass (29/29, check 13 watched failing three ways). Four bugs found there
+were fixed; the main one is that Undo did not redraw the screen under it. **Then, with the owner's settings:** light mode, a
+320 dp display at 1.3x and Pacific/Pago_Pago all pass after two label fixes. **Still open:**
+200% font (the phone's Display setting stops at 1.3). `DECISIONS.md`, 2026-09-14.
+- **Keyboard:** the logger is a full screen, as designed, so the sheet question is moot. It
+  measures the keyboard overlap and needs no `keyboard-controller`.
+- **The toast beneath a Modal** was avoided: delete asks in a sheet, leaves, then toasts. A
+  toast raised while a sheet stays open is still hidden: **refiled to Slice 5b**.
+- **The daily pace chart** ships minimal on Stats, because this "done when" needs it.
+- **The forced-failure switch** deferred from Slice 2 is built (Settings, dev only). Seeing each
+  failure render and the layout pass are on the phone checklist.
+
 **Done when:** you can log a session for last Tuesday, edit its date afterwards, and see a
 correct daily pace chart. **Test this specific case, it is the whole thesis.** Test it with
 the device clock at 11pm and at 4am, in IST and in a US timezone: the session must land on
@@ -300,6 +314,9 @@ and dates, and both count in their own years.
 The actions sheet links here from Slice 2 and the screens exist in `design/`. Without this
 slice that link is a dead end.
 
+- **The undo toast still renders beneath a Modal.** Slice 3 avoided it by leaving the screen
+  before toasting. A note deleted from inside a sheet that stays open would raise an invisible
+  Undo. Filed from Slice 3
 - Notes list per book, filtered by all, quotes, notes
 - Note editor: quote or note toggle, page defaulting to current page, autosaved draft.
   A multiline editor is the worst case for the keyboard covering input: same check as

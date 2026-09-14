@@ -22,6 +22,7 @@ import { isCurrentRead } from '@/db/currentRead'
 import { progressAggregates } from '@/db/progressAggregates'
 import { books, reads, sessions, type ReadStatus } from '@/db/schema'
 import type { UnixMs } from '@/lib/dates'
+import { throwIfFault } from '@/lib/faults'
 
 export interface LibraryRow {
   readonly readId: string
@@ -57,6 +58,7 @@ export interface LibraryRow {
  * last, by title.
  */
 export async function getLibraryRows(status: ReadStatus): Promise<LibraryRow[]> {
+  throwIfFault('libraryQuery')
   const rows = await getDb()
     .select({
       readId: reads.id,

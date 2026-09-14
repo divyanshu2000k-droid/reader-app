@@ -32,6 +32,10 @@ export type IconName =
   | 'more'
   | 'reread'
   | 'trash'
+  | 'pencil'
+  | 'chevron'
+  | 'minus'
+  | 'close'
 
 interface Props {
   name: IconName
@@ -153,6 +157,27 @@ function paths(name: IconName) {
           <Path d="M4 7h16" />
           <Path d="M6 7l1 13h10l1-13" />
           <Path d="M9 7V4h6v3" />
+        </>
+      )
+    // Book detail's session rows, from BookDetail.dc.html.
+    case 'pencil':
+      return (
+        <>
+          <Path d="M12 20h9" />
+          <Path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z" />
+        </>
+      )
+    // The logger's When row, from Session.dc.html.
+    case 'chevron':
+      return <Path d="M9 18l6-6-6-6" />
+    // Session complete's page stepper and close, from SessionComplete.dc.html.
+    case 'minus':
+      return <Path d="M5 12h14" />
+    case 'close':
+      return (
+        <>
+          <Path d="M18 6L6 18" />
+          <Path d="M6 6l12 12" />
         </>
       )
   }

@@ -1,23 +1,26 @@
 /**
  * src/features/library/components/BookRow.tsx
  *
- * One book in the Library list, from `Main.dc.html`: cover, title, author, progress.
+ * One book in the Library list, from `Main.dc.html`: cover, title, author, progress, and on a
+ * book being read, the Continue pill, which opens the session logger.
  *
  * MEMOISED, and every prop it takes is a primitive or a stable callback. A row that
  * re-renders when its neighbour changes is what turns a 2000-book scroll into 40fps, and
  * FlashList recycles these aggressively.
  *
- * What it does NOT have yet, deliberately: the "Continue" pill from the artboard. It opens
- * the session logger, which is Slice 3. A button that goes nowhere is worse than no button,
- * so the whole row opens book detail and the pill arrives with the screen it opens.
+ * The row opens book detail; the pill opens the logger. Continue then Save is the two-tap
+ * budget from the home screen (`rules.maxTapsToLog`). Only on the Reading tab: a book on Want
+ * or Finished is not being continued, and its detail screen has Log pages for a backfill.
  */
 
 import { memo } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 
 import type { LibraryRow } from '../queries'
+import { pillBelowText } from '../rowLayout'
 import { isAudiobook, progressDisplay } from '@/domain/progressDisplay'
 import { BookCover } from '@/ui/BookCover'
+import { Button } from '@/ui/Button'
 import { ProgressBar } from '@/ui/ProgressBar'
 import { font, motion, radius, rules, space, typeStyle } from '@/ui/theme'
 import { useColors } from '@/ui/useTheme'
@@ -25,9 +28,10 @@ import { useColors } from '@/ui/useTheme'
 interface Props {
   row: LibraryRow
   onOpen: (bookId: string) => void
+  onContinue: (bookId: string) => void
 }
 
-export const BookRow = memo(function BookRow({ row, onOpen }: Props) {
+export const BookRow = memo(function BookRow({ row, onOpen, onContinue }: Props) {
   const c = useColors()
   const display = progressDisplay(row)
   const active = row.status === 'reading'
@@ -35,6 +39,18 @@ export const BookRow = memo(function BookRow({ row, onOpen }: Props) {
   // Nothing, never "Unknown", when there is no author (03-DATA-MODEL). And no empty line
   // either: a blank Text still takes a line's height, which the phone showed as a gap.
   const byline = [row.author, audio ? 'audio' : null].filter(Boolean).join(' · ')
+  // Beside the text when there is room, below it when not (rowLayout.ts).
+  const { width, fontScale } = useWindowDimensions()
+  const below = pillBelowText(width, fontScale, rules.minScreenWidth)
+  const pill = active ? (
+    <Button
+      label="Continue"
+      variant="pill"
+      accessibilityLabel={`Log a session for ${row.title}`}
+      onPress={() => onContinue(row.bookId)}
+      style={below ? styles.pillBelow : undefined}
+    />
+  ) : null
 
   return (
     <Pressable
@@ -89,7 +105,9 @@ export const BookRow = memo(function BookRow({ row, onOpen }: Props) {
             ) : null}
           </View>
         ) : null}
+        {below ? pill : null}
       </View>
+      {below ? null : pill}
     </Pressable>
   )
 })
@@ -105,5 +123,6 @@ const styles = StyleSheet.create({
   text: { flex: 1, gap: space.labelGap },
   progress: { flexDirection: 'row', alignItems: 'center', gap: space.row },
   bar: { flex: 1 },
+  pillBelow: { alignSelf: 'flex-start' },
   pressed: { transform: [{ scale: motion.press.scale }] },
 })

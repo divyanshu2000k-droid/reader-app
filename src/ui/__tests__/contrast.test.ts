@@ -40,9 +40,9 @@ const SURFACES: readonly Token[] = ['ground', 'surface', 'surfaceRaised']
 /** Text on a coloured background, each one a real component. [text, background, where] */
 const SPECIAL: readonly (readonly [Token, Token, string])[] = [
   ['onAccent', 'accent', 'primary button label, raised tab icon'],
-  ['accentInk', 'accentSurface', 'pill button label'],
+  ['accentInk', 'accentSurface', 'pill button label: Continue; Session complete’s + stepper'],
   ['text', 'accentSurface', 'a focused field’s value'],
-  ['text', 'dangerSurface', 'an errored field’s value'],
+  ['text', 'dangerSurface', 'an errored field’s value, and a refused When on the logger'],
   ['danger', 'dangerSurface', 'danger button label'],
   ['textSecondary', 'dangerSurface', 'an inline error’s safe line'],
   ['ground', 'text', 'a selected chip’s label'],

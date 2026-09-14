@@ -13,6 +13,7 @@ import { books, reads, sessions, type ReadStatus, type SessionFormat } from '@/d
 import { restoreRow, softDelete, updateRow, writeRow, type WriteOutcome } from '@/db/write'
 import { canStartReread } from '@/domain/reads'
 import type { UnixMs } from '@/lib/dates'
+import { injectedError, isFaultArmed, throwIfFault } from '@/lib/faults'
 import { newId } from '@/lib/ids'
 import { appError, err, type Result } from '@/lib/result'
 
@@ -75,6 +76,7 @@ export interface SessionEntry {
  * without one — and the cascade in write.ts means that shape should not exist.
  */
 export async function getBookDetail(bookId: string): Promise<BookDetail | null> {
+  throwIfFault('bookDetail')
   const db = getDb()
   const bookRows = await db
     .select({
@@ -153,7 +155,18 @@ export async function setReadStatus(
   readId: string,
   status: ReadStatus,
 ): Promise<Result<WriteOutcome>> {
+  if (isFaultArmed('bookAction')) return injectedActionFailure()
   return updateRow('reads', readId, { status })
+}
+
+/** A forced failure from the dev block in Settings (lib/faults.ts), shaped like a real one. */
+function injectedActionFailure() {
+  return err(
+    appError('recoverable', 'Could not change this book', {
+      safe: 'Nothing was changed. This failure was forced from Settings.',
+      cause: injectedError('bookAction'),
+    }),
+  )
 }
 
 /**
@@ -166,6 +179,7 @@ export async function setReadStatus(
  * than two reads sharing a number.
  */
 export async function startReread(bookId: string): Promise<Result<void>> {
+  if (isFaultArmed('bookAction')) return injectedActionFailure()
   const current = await getDb()
     .select({ number: reads.readNumber, status: reads.status })
     .from(reads)
@@ -198,6 +212,7 @@ export async function startReread(bookId: string): Promise<Result<void>> {
 
 /** Remove a book. Soft, cascading to its reads, sessions, notes and shelf assignments. */
 export async function removeBook(bookId: string): Promise<Result<WriteOutcome>> {
+  if (isFaultArmed('bookAction')) return injectedActionFailure()
   return softDelete('books', bookId)
 }
 

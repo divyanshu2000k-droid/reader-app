@@ -311,6 +311,10 @@ export const size = {
   hitSlopTight: 6,
   /** A skeleton line's height when the caller has no real line height to match. */
   skeletonLine: 12,
+  /** The daily pace chart's plot height, bars only. Its labels sit below it and grow. */
+  paceChart: 120,
+  /** The narrowest a pace bar is drawn: a day read but dwarfed by a big day stays visible. */
+  paceBarMin: 3,
 } as const
 
 /** Icon glyph sizes, from the design files. The design draws them on a 24-unit grid. */

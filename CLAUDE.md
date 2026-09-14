@@ -97,6 +97,10 @@ The four, as evidence:
    `unusable`: real reading, reported as broken data.
 15. **`updateRow` could move a session's date without its day**, and `{ note: undefined }`
    queued a sync for an edit that never happened. Latent: no caller had done either yet.
+16. **Undo restored the session, and the screen went on showing it deleted.** The database had
+   the row back and the restore queued; book detail, focused the whole time, had no reason to
+   re-read. Every part worked. Found only by tapping Undo on a phone and looking at the list.
+   `write.ts` now signals every committed change (`db/changes.ts`).
 
 Add another if the theme counts: `font.family` was declared from the first commit and
 applied by nothing, so the entire app rendered in the wrong typeface without a single
@@ -313,6 +317,27 @@ neither.
 Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
+
+**Slice 3 is built and verified on the phone, except four checks that need the owner to change
+phone settings.**
+- **What it does:** log a session for any past date and time (Android's pickers), edit and
+  delete it from book detail, Session complete with streak and time left, the Continue pill and
+  Log pages, sessions in Recently Deleted, a 14-day pace chart on Stats, and the forced-failure
+  switch.
+- **Checks:** 249 tests pass under `cmd` and `sh`, and 85 in each of three time zones.
+  Typecheck, lint and Prettier are clean. Device pass RUNTIME 29/29 · COMPILE-TIME 1/1, with
+  check 13 watched failing three ways.
+- **The backdated edit holds on the phone, all ten steps:** 11 pm last Tuesday, then 4 am
+  Thursday, then today. `local_day` and the pace bars followed each move, and the pulled
+  database agreed.
+- **Found on the phone and fixed:** Undo did not redraw the screen under it (item 16 above), a
+  deprecated picker callback raised LogBox, skeleton rows showed under an error, and last
+  year's sessions lacked their year.
+- **Owner's settings, 2026-09-14:** light mode, a 320 dp display at 1.3x font, and
+  Pacific/Pago_Pago all checked. Library rows and Recently Deleted titles lost their labels and
+  were fixed. An 11 pm session, which is the next day in UTC, kept its own `local_day`.
+- **Still open:** 200% font. The phone's Display setting tops out at 1.3; Accessibility → Display
+  size and text should reach 2.0. 253 tests pass.
 
 **Slice 2 is built and verified on the phone** (Nothing Phone 2a) against a 2000-book sandbox
 library: the Library's status tabs, book detail with sessions and earlier reads, the actions

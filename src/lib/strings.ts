@@ -31,6 +31,7 @@ export const actions = {
   startTimer: 'Start timer',
   finishBook: 'I finished the book',
   restore: 'Restore',
+  keepEditing: 'Keep editing',
 } as const
 
 export const errors = {
@@ -113,7 +114,7 @@ export const empty = {
   },
   trash: {
     title: 'Nothing deleted',
-    body: 'Anything you remove waits here for 30 days.',
+    body: 'Books you remove and sessions you delete wait here for 30 days.',
   },
   /**
    * One per status tab. A tab that is empty is not the library being empty, and saying
@@ -178,6 +179,7 @@ export const toasts = {
   bookRemoved: 'Book removed',
   noteDeleted: 'Note deleted',
   bookRestored: 'Book restored',
+  sessionRestored: 'Session restored',
 } as const
 
 /**

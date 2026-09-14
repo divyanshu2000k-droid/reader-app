@@ -27,6 +27,7 @@
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import { File, Paths } from 'expo-file-system'
 
+import { subscribeDataChanges } from './changes'
 import { checkpointWal, dangerouslyExecDevSql, DATABASE_NAME, getDb } from './client'
 import { books, reads, sessions, syncQueue } from './schema'
 import { isCurrentRead } from './currentRead'
@@ -43,7 +44,25 @@ import { SCHEMA_VERSION } from './migrate'
 import { seedSampleLibrary, SEEDED_TITLE } from './seed'
 import { currentPosition } from '@/domain/progress'
 import { totals } from '@/domain/stats'
-import { now, toLocalDay } from '@/lib/dates'
+// Check 13 drives the session logger's own modules: the device pass exists to run the real
+// path, and for Slice 3 the real path starts in the feature, not in write.ts.
+import {
+  createSession,
+  deleteSession,
+  getReadingDays,
+  restoreSession,
+  updateSession,
+} from '@/features/session/queries'
+import {
+  formFromSession,
+  newForm,
+  newSessionRow,
+  sessionPatch,
+} from '@/features/session/sessionForm'
+import { getSessionsSince } from '@/features/stats/queries'
+import { getDeletedItems } from '@/features/trash/queries'
+import { addDays, now, todayLocalDay, toLocalDay, withLocalTime } from '@/lib/dates'
+import { setFault } from '@/lib/faults'
 import { newId } from '@/lib/ids'
 
 /**
@@ -1210,6 +1229,131 @@ async function checkCurrentRead() {
   })
 }
 
+// ─── 13. THE BACKDATED SESSION, THROUGH THE LOGGER'S OWN PATH ────────────────
+
+async function checkBackdatedSession() {
+  /**
+   * Slice 3's "done when", as a device check: log a session for a past evening, edit its date
+   * afterwards, and every day-bucketed reader of it (the streak, the pace chart, Recently
+   * Deleted) follows. 8a to 8c prove write.ts derives local_day; this proves the logger hands
+   * write.ts the right instant and the right patch, on a real SQLite file in the phone's zone.
+   */
+  await check(
+    '13. a session backdated to 11pm, then moved to 4am, lands on the reader’s days',
+    async () => {
+      const { readId } = await devBook('Devcheck Backdated Session')
+      const want = await updateRow('reads', readId, { status: 'want' })
+      assert(want.ok && want.value.changed, 'could not put the read on Want')
+
+      // 11pm six days ago, as the logger builds it: a new form, then the When pick.
+      const eleven = withLocalTime(now() - 6 * DAY, 23, 0)
+      const form = {
+        ...newForm('pages', { pages: null, minutes: null }, now()),
+        to: '28',
+        occurredAt: eleven,
+      }
+      const sessionId = newId()
+      const created = await createSession(
+        newSessionRow(form, { id: sessionId, readId }),
+        'want',
+      )
+      assert(created.ok, 'the logger could not save')
+      assert(created.value.startedReading, 'logging on a Want read did not move it to Reading')
+      const firstDay = await dayOf(sessionId)
+      assert(
+        firstDay === toLocalDay(eleven),
+        `saved on ${firstDay}, expected ${toLocalDay(eleven)}`,
+      )
+      assert(
+        firstDay === addDays(todayLocalDay(), -6),
+        `11pm six days ago filed under ${firstDay}`,
+      )
+
+      // Edited afterwards to 4am two days later, as the editor builds the patch.
+      const four = withLocalTime(now() - 4 * DAY, 4, 0)
+      const stored = {
+        id: sessionId,
+        format: 'pages' as const,
+        fromPosition: 0,
+        toPosition: 28,
+        occurredAt: eleven,
+        durationSeconds: null,
+      }
+      const patch = sessionPatch(stored, { ...formFromSession(stored), occurredAt: four })
+      assert(
+        Object.keys(patch).length === 1 && patch.occurredAt === four,
+        `the edit patched ${Object.keys(patch).join(', ')}`,
+      )
+      const edited = await updateSession(sessionId, patch)
+      assert(edited.ok && edited.value.changed, 'the date edit did not save')
+      const movedDay = await dayOf(sessionId)
+      assert(
+        movedDay === addDays(todayLocalDay(), -4),
+        `4am four days ago filed under ${movedDay}`,
+      )
+      const queued = await queueRowsFor('sessions', sessionId)
+      assert(
+        queued.length === 2,
+        `expected 2 queue rows (create, edit), found ${queued.length}`,
+      )
+
+      // Every day-bucketed reader follows the edit.
+      const days = await getReadingDays()
+      assert(days.includes(movedDay), 'the streak days do not include the new day')
+      const ownDays = await getDb()
+        .selectDistinct({ day: sessions.localDay })
+        .from(sessions)
+        .where(and(eq(sessions.readId, readId), isNull(sessions.deletedAt)))
+      assert(
+        ownDays.length === 1 && ownDays[0]?.day === movedDay,
+        `the read's sessions sit on ${ownDays.map((d) => d.day).join(', ')}`,
+      )
+      const pace = await getSessionsSince(addDays(todayLocalDay(), -13))
+      assert(
+        pace.some((s) => s.occurredAt === four && s.localDay === movedDay),
+        'the pace chart query does not see the session on its new day',
+      )
+
+      // Delete, find it in Recently Deleted, restore it on the same day.
+      const gone = await deleteSession(sessionId)
+      assert(gone.ok && gone.value.changed, 'delete did not change anything')
+      const trash = await getDeletedItems()
+      assert(
+        trash.some((t) => t.kind === 'session' && t.id === sessionId),
+        'the deleted session is not in Recently Deleted',
+      )
+      // The undo toast's restore must tell the screen underneath it (db/changes.ts).
+      let heard = 0
+      const unsubscribe = subscribeDataChanges(() => (heard += 1))
+      const back = await restoreSession(sessionId)
+      unsubscribe()
+      assert(heard === 1, `the restore signalled ${heard} changes, expected 1`)
+      assert(back.ok && back.value.changed, 'restore did not change anything')
+      assert((await dayOf(sessionId)) === movedDay, 'restore moved the session to another day')
+
+      // A forced save failure writes nothing.
+      const failedId = newId()
+      setFault(__DEV__, 'sessionSave', true)
+      try {
+        const refused = await createSession(
+          newSessionRow(form, { id: failedId, readId }),
+          'reading',
+        )
+        assert(!refused.ok, 'an armed save fault still saved')
+      } finally {
+        setFault(__DEV__, 'sessionSave', false)
+      }
+      const ghost = await getDb()
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(eq(sessions.id, failedId))
+      assert(ghost.length === 0, 'a forced failure left a row behind')
+
+      return `11pm on ${firstDay} -> 4am on ${movedDay}; streak, pace and trash followed; forced failure wrote nothing`
+    },
+  )
+}
+
 // ─── CLEANUP ─────────────────────────────────────────────────────────────────
 
 async function cleanup() {
@@ -1272,6 +1416,7 @@ export async function runDeviceChecks(): Promise<CheckResult[]> {
   await checkProgressAggregate()
   await checkLargeCascade()
   await checkCurrentRead()
+  await checkBackdatedSession()
   await cleanup()
 
   const runtime = results.filter((r) => r.kind === 'runtime')

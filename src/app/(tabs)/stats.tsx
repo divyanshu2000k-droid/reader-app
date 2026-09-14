@@ -1,3 +1,3 @@
-import { StatsScreen } from '@/features/shell/PlaceholderTabs'
+import { StatsScreen } from '@/features/stats/StatsScreen'
 
 export default StatsScreen

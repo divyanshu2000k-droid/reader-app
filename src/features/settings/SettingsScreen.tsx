@@ -15,8 +15,10 @@ import { DATABASE_NAME } from '@/db/client'
 import { runDevicePass } from '@/db/devPass'
 import { seedLargeLibrary } from '@/db/seedLarge'
 import { appName, appVersion, config, usesSandboxDatabase } from '@/lib/config'
+import { FAULTS, isFaultArmed, setFault, type FaultName } from '@/lib/faults'
 import { actions, nav } from '@/lib/strings'
 import { Button } from '@/ui/Button'
+import { Chip } from '@/ui/Chip'
 import { Header } from '@/ui/Header'
 import { Screen } from '@/ui/Screen'
 import { font, rules, space, typeStyle } from '@/ui/theme'
@@ -28,6 +30,15 @@ export function SettingsScreen() {
   const [running, setRunning] = useState(false)
   const [seeding, setSeeding] = useState(false)
   const [summary, setSummary] = useState<string | null>(null)
+  // Mirrors lib/faults.ts so the chips redraw; the module is the truth.
+  const [, setFaultsVersion] = useState(0)
+
+  function toggleFault(name: FaultName) {
+    // `__DEV__` literally: Metro makes it `false` in a release bundle, and faults.test.ts
+    // fails if this argument is anything else.
+    setFault(__DEV__, name, !isFaultArmed(name))
+    setFaultsVersion((v) => v + 1)
+  }
 
   async function devicePass() {
     setRunning(true)
@@ -119,6 +130,24 @@ export function SettingsScreen() {
                 void seedAtScale({ books: 12, statuses: ['reading', 'want', 'finished'] })
               }
             />
+            {/* Forced failures, to see each failure render on a phone (lib/faults.ts). In
+                memory only: a reload clears them. */}
+            <Text
+              maxFontSizeMultiplier={rules.maxFontScale}
+              style={[typeStyle(font.label), { color: c.textMuted }]}
+            >
+              Force a failure. Cleared on reload.
+            </Text>
+            <View style={styles.faults}>
+              {FAULTS.map((f) => (
+                <Chip
+                  key={f.name}
+                  label={f.label}
+                  selected={isFaultArmed(f.name)}
+                  onPress={() => toggleFault(f.name)}
+                />
+              ))}
+            </View>
             {summary ? (
               <Text
                 maxFontSizeMultiplier={rules.maxFontScale}
@@ -137,4 +166,5 @@ export function SettingsScreen() {
 const styles = StyleSheet.create({
   body: { gap: space.section },
   dev: { gap: space.row },
+  faults: { flexDirection: 'row', flexWrap: 'wrap', gap: space.row },
 })

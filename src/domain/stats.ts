@@ -12,7 +12,7 @@
  */
 
 import { sessionAmount, type ProgressSession } from './progress'
-import { yearOfLocalDay, type LocalDay } from '@/lib/dates'
+import { addDays, yearOfLocalDay, type LocalDay } from '@/lib/dates'
 
 /**
  * The three numbers, always separate. Books is counted elsewhere, from `reads`, because
@@ -123,6 +123,25 @@ export function dailyTotals(sessions: readonly ProgressSession[]): DayTotals[] {
   return [...byDay.entries()]
     .map(([day, rows]) => ({ day, ...totals(rows) }))
     .sort((a, b) => a.day.localeCompare(b.day))
+}
+
+/**
+ * The last `count` days ending on `endDay`, oldest first, with a zero for every day that has
+ * no sessions. A chart needs its gaps drawn: a week with two reading days is five empty bars,
+ * not a two-bar chart that looks like a good week.
+ */
+export function lastDays(
+  days: readonly DayTotals[],
+  endDay: LocalDay,
+  count: number,
+): DayTotals[] {
+  const byDay = new Map(days.map((d) => [d.day, d]))
+  const out: DayTotals[] = []
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const day = addDays(endDay, -i)
+    out.push(byDay.get(day) ?? { day, ...EMPTY_TOTALS })
+  }
+  return out
 }
 
 /** Every distinct day that has at least one session. Feeds the streak calculation. */

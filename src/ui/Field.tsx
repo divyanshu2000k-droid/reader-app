@@ -30,6 +30,9 @@ interface Props {
   keyboardType?: KeyboardTypeOptions
   autoFocus?: boolean
   multiline?: boolean
+  maxLength?: number
+  /** Selects the whole value on focus, so a prefilled number is replaced by typing, not appended to. */
+  selectTextOnFocus?: boolean
   /** Inline error. Says what happened; the caller supplies what is still safe. */
   error?: string | undefined
   style?: StyleProp<ViewStyle>
@@ -43,6 +46,8 @@ export function Field({
   keyboardType,
   autoFocus,
   multiline = false,
+  maxLength,
+  selectTextOnFocus,
   error,
   style,
 }: Props) {
@@ -67,6 +72,8 @@ export function Field({
         keyboardType={keyboardType}
         autoFocus={autoFocus}
         multiline={multiline}
+        maxLength={maxLength}
+        selectTextOnFocus={selectTextOnFocus}
         maxFontSizeMultiplier={rules.maxFontScale}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}

@@ -1,5 +1,5 @@
 /**
- * src/features/book/sessionLine.ts
+ * src/domain/sessionLine.ts
  *
  * WHAT ONE SESSION ROW SAYS. Pure, so every shape of session is asserted rather than seen
  * on whichever one happened to be seeded.
@@ -7,6 +7,9 @@
  * Follows the owner's counting rule (DECISIONS.md, 2026-09-10) and positions-as-boundaries
  * (03-DATA-MODEL): `0 → 10` is ten pages, a recovered session is time and not pages, and a
  * session that cannot be counted SAYS so rather than showing zero.
+ *
+ * In domain/ since Slice 3: book detail's session rows and Recently Deleted's deleted sessions
+ * describe a session the same way, and features may not import from one another.
  */
 
 import { formatDuration } from '@/lib/dates'

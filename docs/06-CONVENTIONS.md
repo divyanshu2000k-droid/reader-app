@@ -21,7 +21,8 @@ src/
     settings.tsx
     trash.tsx             Recently deleted (Slice 2)
     book/[id].tsx         Book detail (Slice 2)
-    session/log.tsx       (Slice 3)
+    session/log.tsx       Log or edit a session (Slice 3)
+    session/complete.tsx  Session complete (Slice 3)
     onboarding/           (Slice 11)
   features/               The real code.
     launch/               Gates, recovery sheet, kill switch (Slice 1)
@@ -31,10 +32,15 @@ src/
       queries.ts          All SQL for this feature
       tabData.ts          Pure: a tab never shows another tab's rows
     book/                 Detail, sessions, actions sheet (Slice 2)
-      sessionLine.ts      Pure: what a session row says
-    trash/                Recently deleted (Slice 2)
+    session/              Logger, editor, Session complete (Slice 3)
+      sessionForm.ts      Pure: what saves, what is refused, what is only pointed out, what is written
+      sessionComplete.ts  Pure: what Session complete says, following the edit
+      pickWhen.ts         Android's date then time dialogs, as a promise
+    stats/                The daily pace chart (Slice 3); the rest in Slice 7
+      paceChart.ts        Pure: a bar for every day, pages and time apart
+    trash/                Recently deleted: books, and sessions deleted on their own
     settings/
-    session/  import/  sync/  timer/     (later slices)
+    import/  sync/  timer/     (later slices)
   db/
     schema.ts             Drizzle schema, single source of truth
     migrations/
@@ -42,19 +48,24 @@ src/
     write.ts              The only write path: writeRow, writeBatch, updateRow, softDelete, restoreRow
     progressAggregates.ts Shared SQL: a read's progress. Held equal to domain/stats.ts by check 10
     currentRead.ts        Shared SQL: a book's current read. Every list of books filters with it
+    changes.ts            "The library changed": write.ts signals every committed change
     migrationPlan.ts      Pure: what is pending, by drizzle's rule
     devchecks.ts          The device pass (dev only)
   ui/                     Shared primitives from the design system sheet
-    Button.tsx  Card.tsx  Sheet.tsx  Toast.tsx  InlineError.tsx  Stars.tsx  ...
+    Button.tsx  Card.tsx  Sheet.tsx  Toast.tsx  InlineError.tsx  Stars.tsx  ConfirmSheet.tsx  ...
+    keyboardOverlap.ts    Pure: how much of a full-screen form the keyboard covers
+    useUnsavedGuard.ts    Ask before any route leaves a dirty form
     pressGuard.ts         Pure: a double tap is one tap (usePressGuard)
     sheetMount.ts         Pure: an open sheet always renders
-    useOnRefocus.ts       Reload on return, not on first mount
+    useReloadOnChange.ts  Re-read after any write: now if focused, else on return (stalePolicy.ts)
+    useOnRefocus.ts       Reload on return, not on first mount (Stats only: no write to wait for)
     coverSource.ts        Pure: a cover's fallback chain
     theme.ts              Every token. No colour exists outside this file.
   domain/                 Business logic shared across features.
     progress.ts           Current page, percent complete
     progressDisplay.ts    What progress says, and the ONE definition of an audiobook
     reads.ts              When a re-read may start
+    sessionLine.ts        Pure: what a session row says (book detail, Recently Deleted)
     streaks.ts            Streak and goal calculation
     stats.ts              Aggregations, pages and hours kept separate
   lib/                    Generic utilities with no domain knowledge.
@@ -62,6 +73,7 @@ src/
     databaseChoice.ts     Pure: which database a build opens. Release: always the library
     dates.ts              All date handling. UTC in, local out.
     devLog.ts             Dev diagnostics that do not raise LogBox
+    faults.ts             Forced failures for seeing error renders. Dev builds only
     ids.ts                UUID generation
     result.ts             Result type for fallible operations
     strings.ts            Shared and repeated copy only
@@ -245,8 +257,10 @@ the silent-pass hazard in `CLAUDE.md`.
   error and the primary button must be visible above the keyboard. Android does not resize
   an edge-to-edge Modal for the IME, so `Sheet` lifts itself by the keyboard height. Never
   put an input in your own `Modal`: it gets none of this. A sheet taller than the space
-  left above the keyboard does not yet scroll the focused field into view (decision due in
-  Slice 3). A full-screen form is a separate case, unverified until Slice 4
+  left above the keyboard does not yet scroll the focused field into view. **A full-screen
+  form measures instead** (`useKeyboardOverlap`): how far its bottom sits below the keyboard's
+  top, so it pads by the right amount whether or not Android resized the window. The session
+  logger is the first; unverified on the phone until its Slice 3 checks run
 - Sibling groups use flex with `gap`, never margins on children
 - Motion values come from the States sheet. One `motion` object, no magic numbers
 
@@ -430,7 +444,10 @@ the I/O and calls it. The pattern, in `src/features/launch/`:
 - `src/ui/toastQueue.ts` beside `Toast.tsx`
 - `src/ui/coverSource.ts` beside `BookCover.tsx`
 - `src/domain/progressDisplay.ts`, shared by the Library row and book detail
-- `src/features/book/sessionLine.ts` beside `SessionRow.tsx`
+- `src/domain/sessionLine.ts`, shared by book detail's `SessionRow.tsx` and Recently Deleted
+- `src/features/session/sessionForm.ts` and `sessionComplete.ts` beside the logger and Session
+  complete; `src/features/stats/paceChart.ts` beside `StatsScreen.tsx`
+- `src/ui/keyboardOverlap.ts` beside `useKeyboardOverlap.ts`; `src/lib/faults.ts`
 
 What stays untested is the hook's state transition itself; that half is verified on a
 device, and the entry in `DECISIONS.md` says so.
@@ -482,8 +499,23 @@ derived `mounted` from `visible` with a render-phase `setState`. React dropped t
 behind a skipped no-op one, and the actions sheet never opened. Render from the prop and let
 derived state only extend it (`ui/sheetMount.ts`).
 
-**A screen that loads in an effect reloads on return with `useOnRefocus`, never with a bare
-`useFocusEffect`.** That one also fires on mount, and every open ran its query twice.
+**A form that can hold unsaved input uses `useUnsavedGuard`**, which holds every route away
+from the screen while it is dirty (04-SCREENS: back never loses unsaved input). A screen that
+saves and then navigates calls `leave()`, or it asks whether to discard what it just saved.
+
+**A delete confirmed in a sheet leaves the screen before raising its undo toast.** The toast
+renders beneath a Modal, so an Undo raised under an open sheet is invisible (`ConfirmSheet`).
+
+**A failure render is seen, not assumed.** Read paths call `throwIfFault(name)` and write paths
+check `isFaultArmed(name)` (`lib/faults.ts`), armed from Settings' dev block. `setFault` is only
+ever called with `__DEV__` literally, which `faults.test.ts` holds with a control.
+
+**A screen that shows the reader's books or sessions reloads with `useReloadOnChange`.** A
+write can come from something that is not another screen: an Undo toast on this one restored a
+session that the focused screen never showed. `write.ts` signals every committed change
+(`db/changes.ts`, held by a test with a control), and the hook reloads at once if focused,
+else on return. Never a bare `useFocusEffect`, which also fires on mount and ran every open's
+query twice. `useOnRefocus` remains only where nothing writes (Stats' date window).
 
 **The contrast test's `SPECIAL` list is not wired to the components.** It proves a pair is
 readable, not that a component uses that pair. When a component draws text on a coloured

@@ -1,10 +1,10 @@
 /**
  * Where the reader is in this read, from `BookDetail.dc.html`: position, total, percentage,
- * and the bar.
+ * the bar, and Log pages.
  *
  * Driven by `progressDisplay` in domain/, the same rules the Library row uses, so the two
- * screens cannot disagree about one book. The artboard's "Log pages" and "Start timer"
- * buttons arrive with the screens they open (Slices 3 and 6).
+ * screens cannot disagree about one book. The artboard's "Start timer" beside Log pages
+ * arrives with the timer (Slice 6); until then Log pages has the row to itself.
  */
 
 import { StyleSheet, Text, View } from 'react-native'
@@ -12,6 +12,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import type { BookSummary, ReadSummary } from '../queries'
 import { isAudiobook, progressDisplay } from '@/domain/progressDisplay'
 import { formatDuration } from '@/lib/dates'
+import { Button } from '@/ui/Button'
 import { ProgressBar } from '@/ui/ProgressBar'
 import { font, radius, rules, space, typeStyle } from '@/ui/theme'
 import { useColors } from '@/ui/useTheme'
@@ -19,9 +20,11 @@ import { useColors } from '@/ui/useTheme'
 interface Props {
   book: BookSummary
   read: ReadSummary
+  /** Opens the session logger for this book's current read. */
+  onLog: () => void
 }
 
-export function ProgressCard({ book, read }: Props) {
+export function ProgressCard({ book, read, onLog }: Props) {
   const c = useColors()
   const display = progressDisplay({
     ...read,
@@ -59,8 +62,9 @@ export function ProgressCard({ book, read }: Props) {
           maxFontSizeMultiplier={rules.maxFontScale}
           style={[typeStyle(font.body), { color: c.textMuted }]}
         >
-          No sessions yet.
+          No sessions yet. Log one for any day, including days that have already passed.
         </Text>
+        <Button label={audio ? 'Log listening' : 'Log pages'} onPress={onLog} />
       </View>
     )
   }
@@ -111,6 +115,7 @@ export function ProgressCard({ book, read }: Props) {
           .filter(Boolean)
           .join(' · ')}
       </Text>
+      <Button label={audio ? 'Log listening' : 'Log pages'} onPress={onLog} />
     </View>
   )
 }

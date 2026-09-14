@@ -17,6 +17,7 @@ import {
   format as fnsFormat,
   isValid,
   parse as fnsParse,
+  set as fnsSet,
   startOfDay,
 } from 'date-fns'
 
@@ -98,6 +99,39 @@ export function addDays(day: LocalDay, n: number): LocalDay {
   return fnsFormat(fnsAddDays(fnsParse(day, LOCAL_DAY_FORMAT, new Date()), n), LOCAL_DAY_FORMAT)
 }
 
+// ─── EDITING AN INSTANT ──────────────────────────────────────────────────────
+// A session's date and time are picked separately (Android's pickers are one or the other),
+// and each pick must leave the other half alone, in LOCAL wall-clock terms. Built on
+// date-fns `set`, which keeps the wall clock across a DST change rather than adding hours.
+
+/**
+ * `ts` moved to another calendar day, keeping its local time of day. `month` is 1 to 12.
+ * Picking "last Tuesday" for a session logged at 9:40 pm gives last Tuesday, 9:40 pm.
+ */
+export function withLocalDate(ts: UnixMs, year: number, month: number, day: number): UnixMs {
+  return fnsSet(new Date(ts), { year, month: month - 1, date: day }).getTime()
+}
+
+/** `ts` at another local time on the same calendar day, to the minute. */
+export function withLocalTime(ts: UnixMs, hours: number, minutes: number): UnixMs {
+  return fnsSet(new Date(ts), { hours, minutes, seconds: 0, milliseconds: 0 }).getTime()
+}
+
+/**
+ * The calendar day of `picked`, with the time of day of `ts`. For a date picker, which hands
+ * back an instant whose time of day means nothing.
+ */
+export function takeLocalDate(ts: UnixMs, picked: UnixMs): UnixMs {
+  const d = new Date(picked)
+  return withLocalDate(ts, d.getFullYear(), d.getMonth() + 1, d.getDate())
+}
+
+/** The time of day of `picked`, on the calendar day of `ts`. For a time picker. */
+export function takeLocalTime(ts: UnixMs, picked: UnixMs): UnixMs {
+  const d = new Date(picked)
+  return withLocalTime(ts, d.getHours(), d.getMinutes())
+}
+
 // ─── RENDERING ───────────────────────────────────────────────────────────────
 // Everything below is display only. None of it is ever stored.
 
@@ -122,6 +156,31 @@ export function formatRelativeDay(ts: UnixMs): string {
   if (delta === 0) return 'Today'
   if (delta === 1) return 'Yesterday'
   return formatDateShort(ts)
+}
+
+/**
+ * When a session happened, as the logger and Session complete show it:
+ * "Today, 9:40 pm", "Yesterday, 9:40 pm", "Tue 8 Sep, 9:40 pm", and the year only when it
+ * is not this one. The weekday is there because a backdated session is remembered by it:
+ * "I read on Tuesday", not "I read on the 8th".
+ */
+export function formatWhen(ts: UnixMs, today: LocalDay = todayLocalDay()): string {
+  const delta = daysBetween(toLocalDay(ts), today)
+  const time = formatTime(ts)
+  if (delta === 0) return `Today, ${time}`
+  if (delta === 1) return `Yesterday, ${time}`
+  const sameYear = yearOfLocalDay(toLocalDay(ts)) === yearOfLocalDay(today)
+  return `${fnsFormat(new Date(ts), sameYear ? 'EEE d MMM' : 'EEE d MMM yyyy')}, ${time}`
+}
+
+/** "T" for a Tuesday, from a local day. The pace chart's bar labels. */
+export function weekdayInitial(day: LocalDay): string {
+  return fnsFormat(fnsParse(day, LOCAL_DAY_FORMAT, new Date()), 'EEEEE')
+}
+
+/** "Tue 8 Sep", from a local day. A pace bar's accessibility label. */
+export function formatLocalDay(day: LocalDay): string {
+  return fnsFormat(fnsParse(day, LOCAL_DAY_FORMAT, new Date()), 'EEE d MMM')
 }
 
 /** "1h 12m", "48m", "30s". For session durations, never for page counts. */

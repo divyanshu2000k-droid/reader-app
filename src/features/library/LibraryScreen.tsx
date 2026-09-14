@@ -47,17 +47,25 @@ export function LibraryScreen() {
   const { rows, libraryEmpty, error, reload } = useLibraryRows(status)
 
   const push = useCallback(
-    (bookId: string) => router.push({ pathname: '/book/[id]', params: { id: bookId } }),
+    (to: 'book' | 'log', bookId: string) =>
+      to === 'book'
+        ? router.push({ pathname: '/book/[id]', params: { id: bookId } })
+        : router.push({ pathname: '/session/log', params: { book: bookId } }),
     [router],
   )
   // A quick double tap on a row opened book detail twice, and Back then took two taps. One
-  // guard for the whole list, so two different rows cannot both push either.
-  const openBook = usePressGuard(push)
+  // guard for the whole list, rows and Continue pills alike, so a tap on a row and a tap on
+  // its pill cannot push two screens either.
+  const go = usePressGuard(push)
+  const openBook = useCallback((bookId: string) => go('book', bookId), [go])
+  const continueBook = useCallback((bookId: string) => go('log', bookId), [go])
   // Stable identities: FlashList recycles rows, and a new function every render defeats
   // the memo on BookRow.
   const renderItem = useCallback(
-    ({ item }: { item: LibraryRow }) => <BookRow row={item} onOpen={openBook} />,
-    [openBook],
+    ({ item }: { item: LibraryRow }) => (
+      <BookRow row={item} onOpen={openBook} onContinue={continueBook} />
+    ),
+    [openBook, continueBook],
   )
   const keyExtractor = useCallback((item: LibraryRow) => item.readId, [])
 
@@ -83,7 +91,9 @@ export function LibraryScreen() {
       </View>
 
       <SkeletonGate
-        loading={rows === null}
+        // Not while an error is showing: skeleton rows under "Could not open your library"
+        // said it was still loading, forever. Seen with the forced failure, Slice 3.
+        loading={rows === null && error === null}
         fallback={
           <View style={styles.list}>
             {SKELETON_ROWS.map((i) => (

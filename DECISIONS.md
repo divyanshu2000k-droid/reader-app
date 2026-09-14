@@ -630,6 +630,269 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-14 · Slice 3 on the phone, part two: layout, light mode and a timezone
+**The owner changed the settings.** The phone reports:
+- **Font scale 1.3.** That is the largest the phone's Display setting reached, so **200% is
+  still not tested**.
+- **Display density 542**, which is about 320 dp wide, narrower than the 360 dp target.
+- **Light mode.**
+- **Zone Pacific/Pago_Pago (UTC−11)**, not Chicago. It is further behind UTC and a harder case.
+
+**Layout, every Slice 2 and 3 screen, screenshotted.** Wraps rather than clips: the actions
+sheet's four chips, quick add (Finished on a second line), Session complete's tiles, and book
+detail's badges. Save stays above the keyboard. The status tabs scroll sideways, as designed.
+**Two failures found and fixed:**
+1. **Library rows lost their label.** The Continue pill beside the text left "The Long ..."
+   and "Sally Roo...".
+   - **Fixed:** the pill moves below the progress line when the window's width divided by the
+     font scale is under 360 dp (`features/library/rowLayout.ts`, 4 tests, watched failing).
+     Re-shot: whole titles and authors.
+   - **Over** a smaller pill, which would still truncate at 1.3x.
+2. **Recently Deleted titles cut at two lines** ("Northern Machine i..."). Now three.
+
+**Timezone, Pago Pago:**
+- **The UTC-boundary case:** a session logged for 11:00 pm yesterday is 10:00 UTC today, and
+  its `local_day` is 2026-09-12, yesterday.
+- **4:00 am today** is 2026-09-13.
+- **The pace bars stood on Sat 12 and Sun 13.**
+- **A session written in IST kept its `local_day` 2026-09-14** (03-DATA-MODEL, rule 3).
+- `reader.db` and its WAL had unchanged md5s.
+
+**Filed against Slice 7, not fixed:** after a zone change, a row can say "Today" (from
+`occurred_at` in the new zone) while its bar is on another day (its stored `local_day`). Both
+follow the documented rules. They disagree only for a traveller, and Stats is where to decide
+which one a row shows.
+
+**Still open:** 200% font. The phone's Display → Font size tops out at 1.3. Try Accessibility →
+Display size and text, which reaches 2.0 on Android 14+. Setting it back to the owner's zone is
+the owner's.
+
+## 2026-09-14 · Slice 3 on the phone: the backdated edit holds; four bugs found and fixed
+**Setup:** Nothing Phone 2a, Android 16, Asia/Calcutta, dark mode. New debug APK installed over
+the old one (`adb install -r`). Sandbox library. `reader.db` and `reader.db-wal` md5 identical
+before and after (`1623cf85…`, `6ab7bff2…`).
+
+**The backdated session, then edited: all ten steps pass.**
+- **Logging:** Continue opened the logger with "Now on page" focused and Save above the
+  keyboard. Typing 309 from 281 showed 28 pages. The date dialog took Tue 8 Sep and the time
+  dialog 11:00 pm, and When read "Tue 8 Sep, 11:00 pm".
+- **Session complete:** 28 pages, Page 281 → 309, 47%, 350 pages left.
+- **Book detail:** the row read "8 Sep, 11:00 pm", above the August sessions.
+- **Pulled database, after the save:** `occurred_at` 2026-09-08 23:00 IST and `local_day`
+  2026-09-08, with exactly one upsert queued.
+- **Edited to Thu 10 Sep, 4:00 am:** `local_day` 2026-09-10 and `occurred_at` 04:00 IST.
+  Positions and `created_at` were unchanged, and two upserts were queued. Stats showed one bar,
+  "Thu 10 Sep, 28 pages", and nothing on Tuesday or Wednesday.
+- **Moved to today:** both the list and the bars followed.
+- **Session complete's streak followed a date change before Done:** 1, then 0 once the new
+  session moved to last Tuesday.
+- **Future times:** 11:00 pm today was refused ("That has not happened yet") with Save disabled.
+  15 Sep was disabled in the date dialog, and cancelling the dialog changed nothing.
+
+**The rest of the loop, passed:**
+- **Taps:** Continue, type, Save is two taps.
+- **Quick add:** +25 from a typed 340 gave 365, and Finished gave 659.
+- **Warnings that still save:** past the page count, and an overlap naming "Today, 12:05 am".
+- **Refused:** an end equal to the start, and "2.5".
+- **Formats:** Pages → Minutes restarts at minute 0 and back at page 329. An audiobook opens in
+  minutes with "Finished, minute 900"; in Pages it has no Finished.
+- **Want → Reading:** logging on a Want book moved it to Reading, listed once.
+- **Session complete:** the stepper stopped one page after the start. Close with a change asked,
+  and said the session stays saved. The note saved on Done. I finished the book moved the read
+  to Finished and is absent on a finished read.
+- **Unsaved input:** Back asked, Keep editing kept 340, and Discard left. Back after a save did
+  not ask.
+- **Delete and restore:**
+  - The undo toast appeared on book detail with the confirm sheet gone.
+  - Recently deleted named the session by pages, book and date.
+  - Restore worked.
+- **Double taps:** Continue, Save and a session row each acted once.
+- **A removed book:** both session routes, opened by deep link, said the session is not here,
+  and Go back returned.
+- **Forced failures, all four:**
+  - The Library error with Try again, never an empty-library claim.
+  - Book detail's error, not the not-in-library screen.
+  - Move and remove each kept the sheet open with the reason.
+  - A failed save kept 345 and the logger, still asked on Back, and wrote no row.
+- **Dark mode:** screenshots of the logger (keyboard up and down), Session complete, book
+  detail, Recently deleted, Stats pages and time. All readable.
+
+**Found on the phone, each fixed and re-verified there:**
+1. **Undo restored the session and the screen never showed it.**
+   - **What happened:** the database had the row live with a restore upsert queued, but book
+     detail still listed it as gone. The screen was focused throughout, so its reload-on-return
+     had nothing to react to. The Library under "Book removed" had the same shape.
+   - **Fixed:** `db/changes.ts`. `write.ts` signals after every committed change, and
+     `useReloadOnChange` reloads a focused screen at once and an unfocused one on its return.
+     It replaces `useOnRefocus` on book detail and the Library, which also ends the
+     query-twice-on-return.
+   - **Re-verified:** Undo on book detail and on the Library each redraw in place.
+   - **Held by:**
+     - `changes.test.ts`, with a control over every public write function.
+     - Device check 13, which now asserts a restore signals exactly one change.
+     - Watched failing: three node mutations and one device mutation.
+2. **The picker's `onChange` is deprecated in v9, and its warning raised LogBox's toast**, which
+   swallows taps (2026-09-10). Now `onValueChange` and `onDismiss`, and the warning is gone.
+3. **Skeleton rows shimmered under "Could not open your library" forever**, as if still loading.
+   Seen only because of the forced failure. Now they show only while loading without an error.
+   The other gated screens were checked and already correct.
+4. **Sessions from last year read "23 Aug"**, as if this year. Session rows now use
+   `formatWhen`, which is tested with a year, and read "Sat 23 Aug 2025, 1:40 am".
+
+**Device pass:** RUNTIME 29/29 · COMPILE-TIME 1/1. Check 13 went red under each of three
+mutations, each 28/29 with only check 13 failing:
+- **Want → Reading skipped:** "did not move it to Reading".
+- **An edit that writes nothing:** "the date edit did not save".
+- **A silent restore:** "the restore signalled 0 changes".
+
+The sources were compared byte for byte after restoring. The clean run came before the
+mutations, on identical sources.
+
+**My script errors, discarded, not counted:**
+- **Three failures were the Back key:** Android's first Back closes the keyboard, which the
+  logger opens with. The rerun hides it first.
+- **The Minutes toggle was tapped while behind the keyboard.**
+- **The first Undo tap landed after the toast's 5 seconds:** each view-tree dump takes about
+  2 s. The rerun taps from a screenshot at 1 s.
+
+**NOT done, because each needs the phone's settings changed by the owner:**
+- **200% font:** the phone is at 1.0.
+- **A 360 dp display size:** the phone is at ~462 dp with a density override of 375.
+- **Light mode for the Slice 3 screens.**
+- **A US timezone.**
+
+Slice 3 is not done until these are seen. They are items 4 and 5 of
+`docs/device-checks/slice-3.md`.
+
+## 2026-09-13 · Slice 3: the core loop, decisions as they were made
+**State: built, tested under node, NOT yet verified on the phone.** The checks the phone must
+pass before this slice is done are in `docs/device-checks/slice-3.md`, with the backdated
+edit first, because that case is the product thesis (05-BUILD-PLAN).
+
+**The logger is a full screen, as designed, and the keyboard question is settled without a
+new library.**
+- **Chose:** `Session.dc.html` draws a full screen, so the logger is a route
+  (`app/session/log.tsx`), not a sheet. It measures how much of itself the keyboard covers
+  (`ui/keyboardOverlap.ts`) and pads its footer by exactly that, so Save rides above the
+  keyboard whether or not Android resized the window.
+- **Over:** `react-native-keyboard-controller`, which the 2026-09-10 entry said might earn its
+  place "if Slice 3's logger puts several fields in a sheet". It does not put them in a sheet.
+  **Over** padding by the keyboard's height, which doubles the gap on a window Android does
+  resize.
+- **Revisit if:** the phone shows the footer covered or floating at 200% font with the
+  keyboard up. The measurement is a guess about an edge-to-edge activity until then.
+
+**Android's own date and time pickers** (`@react-native-community/datetimepicker`, the
+version Expo 57 resolves).
+- **Chose:** the native dialogs, date then time, as promises (`features/session/pickWhen.ts`).
+  They are accessible, localised, and familiar, and the date field is the most important
+  control in the app.
+- **Over:** a JavaScript calendar, which would be a hand-built accessibility surface on the
+  one screen TalkBack must be able to complete (06-CONVENTIONS).
+- **Cost:** a native module, so a native rebuild before the phone checks. Its config plugin
+  only themes the dialog colours and is **not** added, so no prebuild is needed. Revisit the
+  plugin if the dialogs look wrong in either theme.
+
+**What the logger allows, refuses and only points out** (`features/session/sessionForm.ts`,
+25 tests):
+- **Any past day, never the future.** A session dated later than now plus one minute is
+  refused with a reason. **Over** allowing it: a future-dated session would count towards a
+  streak day that has not happened. The picker cannot pick a future date, but it can pick a
+  later time today, hence the check.
+- **The end must be after the start.** Backwards and zero-length sessions are refused on the
+  field. **Over** accepting them and marking them "needs fixing" as imported rows are: the
+  logger is where the typo happens, so it is where to catch it.
+- **Past the book's length saves, and says the page count may be wrong.** Page counts from
+  APIs are the usual culprit (`exceedsKnownLength`).
+- **Overlapping another session saves, and names that session.** Totals are sums of spans,
+  so a backfill over pages already logged counts them twice. The reader may mean it (a
+  re-read chapter), so it is not refused. They cannot find the double count later unless
+  told now. Touching boundaries (184 → 212 then 212 → 240) is not an overlap.
+- **An edit writes only what changed.** An unchanged date is never re-sent, so its
+  `local_day` is never recomputed in a new timezone (03-DATA-MODEL, rule 3). An edit that
+  changes nothing writes and queues nothing.
+- **A new session opens with "Now on page" focused**, so Continue, type, Save is the two-tap
+  budget.
+
+**Logging on a Want book moves it to Reading.** A reader logging pages has started. The move
+is a second write after the session, not in its transaction (no public write runs inside
+another's), so if only the move fails the session is still saved. **Over** leaving it on Want,
+which hides the book being read from the Reading tab.
+
+**Session complete edits are written on Done, and every number follows the edit first.**
+- The stepper and Change edit the screen. Done saves the patch and the quick note. Leaving
+  with changes asks, and says the session itself stays saved.
+- **The streak is computed from the other sessions' days plus the day being chosen**
+  (`getReadingDays(except)`). Moving tonight's session to last Tuesday drops today from the
+  streak before Done is tapped. **Over** showing the saved streak until Done, a number the
+  screen would then contradict.
+- **Time left comes only from the reader's own timed page sessions**, or an audiobook's
+  remaining minutes. With no timer data it shows pages left. **Over** an average reading
+  speed: a number about somebody else.
+- **"I finished the book" moves the read to Finished, status only.** The finish flow with a
+  rating and date is Slice 5. Writing `finished_at` here would store a date the reader did not
+  choose.
+- **The stepper is not press-guarded.** Five quick taps mean five pages, and each tap only
+  edits the screen.
+
+**A minimal daily pace chart ships in Slice 3, because its "done when" asks for one.**
+- **Chose:** the Stats tab shows the last 14 days by `local_day`, pages or time (never
+  summed), a bar for every day (`features/stats/paceChart.ts`). The sessions are counted in
+  TypeScript by `contribution()`.
+- **Over:** waiting for Slice 7, which would leave "a correct daily pace chart" unverifiable
+  until then. **Over** a SQL sum, which would be a third copy of the counting rule.
+- Slice 7 builds the rest of Stats around it.
+
+**Unsaved input is guarded by route, not by button.** `ui/useUnsavedGuard.ts` holds any
+removal of the screen (header back, Android back, `router.back()`) while a form is dirty, via
+React Navigation's `usePreventRemove`, imported from expo-router's build as `TabBar` already
+does. A screen that saves calls `leave()` first, or it would ask whether to discard what it
+just saved.
+
+**The toast-under-a-Modal problem is avoided, not fixed.** Slice 3 had to be the first slice
+with sheets that delete. It is not: deleting a session asks in `ui/ConfirmSheet.tsx`, then
+leaves the screen, then raises the toast on book detail. **Still open, refiled to Slice 5b:**
+a toast raised while a sheet stays open (a note deleted from inside a sheet) is still drawn
+beneath it.
+
+**Recently Deleted lists sessions deleted on their own.** A session deleted with its book is
+not listed separately: restoring the book brings it back, and `restoreRow` would refuse it
+under a deleted book anyway. `sessionLine` moved from the book feature to `domain/` so both
+screens describe a session the same way (features may not import each other).
+
+**The deferred Slice 2 failure switch is built** (`lib/faults.ts`): library list, book detail,
+actions sheet action, session save. `setFault` refuses unless passed `true`, and its callers
+pass `__DEV__` literally, which a test with a control holds. **Over** reading `__DEV__` inside
+the module, which node could not load to test. Seeing each failure render is on the phone
+checklist.
+
+**Device check 13 imports the session, stats and trash features.** It is the first check that
+does. The device pass exists to run the real path, and Slice 3's path starts in the feature:
+form → row → write → edit patch → streak days → pace query → trash → restore, plus a forced
+failure that must write nothing. **Revisit if** a feature module starts importing the device
+pass back.
+
+**Not built, deliberately, each filed:**
+- **A FAB for logging.** The raised tab is Add a book (Slice 4). Logging opens from the
+  Library's Continue pill and from book detail's Log pages. Revisit with Slice 4's Add screen.
+- **The recovery sheet asking where the reader got to.** A recovered session (a duration, no
+  positions) can now be edited from book detail to add them, which is what the 04-SCREENS
+  note promised the logger would allow. A direct prompt belongs to Slice 6's timer finish.
+- **The goal's query and its surface.** `goalProgress` is tested in `domain/streaks.ts`. Its
+  first surface is Settings' yearly goal and Stats (Slice 7), with the `goals` unique index
+  that slice already owns.
+
+**Watched failing, node:** 7 mutations, each red:
+1. Future dates allowed.
+2. An edit always re-sends the date.
+3. Backwards sessions allowed.
+4. The streak counts the saved day, not the chosen one.
+5. The pace window skips empty days.
+6. A picked date keeps the picker's time of day.
+7. A release build can arm a fault.
+
+Restored: 244/244.
+
 ## 2026-09-13 · Slice 2: the Library and book detail, decisions as they were made
 
 **A sandbox database, separate from the device pass.**

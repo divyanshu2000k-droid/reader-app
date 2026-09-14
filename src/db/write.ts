@@ -20,6 +20,7 @@
 import { and, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn, SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 
+import { notifyDataChanged } from './changes'
 import { getDb, runInTransaction, type Database } from './client'
 import {
   bookShelves,
@@ -553,6 +554,8 @@ export async function writeRow<K extends SyncableTable>(
       runInTransaction(() => {
         upsertOne(db, table, values, ts)
       })
+      // After the commit, never inside it: a screen reads what the transaction wrote.
+      notifyDataChanged()
     },
     (cause) =>
       writeFailure(
@@ -589,6 +592,7 @@ export async function writeBatch<K extends SyncableTable>(
       runInTransaction(() => {
         for (const values of rows) upsertOne(db, table, values, ts)
       })
+      notifyDataChanged()
       return { written: rows.length }
     },
     (cause) =>
@@ -632,6 +636,7 @@ export async function softDelete(
         cascadeDelete(db, table, id, ts)
       })
 
+      if (changed) notifyDataChanged()
       return { changed }
     },
     (cause) =>
@@ -680,6 +685,7 @@ export async function restoreRow(
         if (typeof deletedAt === 'number') cascadeRestore(db, table, id, deletedAt, ts)
       })
 
+      if (changed) notifyDataChanged()
       return { changed }
     },
     (cause) => writeFailure(cause, 'Could not restore that', 'Nothing was changed.'),
@@ -745,6 +751,7 @@ export async function updateRow<K extends SyncableTable>(
         enqueue(db, table, id, 'upsert', ts)
       })
 
+      if (changed) notifyDataChanged()
       return { changed }
     },
     (cause) =>

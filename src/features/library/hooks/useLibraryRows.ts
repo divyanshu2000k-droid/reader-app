@@ -4,9 +4,10 @@
  * The Library's data, read from SQLite. Never cached in a store: the database is the truth
  * (06-CONVENTIONS, State), and a store holding a copy is a store that goes stale.
  *
- * - **Loads once when the tab is chosen, and again when the screen regains focus**, which is
- *   what makes a delete on book detail show up here. It used to query twice on every open,
- *   because `useFocusEffect` also fires on mount; `useOnRefocus` skips that first call.
+ * - **Loads once when the tab is chosen, and again after any write**: at once if this screen
+ *   is focused (an Undo toast raised here), else when it regains focus (a delete on book
+ *   detail). Nothing written, nothing re-read (ui/useReloadOnChange.ts). It used to query
+ *   twice on every open, because `useFocusEffect` also fires on mount.
  * - **A tab only ever shows its own result.** The previous tab's rows used to stay on screen
  *   under the new chip until the new query answered (`tabData.ts`).
  * - **No loading spinner over the reader's own data** (rule 1). Skeleton rows appear only past
@@ -20,7 +21,7 @@ import { viewForTab, type TabResult } from '../tabData'
 import type { ReadStatus } from '@/db/schema'
 import { devTimed } from '@/lib/devLog'
 import { appError, type AppError } from '@/lib/result'
-import { useOnRefocus } from '@/ui/useOnRefocus'
+import { useReloadOnChange } from '@/ui/useReloadOnChange'
 
 export interface LibraryData {
   /** Null until THIS tab's query has answered. */
@@ -75,8 +76,9 @@ export function useLibraryRows(status: ReadStatus): LibraryData {
     }
   }, [status, nonce])
 
-  // Coming back from book detail, where the book may have been removed or moved.
-  useOnRefocus(reload)
+  // Coming back from book detail, where the book may have been removed or moved, and the
+  // Undo toast raised here after a removal: both are writes (ui/useReloadOnChange.ts).
+  useReloadOnChange(reload)
 
   return { ...viewForTab(result, status), error, reload }
 }

@@ -7,8 +7,21 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import type { ProgressSession } from '../progress'
-import { currentPosition, isBackwards, percentComplete, sessionAmount } from '../progress'
-import { activeDays, contribution, dailyTotals, totals, totalsForYear } from '../stats'
+import {
+  currentPosition,
+  isBackwards,
+  percentComplete,
+  secondsLeft,
+  sessionAmount,
+} from '../progress'
+import {
+  activeDays,
+  contribution,
+  dailyTotals,
+  lastDays,
+  totals,
+  totalsForYear,
+} from '../stats'
 import { currentStreak, goalProgress, longestStreak } from '../streaks'
 
 function s(
@@ -221,4 +234,59 @@ test('lowering a goal below current progress reads as met, not as failure', () =
 
 test('no goal set still returns null rather than gating anything', () => {
   assert.equal(goalProgress(null, 14), null)
+})
+
+// ─── SLICE 3: SESSION COMPLETE AND THE PACE CHART ────────────────────────────
+
+test('time left for an audiobook is its remaining minutes', () => {
+  assert.equal(secondsLeft([], 'minutes', 360, 600), 240 * 60)
+})
+
+test('time left for a print book comes only from the reader’s own timed page sessions', () => {
+  // 50 pages in 3000 s is 60 s a page; 100 pages left is 6000 s.
+  const sessions = [
+    timed('2026-09-01', 'pages', 3000, 100, 150),
+    s('2026-09-02', 'pages', 150, 200),
+  ]
+  assert.equal(secondsLeft(sessions, 'pages', 200, 300), 6000)
+})
+
+test('no timed page session means no estimate, never an average reader’s speed', () => {
+  assert.equal(secondsLeft([s('2026-09-01', 'pages', 0, 50)], 'pages', 50, 300), null)
+  // A recovered session is time with no pages: it cannot say how fast pages go.
+  assert.equal(secondsLeft([timed('2026-09-01', 'pages', 1800)], 'pages', 50, 300), null)
+  // An audiobook timer says nothing about print speed either.
+  assert.equal(
+    secondsLeft([timed('2026-09-01', 'minutes', 1800, 0, 30)], 'pages', 50, 300),
+    null,
+  )
+})
+
+test('no time left without a length, or once the end is reached or passed', () => {
+  assert.equal(secondsLeft([], 'minutes', 100, null), null)
+  assert.equal(secondsLeft([], 'minutes', null, 600), null)
+  assert.equal(secondsLeft([], 'minutes', 600, 600), null)
+  assert.equal(secondsLeft([], 'minutes', 700, 600), null)
+})
+
+test('the pace window has a bar for every day, zero where nothing was read', () => {
+  const window = lastDays(dailyTotals(mixed), '2026-09-04', 5)
+  assert.deepEqual(
+    window.map((d) => [d.day, d.pages, d.minutes]),
+    [
+      ['2026-08-31', 0, 0],
+      ['2026-09-01', 40, 35],
+      ['2026-09-02', 50, 0],
+      ['2026-09-03', 0, 0],
+      ['2026-09-04', 0, 60],
+    ],
+  )
+})
+
+test('the pace window crosses a month and a year boundary by local day', () => {
+  const window = lastDays([], '2027-01-01', 3)
+  assert.deepEqual(
+    window.map((d) => d.day),
+    ['2026-12-30', '2026-12-31', '2027-01-01'],
+  )
 })

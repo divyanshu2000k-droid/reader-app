@@ -34,10 +34,16 @@ export function Header({
   title,
   left,
   right,
+  compact = false,
 }: {
   title?: string
   left?: ReactNode
   right?: ReactNode
+  /**
+   * A small centred title between two buttons, for a task screen rather than a destination:
+   * "Log a session" in Session.dc.html is 15/600 between Back and a spacer, not 25/700.
+   */
+  compact?: boolean
 }) {
   const c = useColors()
   return (
@@ -49,7 +55,12 @@ export function Header({
           accessibilityRole="header"
           numberOfLines={2}
           maxFontSizeMultiplier={rules.maxFontScale}
-          style={[typeStyle(font.title), styles.title, { color: c.text }]}
+          style={[
+            typeStyle(compact ? font.bodyStrong : font.title),
+            styles.title,
+            compact && styles.centred,
+            { color: c.text },
+          ]}
         >
           {title}
         </Text>
@@ -103,6 +114,7 @@ const styles = StyleSheet.create({
     paddingBottom: space.section,
   },
   title: { flex: 1 },
+  centred: { textAlign: 'center' },
   right: { flexDirection: 'row', alignItems: 'center', gap: space.cardTight },
   iconButton: {
     width: size.iconButton,
