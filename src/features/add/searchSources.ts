@@ -19,6 +19,7 @@
  *     recognising a book already in the library.
  */
 
+import { NO_DETAILS, parseGoogleVolumeDetails } from '@/domain/bookDetails'
 import { toIsbn13 } from '@/domain/isbn'
 
 export type SearchSource = 'google' | 'openlibrary'
@@ -39,13 +40,21 @@ export interface SearchHit {
   readonly isbns: readonly string[]
   /** https only. An http cover is blocked by Android's cleartext policy. */
   readonly coverUrl: string | null
+  /**
+   * Plain text (domain/bookDetails.ts). Google's search carries it; Open Library's does not, so
+   * an Open Library book's description is fetched from its work after it is added.
+   */
+  readonly description: string | null
+  /** The source's raw categories. Slice 7 maps them to genres. */
+  readonly categories: readonly string[]
+  /** Google's preview page, when some pages can be read. */
+  readonly previewUrl: string | null
 }
 
 /** How many results each source is asked for. */
 export const RESULTS_PER_SOURCE = 20
 
-/** Open Library asks every client to identify itself (02-ARCHITECTURE, ADR 005). */
-export const OPEN_LIBRARY_USER_AGENT = 'Reader/0.1 (Android reading tracker)'
+export { OPEN_LIBRARY_USER_AGENT } from '@/lib/openLibrary'
 
 /**
  * Built by hand, not with `URLSearchParams`: React Native's implementation has lagged the web's,
@@ -167,6 +176,7 @@ export function parseGoogleBooks(json: unknown): SearchHit[] {
       isbn10,
       isbns: uniqueIsbns([isbn13, isbn10]),
       coverUrl: googleCover(obj(info.imageLinks)),
+      ...parseGoogleVolumeDetails(item),
     })
   }
   return hits
@@ -196,6 +206,7 @@ export function parseOpenLibrary(json: unknown): SearchHit[] {
       isbns: uniqueIsbns(strings(doc.isbn)),
       coverUrl:
         coverId === null ? null : `https://covers.openlibrary.org/b/id/${coverId}-M.jpg`,
+      ...NO_DETAILS,
     })
   }
   return hits

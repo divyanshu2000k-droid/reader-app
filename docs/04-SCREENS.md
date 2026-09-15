@@ -254,6 +254,26 @@ count increments.
 Starting a re-read creates a new `reads` row. The previous read keeps its rating, review,
 dates and sessions untouched.
 
+**As built in Slice 5** (`features/finish`, route `book/finish?read=`):
+- **Opened from:** the actions sheet's Finished chip, "I finished the book" on Session complete
+  (replacing it), and "I already finished it" when adding (over the new book's detail).
+- **The screen:** "That's a wrap on <title>." with "502 pages over 23 days · your 31st book this
+  year". The line follows the date: move it to last December and it says "book of 2025".
+- **Rating:** tap the left or right half of a star; tap the shown rating to clear. The note is
+  optional and private.
+- **Date row:** Finished today / yesterday / a date, and Change. It asks "When did you finish?"
+  when there is no date. A Want to read book with no sessions starts with no date: that move is
+  nearly always a book read before the app.
+- **Refused:** a date after today, or before the read's last session.
+- **Buttons:** "Add to Finished" moves the book and saves everything in one write. "Start the
+  next one" does the same, then opens the Library on Want to read.
+- **Closing** changes nothing, and asks first if a rating, note or date was changed.
+- **A finished read:** the actions sheet row "Rating, note and finish date" opens the same screen
+  with Save. Earlier reads are not editable yet (filed, Slice 11).
+- **Book detail shows,** once finished: the stars, "Finished <date>" and the note. Earlier reads
+  show their note too.
+- **Not linked:** notes and quotes (Slice 5b).
+
 ---
 
 ## Journey G · Notes and quotes
@@ -307,11 +327,11 @@ not failure and the data should not treat it as such.
 - **Not yet, with the slice that owns each:** the Continue pill and Log pages (3), Start timer
   and the dock (6), search, Discover and Edit details (4), notes (5b), the stats strip (7),
   and share (11). None renders as a control that goes nowhere.
-- **Planned, 2026-09-14:**
-  - **Slice 5:** a short, expandable summary on book detail, and "Read a sample" opening Google's
-    preview in the browser, only when pages are viewable.
-  - **Slice 7:** a genre filter on the Library.
-  - **Slice 11:** the sample read inside the app.
+- **About this book (Slice 5):** the description, five lines until More, and "Read a sample"
+  opening Google's preview in the browser, only when pages are viewable. No card when there is
+  neither. Missing details are fetched once when the book is opened online. Edit details can
+  change the description.
+- **Planned:** a genre filter on the Library (Slice 7); the sample read inside the app (Slice 11).
 
 ---
 

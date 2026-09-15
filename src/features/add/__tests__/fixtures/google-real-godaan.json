@@ -1,5 +1,5 @@
 {
-  "_captured": "REAL response from the Google Books v1 volumes API, 2026-09-14, q=\"godaan\", maxResults=20, printType=books, as the app requests it. Trimmed to the volumeInfo fields the parser reads; accessInfo, saleInfo, searchInfo, etag, selfLink and description removed. Item order and every kept value are as returned.",
+  "_captured": "REAL response from the Google Books v1 volumes API, 2026-09-14, q=\"godaan\", maxResults=20, printType=books, as the app requests it. Trimmed to the volumeInfo fields the app reads and accessInfo.viewability; saleInfo, searchInfo, etag and selfLink removed. Item order and every kept value are as returned.",
   "kind": "books#volumes",
   "totalItems": 300,
   "items": [
@@ -11,6 +11,7 @@
         "authors": ["Munshi Premchand"],
         "publisher": "Prakash Books India Pvt Ltd",
         "publishedDate": "2018-02-01",
+        "description": "Godaan is a masterpiece of Indian literature that explores the complex themes of social inequality, rural life, and the struggles of the marginalized. Written by Munshi Premchand, this timeless novel takes you on a poignant journey through the lives of characters grappling with poverty, morality, and the pursuit of a better life. Highlights: Compelling storytelling that immerses you in the vibrant world of rural India. Thought-provoking social commentary that sheds light on caste dynamics and societal injustices. Memorable characters whose stories evoke empathy and reflection. A powerful portrayal of the human condition and the search for meaning. A must-read for those interested in Indian literature and a deeper understanding of society. Optimized for digital reading, this ebook offers a smooth, immersive experience on any device.",
         "industryIdentifiers": [
           {
             "type": "ISBN_13",
@@ -23,11 +24,15 @@
         ],
         "pageCount": 414,
         "printType": "BOOK",
+        "categories": ["Social Science"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=xUzVEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=xUzVEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
         },
         "language": "hi"
+      },
+      "accessInfo": {
+        "viewability": "PARTIAL"
       }
     },
     {
@@ -38,6 +43,7 @@
         "authors": ["Gulzar"],
         "publisher": "Roli Books Private Limited",
         "publishedDate": "2017-04-19",
+        "description": "Gulzar is one of the best known and acknowledged poet lyricist and director, honoured for his sensitivity, best reflected through his writings and treatment of films. Saba Basheer is a poet, author and a translator. Her first book was a collection of poems, Memory Past (2006) brought out by Writers’ Workshop. I Swallowed the Moon: The Poetry of Gulzar (2013), is the analysis of the poetry of Gulzar, which culminated from her PhD thesis, and is now being translated in Hindi and Urdu.",
         "industryIdentifiers": [
           {
             "type": "ISBN_13",
@@ -50,11 +56,15 @@
         ],
         "pageCount": 239,
         "printType": "BOOK",
+        "categories": ["Performing Arts"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=3KohEAAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=3KohEAAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
         },
         "language": "en"
+      },
+      "accessInfo": {
+        "viewability": "PARTIAL"
       }
     },
     {
@@ -66,6 +76,7 @@
         "authors": ["Premacanda"],
         "publisher": "Pustak Mahal",
         "publishedDate": "2009",
+        "description": "Godaan is one of the most celebrated novels of Munshi Premchand. Set in pre-independence India, the novel captures social and economic conflict in a north Indian village. The story revolves around Horiram, a poor village farmer, and the struggle of his family to survive and maintain their self-respect. Horiram does everything in his capacity to fulfil his sole desire to own a cow, which is considered a farmer's source of wealth and happiness. One of the classics of Indian literature, the book offers an insight into the colonial history of India, captures the ethnic flavour of the Indian villages and also catches the human emotions in all their rawness.",
         "industryIdentifiers": [
           {
             "type": "ISBN_13",
@@ -78,11 +89,15 @@
         ],
         "pageCount": 314,
         "printType": "BOOK",
+        "categories": ["Hindi fiction"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=oeKP-bZHO08C&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=oeKP-bZHO08C&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
         },
         "language": "en"
+      },
+      "accessInfo": {
+        "viewability": "PARTIAL"
       }
     },
     {
@@ -93,6 +108,7 @@
         "authors": ["Premchand"],
         "publisher": "Eka",
         "publishedDate": "2023",
+        "description": "ONE OF THE HIGHEST SELLING HINDI NOVELS OF ALL TIME This novel by Premchand, considered the father of modern Hindi literature, was published in 1936. Its central theme is the deeply entrenched socio-economic disparity in Indian society. In this novel, through the eyes of an ordinary farmer called Hori, the entire village is vividly depicted. Hori wished to buy a cow which would improve his fortune. He managed to get one, but Hori's jealous brother killed the cow. After this, it was as if an avalanche of trouble struck Hori. Godan is a ritual done before someone’s death as per Hindu custom. It is believed that by donating a cow to a Brahmin at the time of death, a person is forgiven all his sins and they smoothly cross over Vaitarini (the river of death) holding the cow’s tail. Was Hori able to do 'Godan' in his last moments?",
         "industryIdentifiers": [
           {
             "type": "ISBN_13",
@@ -105,11 +121,15 @@
         ],
         "pageCount": 454,
         "printType": "BOOK",
+        "categories": ["Fiction"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=624xEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=624xEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
         },
         "language": "hi"
+      },
+      "accessInfo": {
+        "viewability": "PARTIAL"
       }
     },
     {
@@ -132,11 +152,15 @@
         ],
         "pageCount": 308,
         "printType": "BOOK",
+        "categories": ["Fiction"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=99Qe0jfpQMMC&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=99Qe0jfpQMMC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
         },
         "language": "hi"
+      },
+      "accessInfo": {
+        "viewability": "PARTIAL"
       }
     },
     {
@@ -145,6 +169,7 @@
       "volumeInfo": {
         "title": "NU, khittah, dan godaan politik",
         "publishedDate": "1994",
+        "description": "Issues on political involvement of N.U., orthodox Islamic organization in Indonesia; collected of artilces, previously published in Republika daily.",
         "industryIdentifiers": [
           {
             "type": "OTHER",
@@ -153,11 +178,15 @@
         ],
         "pageCount": 108,
         "printType": "BOOK",
+        "categories": ["Indonesia"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=sTCOAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=sTCOAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "id"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -168,6 +197,7 @@
         "authors": ["Premchand"],
         "publisher": "Prakash Books India Pvt Ltd",
         "publishedDate": "2025-02-28",
+        "description": "प्रेमचंद का गोदान सिर्फ एक उपन्यास नहीं, बल्कि भारतीय समाज का ऐसा आइना है, जिसमें आज भी हम अपने सवालों और संघर्षों के जवाब ढूंढ सकते हैं। यह कहानी है होरी और धनिया की, जो अपने सपनों, संघर्षों और रिश्तों की उलझनों में जीते हैं। यह उपन्यास न केवल किसानों की दयनीय स्थिति का जीवंत चित्रण करता है, बल्कि बदलते हुए शहरी और ग्रामीण जीवन के बीच के टकराव को भी बखूबी प्रस्तुत करता है। गोदान केवल एक कहानी नहीं, बल्कि भारतीय समाज का दर्पण है, जो आज भी उतना ही प्रासंगिक है। पढ़िए और जानिए कि क्यों गोदान को भारतीय साहित्य की सबसे बड़ी कृतियों में गिना जाता है? यह उपन्यास आपको न केवल गांव की मिट्टी की महक महसूस कराएगा, बल्कि आपके भीतर के सवालों को भी जगाएगा। संघर्ष, सपने और संवेदनाओं की अनकही कहानी। ग्रामीण भारत की सच्चाई: ग्रामीण समाज की गरीबी, शोषण और सामाजिक असमानता का यथार्थ चित्रण करता है। आर्थिक असमानता: गरीब और अमीर के बीच गहरी खाई का चित्रण। त्याग और बलिदान: होरी का जीवन त्याग, धर्म और कर्तव्य की भावना का उदाहरण है। सामाजिक अन्याय: जमींदारों और महाजनों द्वारा गरीब किसानों का शोषण। Optimized for digital reading, this ebook offers a smooth, immersive experience on any device.",
         "industryIdentifiers": [
           {
             "type": "ISBN_13",
@@ -180,11 +210,15 @@
         ],
         "pageCount": 418,
         "printType": "BOOK",
+        "categories": ["Fiction"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=CU3VEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=CU3VEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
         },
         "language": "hi"
+      },
+      "accessInfo": {
+        "viewability": "PARTIAL"
       }
     },
     {
@@ -201,11 +235,15 @@
         ],
         "pageCount": 690,
         "printType": "BOOK",
+        "categories": ["Indic literature"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=H3pjAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=H3pjAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "en"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -216,13 +254,18 @@
         "authors": ["Premchand"],
         "publisher": "Rajpal & Sons",
         "publishedDate": "2016-12-26",
+        "description": "होरीराम ने दोनों बैलों को सानी-पानी दे कर अपनी स्त्री धनिया से कहा - गोबर को ऊख गोड़ने भेज देना। मैं न जाने कब लौटूँ। जरा मेरी लाठी दे दे। धनिया के दोनों हाथ गोबर से भरे थे। उपले पाथ कर आई थी। बोली - अरे, कुछ रस-पानी तो कर लो। ऐसी जल्दी क्या है? होरी ने अपने झुर्रियों से भरे हुए माथे को सिकोड़ कर कहा - तुझे रस-पानी की पड़ी है, मुझे यह चिंता है कि अबेर हो गई तो मालिक से भेंट न होगी। असनान-पूजा करने लगेंगे, तो घंटों बैठे बीत जायगा। 'इसी से तो कहती हूँ, कुछ जलपान कर लो और आज न जाओगे तो कौन हरज होगा! अभी तो परसों गए थे।' 'तू जो बात नहीं समझती, उसमें टाँग क्यों अड़ाती है भाई! मेरी लाठी दे दे और अपना काम देख। यह इसी मिलते-जुलते रहने का परसाद है कि अब तक जान बची हुई है, नहीं कहीं पता न लगता कि किधर गए। गाँव में इतने आदमी तो हैं, किस पर बेदखली नहीं आई, किस पर कुड़की नहीं आई। जब दूसरे के पाँवों-तले अपनी गर्दन दबी हुई है, तो उन पाँवों को सहलाने में ही कुसल है।' धनिया इतनी व्यवहार-कुशल न थी। उसका विचार था कि हमने जमींदार के खेत जोते हैं, तो वह अपना लगान ही तो लेगा। उसकी खुशामद क्यों करें, उसके तलवे क्यों सहलाएँ। यद्यपि अपने विवाहित जीवन के इन बीस बरसों में उसे अच्छी तरह अनुभव हो गया था कि चाहे कितनी ही कतर-ब्योंत करो, कितना ही पेट-तन काटो, चाहे एक-एक कौड़ी को दाँत से पकड़ो; मगर लगान का बेबाक होना मुश्किल है। फिर भी वह हार न मानती थी, और इस विषय पर स्त्री-पुरुष में आए दिन संग्राम छिड़ा रहता था। उसकी छ: संतानों में अब केवल तीन जिंदा हैं, एक लड़का गोबर कोई सोलह साल का, और दो लड़कियाँ सोना और रूपा, बारह और आठ साल की। तीन लड़के बचपन ही में मर गए। उसका मन आज भी कहता था, अगर उनकी दवा-दवाई होती तो वे बच जाते; पर वह एक धेले की दवा भी न मँगवा सकी थी। उसकी ही उम्र अभी क्या थी। छत्तीसवाँ ही साल तो था; पर सारे बाल पक गए थे, चेहरे पर झुर्रियाँ पड़ गई थीं। सारी देह ढल गई थी, वह सुंदर गेहुँआँ रंग सँवला गया था, और आँखों से भी कम सूझने लगा था। पेट की चिंता ही के कारण तो। कभी तो जीवन का सुख न मिला। इस चिरस्थायी जीर्णावस्था ने उसके आत्मसम्मान को उदासीनता का रूप दे दिया था। जिस गृहस्थी में पेट की रोटियाँ भी न मिलें, उसके लिए इतनी खुशामद क्यों? इस परिस्थिति से उसका मन बराबर विद्रोह किया करता था, और दो-चार घुड़कियाँ खा लेने पर ही उसे यथार्थ का ज्ञान होता था। उसने परास्त हो कर होरी की लाठी, मिरजई, जूते, पगड़ी और तमाखू का बटुआ ला कर सामने पटक दिए। होरी ने उसकी ओर आँखें तरेर कर कहा - क्या ससुराल जाना है, जो पाँचों पोसाक लाई है? ससुराल में भी तो कोई जवान साली-सलहज नहीं बैठी है, जिसे जा कर दिखाऊँ। होरी के गहरे साँवले, पिचके हुए चेहरे पर मुस्कराहट की मृदुता झलक पड़ी। धनिया ने लजाते हुए कहा - ऐसे ही बड़े सजीले जवान हो कि साली-सलहजें तुम्हें देख कर रीझ जाएँगी। होरी ने फटी हुई मिरजई को बड़ी सावधानी से तह करके खाट पर रखते हुए कहा - तो क्या तू समझती है, मैं बूढ़ा हो गया? अभी तो चालीस भी नहीं हुए। मर्द साठे पर पाठे होते हैं।",
         "pageCount": 332,
         "printType": "BOOK",
+        "categories": ["Literary Criticism"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=V4TAijRyKikC&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=V4TAijRyKikC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
         },
         "language": "hi"
+      },
+      "accessInfo": {
+        "viewability": "PARTIAL"
       }
     },
     {
@@ -239,11 +282,15 @@
         ],
         "pageCount": 496,
         "printType": "BOOK",
+        "categories": ["Books"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=GnksAAAAYAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=GnksAAAAYAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "en"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -254,6 +301,7 @@
         "authors": ["Munshi Premchand"],
         "publisher": "DD Sales and Distributors",
         "publishedDate": "2022-10-19",
+        "description": "Godaan In Hindi (Bestseller Book By Munshi Premchandra) All Time Most Demanding Hindi Books Classic Collection 31 1880,, 1901, ? ( ),, 8 1903 1905,,,,,, Godaan In Hindi (Bestseller Book By Munshi Premchandra) All Time Most Demanding Hindi Books Classic Collection (1912), (1918), (1922), (1925), (1927), (1927), (1931), (1932), (1936) ' ', ' ', ' ', ' ', ' ' Godaan In Hindi (Bestseller Book By Munshi Premchandra) All Time Most Demanding Hindi Books Classic Collection",
         "industryIdentifiers": [
           {
             "type": "ISBN_10",
@@ -266,11 +314,15 @@
         ],
         "pageCount": 0,
         "printType": "BOOK",
+        "categories": ["Fiction"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=nwPJ0QEACAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=nwPJ0QEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "hi"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -288,11 +340,15 @@
         ],
         "pageCount": 270,
         "printType": "BOOK",
+        "categories": ["Indic fiction"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=NT0qAQAAIAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=NT0qAQAAIAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "en"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -312,11 +368,15 @@
         ],
         "pageCount": 100,
         "printType": "BOOK",
+        "categories": ["Hindi language"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=KrZjAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=KrZjAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "en"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -334,11 +394,15 @@
         ],
         "pageCount": 654,
         "printType": "BOOK",
+        "categories": ["Hindi language"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=tXoHAQAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=tXoHAQAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "en"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -349,13 +413,18 @@
         "authors": ["Premchand"],
         "publisher": "Bookly Digital",
         "publishedDate": "2024-11-22",
+        "description": "\"Godan,\" a cornerstone of Hindi literature, is a powerful novel by Munshi Premchand that delves deep into the socio-economic realities of rural India in the early 20th century. It tells the story of Hori, a poor peasant, and his unwavering desire to own a cow, a symbol of prosperity in the village. Hori's relentless pursuit of this dream, despite crippling debt and societal pressures, forms the central narrative of the novel. Premchand masterfully weaves together the lives of other villagers, creating a tapestry of interconnected stories that explore themes of poverty, caste discrimination, social reform, and the enduring human spirit. The novel vividly portrays the stark contrast between the wealthy landowners and the impoverished peasants, highlighting the exploitation and injustice prevalent in rural society. Hori, burdened by debt and societal obligations, struggles to make ends meet, while the wealthy landowners live in relative comfort. Premchand doesn't shy away from critiquing the rigid caste system and its dehumanizing impact on individuals. Characters like Jhunia, a young widow ostracized by society, and Gobar, Hori's son who dares to challenge traditional norms, highlight the struggle for dignity and social mobility. \"Godan\" also delves into the complexities of religion and superstition, showcasing both its positive and negative influences on the villagers. While faith provides solace and community, it can also be used to manipulate and exploit the vulnerable.",
         "pageCount": 617,
         "printType": "BOOK",
+        "categories": ["Fiction"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=tBozEQAAQBAJ&printsec=frontcover&img=1&zoom=5&edge=curl&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=tBozEQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api"
         },
         "language": "en"
+      },
+      "accessInfo": {
+        "viewability": "PARTIAL"
       }
     },
     {
@@ -366,6 +435,7 @@
         "authors": ["Stephen K. George", "Barbara A. Heavilin"],
         "publisher": "Scarecrow Press",
         "publishedDate": "2007-10-02",
+        "description": "In March of 2006, scholars from around the world gathered in Sun Valley, Idaho for a conference devoted to not only John Steinbeck but also to the authors whose work influenced, informs, or illuminates his writings. This volume represents the many unique papers delivered at that conference by scholars from around the world. This collection includes studies on authors who influenced Steinbeck's work, discussions of writers whose work is in dialogue with Steinbeck, and examinations of Steinbeck's contemporaries, whose individual works invite comparisons with those of the Nobel-prize winning author. Revealing Steinbeck's penchant for culling \"all old books,\" the first section focuses on Steinbeck's European forebears, particularly Sir Thomas Malory's retelling of the legend of King Arthur, Le Morte d'Arthur, and Henry Fielding's novel Tom Jones. This section also includes articles on his American forebears: Walt Whitman and Sarah Orne Jewett. The second part, \"Steinbeck, Hemingway, Faulkner, and Cather\" includes a personal reminiscence by Ernest Hemingway's daughter-in-law, Valerie, as well as comparisons of Steinbeck with other great American authors of the 20th century. The third section includes an essay by National Book Award winner Charles Johnson (Middle Passage), as well as articles that compare Steinbeck's work with Zora Neale Hurston, Alice Walker, and Toni Morrison. Further articles are concerned with Steinbeck's moral philosophy and strong sense of social justice, eliciting comparisons with Sinclair Lewis, Tom Kristensen, and Charles Johnson. The fourth section, \"Steinbeck, the Arts, and the World\" includes articles on the film adaptation of The Moon Is Down, on Steinbeck and Mexican Modernism, on the American experience as portrayed in The Grapes of Wrath and Raymond Chandler's The Big Sleep, and on Steinbeck and ecocriticism. The book fittingly concludes with John Ditsky's keynote address, \"In Search of a Language: Steinbeck and Others,\" which was delivered",
         "industryIdentifiers": [
           {
             "type": "OTHER",
@@ -374,11 +444,15 @@
         ],
         "pageCount": 352,
         "printType": "BOOK",
+        "categories": ["Literary Criticism"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=m9tlAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=m9tlAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "en"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -395,11 +469,15 @@
         ],
         "pageCount": 820,
         "printType": "BOOK",
+        "categories": ["Buddhism"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=WH7YAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=WH7YAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "id"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -417,11 +495,15 @@
         ],
         "pageCount": 532,
         "printType": "BOOK",
+        "categories": ["Christianity"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=rNDYAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=rNDYAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "id"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -438,11 +520,15 @@
         ],
         "pageCount": 910,
         "printType": "BOOK",
+        "categories": ["Mysticism"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=RUkKAQAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=RUkKAQAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "id"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     },
     {
@@ -452,6 +538,7 @@
         "title": "The Gift of a Cow",
         "publisher": "London : Allen & Unwin",
         "publishedDate": "1968",
+        "description": "Story of Hori, a poor peasant who yearns to own a cow and to make the pious Hindu's traditional gift to a Brahmin when he dies. Through Premchand's vivid character portrayals we witness the efforts of Hori's family to survive the conflicts of village politics and the webs spun by colonial landownership patterns. Counterposed to the culture of rural connectedness but also constriction is the isolation but also freedom of the city. Here the rigors of industrialization and empty materialism only can be offset by the promise of Gandhian idealism.",
         "industryIdentifiers": [
           {
             "type": "OTHER",
@@ -460,11 +547,15 @@
         ],
         "pageCount": 456,
         "printType": "BOOK",
+        "categories": ["Peasantry"],
         "imageLinks": {
           "smallThumbnail": "http://books.google.com/books/content?id=yqRjAAAAMAAJ&printsec=frontcover&img=1&zoom=5&source=gbs_api",
           "thumbnail": "http://books.google.com/books/content?id=yqRjAAAAMAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api"
         },
         "language": "en"
+      },
+      "accessInfo": {
+        "viewability": "NO_PAGES"
       }
     }
   ]

@@ -70,15 +70,19 @@ The work. Contains no progress and no dates, deliberately.
 | `published_year` | INTEGER | |
 | `source` | TEXT | `google` · `openlibrary` · `manual` · `import` |
 | `source_id` | TEXT | The upstream id, for refresh |
+| `description` | TEXT | Plain text, paragraphs separated by a blank line. Cleaned from the source's HTML or Markdown; reader editable. Added in 0002 |
+| `categories` | TEXT | The source's raw categories as a JSON array of strings. Not genres: Slice 7 maps them. Added in 0002 |
+| `preview_url` | TEXT | Google's preview page, only when some pages can be read. "Read a sample". Added in 0002 |
+| `details_checked_at` | INTEGER | Unix ms when the three above were fetched from the source, or NULL if never. Each book is fetched once, so a description the reader cleared is not refetched. Added in 0002 |
 | `created_at` | INTEGER | Unix ms, UTC |
 | `updated_at` | INTEGER | Unix ms, UTC. Drives sync |
 | `deleted_at` | INTEGER | Soft delete. NULL means live |
 
 Every metadata field is user editable. This is a product requirement, not a nicety.
 
-**Planned for Slice 5, not yet in the schema:** `description` (TEXT, nullable) and `categories`
-(the source's raw categories; the exact shape is decided in the slice). Genres are derived from
-categories in Slice 7, plus a genre the reader sets. See `DECISIONS.md`, 2026-09-14.
+**Book details (Slice 5):** a fetch fills only empty details and always sets
+`details_checked_at` (`domain/bookDetails.ts`, `db/bookDetails.ts`). Genres are derived from
+`categories` in Slice 7, plus a genre the reader sets. See `DECISIONS.md`, 2026-09-14.
 
 ### `reads`
 
@@ -105,6 +109,18 @@ matters when they later add an earlier session.
 
 A book with three reads has three rows here, each with its own rating and dates. Nothing
 overwrites anything. `dnf` is a first class status and pages read on a DNF still count.
+
+**How `finished_at` is written, as built in Slice 5** (`features/finish/finishForm.ts`):
+- **A read reaches `finished` only through the finish flow**, which writes status, rating,
+  review and date in one update. `setReadStatus` cannot write `finished` (`MoveStatus`).
+- **Finishing now:** the date the reader saves (today by default) is stored. That is the
+  reader's answer, not a cached calculation.
+- **An already finished read with NULL:** shows its last session's date as derived; saving
+  without changing it writes nothing.
+- **Finished with no sessions and NULL** ("I already finished it"): no date. It counts as
+  finished and in no year.
+- **A read's finish date** is `finished_at`, else its last session, and only for status
+  `finished` (`domain/finishes.ts`, the one definition).
 
 ### `sessions`
 
@@ -268,7 +284,7 @@ Compute these with SQL. Storing them means they drift.
 | Time read (hours) | `duration_seconds / 60` for **every timed session, whatever its format**. For an audiobook session logged by hand (no duration), `to_position - from_position` in minutes. A timed audiobook counts its duration only, never its span as well. Kept in a **separate column of the UI**, never summed with pages |
 | Daily pace | Group sessions by `local_day`. This only works because sessions carry real dates |
 | Streak | Consecutive `local_day` values having at least one session |
-| Books finished | Count of reads with status finished in the year of `finished_at` |
+| Books finished | Count of reads with status finished in the local year of their finish date (`finished_at`, else the last session). Every read counts, so a re-read finished in a later year counts in that year too. Bucketed in TypeScript, not SQLite `localtime` (`domain/finishes.ts`, `db/finishedReads.ts`) |
 
 Every row above that buckets by day or year uses `local_day`, never `date(occurred_at)`.
 `local_day` is the one stored derivation in the schema and the reasoning is directly above.

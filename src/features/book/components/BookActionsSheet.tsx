@@ -1,9 +1,14 @@
 /**
  * The actions sheet, from `BookActions.dc.html`: the hub for managing a book (Journey H).
  *
- * In Slice 2: move to another status (including DNF), start a re-read, and remove. The
- * artboard's "Edit book details", "Notes" and "Share progress" open screens that belong to
- * Slices 4, 5b and 11; they appear with those screens, not as rows that go nowhere.
+ * Move to another status (including DNF), start a re-read, edit details, and remove. The
+ * artboard's "Notes" and "Share progress" open screens that belong to Slices 5b and 11; they
+ * appear with those screens, not as rows that go nowhere.
+ *
+ * **Finished is not a plain move.** Its chip opens the finish flow (Slice 5), which moves the
+ * book with its rating and date, and a finished read gets a row to change those. A status-only
+ * move to Finished could leave a book finished with no date the reader chose, which is what
+ * `MoveStatus` makes impossible to write.
  *
  * Remove asks once, in place, using the confirm copy in strings.ts, then soft-deletes and
  * raises an undo toast. Deleting a book takes its sessions and notes with it (the cascade),
@@ -18,6 +23,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 
 import type { BookSummary, ReadSummary } from '../queries'
 import type { ReadStatus } from '@/db/schema'
+import type { MoveStatus } from '@/domain/reads'
 import { canStartReread } from '@/domain/reads'
 import type { AppError, Result } from '@/lib/result'
 import { actions, confirm, status as statusCopy } from '@/lib/strings'
@@ -36,7 +42,9 @@ interface Props {
   onClose: () => void
   book: BookSummary
   read: ReadSummary
-  onMove: (status: ReadStatus) => Promise<Result<unknown>>
+  onMove: (status: MoveStatus) => Promise<Result<unknown>>
+  /** Opens the finish flow for the current read. The sheet closes first. */
+  onFinish: () => void
   onReread: () => Promise<Result<unknown>>
   /** Resolves ok once the book is removed; the screen then leaves and raises the toast. */
   onRemove: () => Promise<Result<unknown>>
@@ -55,6 +63,7 @@ export function BookActionsSheet({
   onReread,
   onRemove,
   onEdit,
+  onFinish,
 }: Props) {
   const c = useColors()
   const [confirming, setConfirming] = useState(false)
@@ -133,12 +142,23 @@ export function BookActionsSheet({
                 selected={s === read.status}
                 accessibilityLabel={`Move to ${statusCopy[s]}`}
                 onPress={() => {
-                  if (s !== read.status) void run(s, () => onMove(s))
+                  if (s === read.status) return
+                  if (s === 'finished') onFinish()
+                  else void run(s, () => onMove(s))
                 }}
               />
             ))}
           </View>
           {error ? <InlineError error={error} /> : null}
+          {read.status === 'finished' ? (
+            <ActionRow
+              icon="star"
+              title="Rating, note and finish date"
+              detail={read.rating !== null ? `Rated ${read.rating} out of 5` : 'Not rated yet'}
+              disabled={busy !== null}
+              onPress={onFinish}
+            />
+          ) : null}
           {/* Only once the current read has ended (domain/reads.ts). */}
           {canStartReread(read.status) ? (
             <ActionRow

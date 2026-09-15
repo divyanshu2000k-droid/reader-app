@@ -13,6 +13,7 @@
  */
 
 import type { ReadStatus } from '@/db/schema'
+import { effectiveFinishedAt } from '@/domain/finishes'
 import { normaliseText, textWords } from '@/domain/searchText'
 import { localYearOf, type UnixMs } from '@/lib/dates'
 
@@ -90,8 +91,8 @@ export function statusBadge(
     case 'reading':
       return progressLabel ? `READING · ${progressLabel.toUpperCase()}` : 'READING'
     case 'finished': {
-      // The reader's own finish date wins; otherwise the last session's (03-DATA-MODEL, reads).
-      const when = finishedAt ?? lastSessionAt
+      // One rule for every screen (domain/finishes.ts).
+      const when = effectiveFinishedAt({ status, finishedAt, lastSessionAt })
       return when === null ? 'FINISHED' : `FINISHED · ${localYearOf(when)}`
     }
     case 'want':

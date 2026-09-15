@@ -8,9 +8,10 @@
  *   itself stays saved either way.
  * - **Every number follows the edit** before Done: move the date to last Tuesday and the
  *   streak changes with it (sessionComplete.ts).
- * - **"I finished the book"** moves the read to Finished, status only. The finish flow with a
- *   rating and a finish date is Slice 5's; until then this is the same move as the actions
- *   sheet, so no date the reader did not choose is ever written.
+ * - **"I finished the book"** saves this screen's edits, then opens the finish flow (Slice 5),
+ *   which moves the book to Finished with its rating and date. It replaces this screen, so
+ *   closing the finish flow returns to where the session was started (book detail, or the
+ *   Library's Continue pill), not back on a session already saved.
  */
 
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -19,13 +20,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 
 import { WhenField } from './components/WhenField'
 import { useSessionTarget } from './hooks/useSessionTarget'
-import {
-  getReadingDays,
-  markReadFinished,
-  saveSessionNote,
-  updateSession,
-  type EditContext,
-} from './queries'
+import { getReadingDays, saveSessionNote, updateSession, type EditContext } from './queries'
 import { completeSummary, stepEnd } from './sessionComplete'
 import {
   checkForm,
@@ -177,15 +172,12 @@ function CompleteView({
         return setSaveError(saved.error)
       }
     }
-    if (markFinished) {
-      const moved = await markReadFinished(context.read.readId)
-      if (!moved.ok) {
-        setBusy(null)
-        return setSaveError(moved.error)
-      }
-    }
     setBusy(null)
-    guard.leave(close)
+    guard.leave(() =>
+      markFinished
+        ? router.replace({ pathname: '/book/finish', params: { read: context.read.readId } })
+        : close(),
+    )
   }
 
   const leftText =

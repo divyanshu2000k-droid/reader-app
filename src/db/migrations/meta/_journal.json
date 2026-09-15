@@ -15,6 +15,13 @@
       "when": 1788464195223,
       "tag": "0001_medical_red_shift",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789408341306,
+      "tag": "0002_ambitious_the_liberteens",
+      "breakpoints": true
     }
   ]
 }

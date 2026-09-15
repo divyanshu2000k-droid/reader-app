@@ -250,7 +250,9 @@ test('0001 applies to a POPULATED v1 database, repairs it, and loses nothing', (
     ),
   }
 
-  migrate(db, journal.entries.length - 1)
+  // Exactly 0001. Later migrations add columns, which changes a whole-table fingerprint; each
+  // has its own populated test below.
+  migrate(db, 1)
 
   // Every live book now has distinct read numbers, 1..n in creation order.
   const clashes = db
@@ -313,4 +315,61 @@ test('0001 applies to a POPULATED v1 database, repairs it, and loses nothing', (
   ]) {
     assert.ok(indexes.includes(name), `${name} is missing`)
   }
+})
+
+/** The columns 0002 adds to `books`, left out of "nothing else changed". */
+const BOOK_DETAILS = ['description', 'categories', 'preview_url', 'details_checked_at']
+
+function v2Database(): DatabaseSync {
+  const { db } = v1Database()
+  migrate(db, 1)
+  return db
+}
+
+function fingerprints(db: DatabaseSync) {
+  return {
+    books: fingerprint(db, 'books', BOOK_DETAILS),
+    reads: fingerprint(db, 'reads'),
+    sessions: fingerprint(db, 'sessions'),
+    shelves: fingerprint(db, 'shelves'),
+    assignments: fingerprint(db, 'book_shelves'),
+    notes: fingerprint(db, 'notes'),
+    queue: fingerprint(db, 'sync_queue'),
+  }
+}
+
+/**
+ * The control for the next test: the fingerprint must notice one changed value in one book, or
+ * "unchanged" below means nothing.
+ */
+test('the populated fingerprint notices a single changed book', () => {
+  const db = v2Database()
+  const before = fingerprints(db)
+  migrate(db, 2, {
+    idx: 2,
+    statements: [
+      ...statementsOf(journal.entries[2]?.tag ?? ''),
+      "UPDATE books SET author = NULL WHERE id = 'bk-1'",
+    ],
+  })
+  assert.notEqual(fingerprints(db).books, before.books)
+})
+
+test('0002 applies to a POPULATED database, adds empty book details, and loses nothing', () => {
+  const db = v2Database()
+  const before = fingerprints(db)
+
+  migrate(db, 2)
+
+  assert.deepEqual(fingerprints(db), before, 'a row changed')
+  const filled = db
+    .prepare(
+      `select count(*) as n from books where ${BOOK_DETAILS.map((c) => `${c} is not null`).join(' or ')}`,
+    )
+    .get() as { n: number }
+  assert.equal(filled.n, 0, 'the migration invented book details')
+  const cols = (db.prepare('pragma table_info(books)').all() as { name: string }[]).map(
+    (c) => c.name,
+  )
+  for (const c of BOOK_DETAILS) assert.ok(cols.includes(c), `books.${c} is missing`)
 })

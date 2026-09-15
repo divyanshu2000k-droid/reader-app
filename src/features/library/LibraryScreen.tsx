@@ -18,12 +18,12 @@
  */
 
 import { FlashList } from '@shopify/flash-list'
-import { useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import { BookRow } from './components/BookRow'
-import { StatusTabs } from './components/StatusTabs'
+import { STATUS_ORDER, StatusTabs } from './components/StatusTabs'
 import { useLibraryRows } from './hooks/useLibraryRows'
 import type { LibraryRow } from './queries'
 import type { ReadStatus } from '@/db/schema'
@@ -38,12 +38,27 @@ import { space } from '@/ui/theme'
 
 const EMPTY_ROWS: readonly LibraryRow[] = []
 
+function isTab(value: string | undefined): value is ReadStatus {
+  return value !== undefined && (STATUS_ORDER as readonly string[]).includes(value)
+}
+
 /** Enough skeletons to fill a phone, so the list does not appear to jump on load. */
 const SKELETON_ROWS = [0, 1, 2, 3, 4, 5]
 
 export function LibraryScreen() {
   const router = useRouter()
-  const [status, setStatus] = useState<ReadStatus>('reading')
+  // "Start the next one" in the finish flow opens the Library on Want to read, through `tab`.
+  // Adjusted during render, not in an effect, so the first frame is already the right tab.
+  // `at` makes a repeat request a new one: without it, a second "Start the next one" after the
+  // reader had moved to another tab carried the same `tab` and changed nothing.
+  const { tab, at } = useLocalSearchParams<{ tab?: string; at?: string }>()
+  const [status, setStatus] = useState<ReadStatus>(isTab(tab) ? tab : 'reading')
+  const request = `${tab ?? ''}@${at ?? ''}`
+  const [seenRequest, setSeenRequest] = useState(request)
+  if (request !== seenRequest) {
+    setSeenRequest(request)
+    if (isTab(tab)) setStatus(tab)
+  }
   const { rows, libraryEmpty, error, reload } = useLibraryRows(status)
 
   const push = useCallback(

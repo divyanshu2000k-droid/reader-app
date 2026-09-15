@@ -28,6 +28,7 @@ import {
   type BookShape,
 } from './bookForm'
 import { addManually, getEditableBook, updateBookDetails, type EditableBook } from './queries'
+import { DESCRIPTION_MAX_LENGTH } from '@/domain/bookDetails'
 import { formatDuration, localYearOf, now } from '@/lib/dates'
 import type { AppError } from '@/lib/result'
 import { actions, confirm, status as statusCopy } from '@/lib/strings'
@@ -163,9 +164,13 @@ function FormView({
       const added = await addManually(form, addTo)
       setSaving(false)
       if (!added.ok) return setSaveError(added.error)
-      guard.leave(() =>
-        router.replace({ pathname: '/book/[id]', params: { id: added.value.bookId } }),
-      )
+      guard.leave(() => {
+        router.replace({ pathname: '/book/[id]', params: { id: added.value.bookId } })
+        // Added to Finished: ask for the rating and date, over the new book's detail.
+        if (addTo === 'finished') {
+          router.push({ pathname: '/book/finish', params: { read: added.value.readId } })
+        }
+      })
       return
     }
     if (!book) return
@@ -307,6 +312,15 @@ function FormView({
             error={check.errors.isbn}
           />
         </View>
+
+        <Field
+          label="About this book · optional"
+          value={form.description}
+          onChangeText={(description) => set({ description })}
+          multiline
+          maxLength={DESCRIPTION_MAX_LENGTH}
+          error={check.errors.description}
+        />
 
         <View style={styles.note}>
           <Icon name="check" size={iconSize.header} color={c.textFaint} />

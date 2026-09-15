@@ -11,7 +11,7 @@ import { getDb } from '@/db/client'
 import { progressAggregates } from '@/db/progressAggregates'
 import { books, reads, sessions, type ReadStatus, type SessionFormat } from '@/db/schema'
 import { restoreRow, softDelete, updateRow, writeRow, type WriteOutcome } from '@/db/write'
-import { canStartReread } from '@/domain/reads'
+import { canStartReread, type MoveStatus } from '@/domain/reads'
 import type { UnixMs } from '@/lib/dates'
 import { injectedError, isFaultArmed, throwIfFault } from '@/lib/faults'
 import { newId } from '@/lib/ids'
@@ -28,6 +28,9 @@ export interface BookSummary {
   readonly coverColor: string | null
   readonly publisher: string | null
   readonly publishedYear: number | null
+  readonly description: string | null
+  /** Google's preview page, when some pages can be read. */
+  readonly previewUrl: string | null
 }
 
 export interface ReadSummary {
@@ -35,6 +38,8 @@ export interface ReadSummary {
   readonly readNumber: number
   readonly status: ReadStatus
   readonly rating: number | null
+  /** The note from the finish flow. Private. */
+  readonly review: string | null
   /** Set only when the reader chose it. Null means: derive from the sessions. */
   readonly startedAt: UnixMs | null
   readonly finishedAt: UnixMs | null
@@ -90,6 +95,8 @@ export async function getBookDetail(bookId: string): Promise<BookDetail | null> 
       coverColor: books.coverColor,
       publisher: books.publisher,
       publishedYear: books.publishedYear,
+      description: books.description,
+      previewUrl: books.previewUrl,
     })
     .from(books)
     .where(and(eq(books.id, bookId), isNull(books.deletedAt)))
@@ -103,6 +110,7 @@ export async function getBookDetail(bookId: string): Promise<BookDetail | null> 
       readNumber: reads.readNumber,
       status: reads.status,
       rating: reads.rating,
+      review: reads.review,
       startedAt: reads.startedAt,
       finishedAt: reads.finishedAt,
       ...progressAggregates,
@@ -146,14 +154,12 @@ export async function getSessionsForRead(readId: string): Promise<SessionEntry[]
  * Move a read to another status, including DNF.
  *
  * Only the status changes. DNF keeps every page already read (04-SCREENS, Journey H), so
- * nothing else is touched. Moving to Finished does NOT write `finished_at`: a null there
- * means "derive it from the sessions", and writing a computed value would make it
- * indistinguishable from a date the reader chose (03-DATA-MODEL, `reads`). The finish flow,
- * with its date and rating, is Slice 5's.
+ * nothing else is touched. Not Finished: that is the finish flow's, with its rating and date,
+ * and `MoveStatus` does not let a caller write it here.
  */
 export async function setReadStatus(
   readId: string,
-  status: ReadStatus,
+  status: MoveStatus,
 ): Promise<Result<WriteOutcome>> {
   if (isFaultArmed('bookAction')) return injectedActionFailure()
   return updateRow('reads', readId, { status })

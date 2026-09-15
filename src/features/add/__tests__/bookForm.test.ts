@@ -77,6 +77,7 @@ describe('what is written', () => {
       isbn13: null,
       isbn10: null,
       coverColor: null,
+      description: null,
     })
   })
 
@@ -112,6 +113,7 @@ describe('editing', () => {
     isbn13: '9781635575637',
     isbn10: null,
     coverColor: null,
+    description: 'Piranesi lives in the House.',
   }
 
   test('an untouched form is an empty patch and not dirty', () => {
@@ -138,6 +140,16 @@ describe('editing', () => {
       coverColor: '#2E2E38',
     })
     assert.deepEqual(patch, { publisher: null, coverColor: '#2E2E38' })
+  })
+
+  test('the description is edited like any field, and clearing it writes null', () => {
+    assert.deepEqual(
+      bookPatch(stored, { ...formFromBook(stored), description: '  My own summary. ' }),
+      { description: 'My own summary.' },
+    )
+    assert.deepEqual(bookPatch(stored, { ...formFromBook(stored), description: '   ' }), {
+      description: null,
+    })
   })
 
   test('an audiobook reopens as audio with its minutes', () => {

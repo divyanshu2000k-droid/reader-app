@@ -18,6 +18,7 @@ import {
   type BookDetail,
   type SessionEntry,
 } from '../queries'
+import { ensureBookDetails } from '@/db/bookDetails'
 import { ensureLocalCover } from '@/db/coverFiles'
 import { devTimed } from '@/lib/devLog'
 import { appError, type AppError } from '@/lib/result'
@@ -62,6 +63,10 @@ export function useBookDetail(bookId: string): BookDetailData {
         if (next && next.book.coverUrl !== null && next.book.coverLocalPath === null) {
           void ensureLocalCover(next.book.id, next.book.coverUrl)
         }
+        // A description, categories and preview link never fetched for this book (added before
+        // Slice 5, or from Open Library): once per book, never over the reader's own words
+        // (db/bookDetails.ts). Its write reloads this screen.
+        if (next) void ensureBookDetails(next.book.id)
       } catch (cause) {
         if (cancelled || !alive.current) return
         setError(

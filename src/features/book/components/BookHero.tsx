@@ -1,12 +1,14 @@
 /**
- * The top of book detail, from `BookDetail.dc.html`: cover, title, author, rating, and two
- * small badges for status and format.
+ * The top of book detail, from `BookDetail.dc.html`: cover, title, author, rating, the finish
+ * date once finished, and two small badges for status and format.
  */
 
 import { StyleSheet, Text, View } from 'react-native'
 
 import type { BookSummary, ReadSummary } from '../queries'
+import { effectiveFinishedAt } from '@/domain/finishes'
 import { isAudiobook } from '@/domain/progressDisplay'
+import { formatDate } from '@/lib/dates'
 import { status as statusCopy } from '@/lib/strings'
 import { BookCover } from '@/ui/BookCover'
 import { Stars } from '@/ui/Stars'
@@ -30,6 +32,7 @@ function formatBadge(book: BookSummary, read: ReadSummary): string {
 
 export function BookHero({ book, read }: Props) {
   const c = useColors()
+  const finished = effectiveFinishedAt(read)
 
   return (
     <View style={styles.hero}>
@@ -57,6 +60,14 @@ export function BookHero({ book, read }: Props) {
           </Text>
         ) : null}
         {read.rating !== null ? <Stars rating={read.rating} /> : null}
+        {finished !== null ? (
+          <Text
+            maxFontSizeMultiplier={rules.maxFontScale}
+            style={[typeStyle(font.secondary), { color: c.textMuted }]}
+          >
+            {`Finished ${formatDate(finished)}`}
+          </Text>
+        ) : null}
         <View style={styles.badges}>
           {[
             read.readNumber > 1

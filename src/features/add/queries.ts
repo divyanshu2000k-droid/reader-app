@@ -21,6 +21,8 @@ import {
   type SearchResult,
 } from './searchMerge'
 import { getDb } from '@/db/client'
+import { ensureBookDetails } from '@/db/bookDetails'
+import { serialiseCategories } from '@/domain/bookDetails'
 import { ensureLocalCover } from '@/db/coverFiles'
 import { books, metadataCache } from '@/db/schema'
 import {
@@ -31,6 +33,7 @@ import {
   type RowFor,
   type WriteOutcome,
 } from '@/db/write'
+import { now, type UnixMs } from '@/lib/dates'
 import { injectedError, isFaultArmed } from '@/lib/faults'
 import { newId } from '@/lib/ids'
 import { appError, err, ok, type Result } from '@/lib/result'
@@ -88,7 +91,11 @@ function injectedSaveFailure() {
 }
 
 /** The `books` row for a search result. The copy is the reader's from here on (03-DATA-MODEL). */
-export function bookRowFromResult(result: SearchResult, id: string): RowFor<'books'> {
+export function bookRowFromResult(
+  result: SearchResult,
+  id: string,
+  checkedAt: UnixMs,
+): RowFor<'books'> {
   return {
     id,
     title: result.title,
@@ -104,40 +111,56 @@ export function bookRowFromResult(result: SearchResult, id: string): RowFor<'boo
     publishedYear: result.publishedYear,
     source: result.source,
     sourceId: result.sourceId,
+    description: result.description,
+    categories: serialiseCategories(result.categories),
+    previewUrl: result.previewUrl,
+    // Google's search already carried the details, so there is nothing to fetch. Open Library's
+    // search does not: its work is fetched after adding (db/bookDetails.ts).
+    detailsCheckedAt: result.source === 'google' ? checkedAt : null,
   }
 }
 
+export interface AddedBook {
+  readonly bookId: string
+  /** The first read, so "I already finished it" can open the finish flow on it. */
+  readonly readId: string
+}
+
 /**
- * Add a search result: the book and its first read, in one transaction. The cover downloads
- * afterwards, in the background, and never decides whether the add succeeded.
+ * Add a search result: the book and its first read, in one transaction. The cover and, for Open
+ * Library, the description download afterwards, in the background, and never decide whether the
+ * add succeeded.
  */
 export async function addFromSearch(
   result: SearchResult,
   status: AddStatus,
-): Promise<Result<{ bookId: string }>> {
+): Promise<Result<AddedBook>> {
   if (isFaultArmed('bookSave')) return injectedSaveFailure()
   const bookId = newId()
+  const readId = newId()
   const saved = await writeTogether([
-    { table: 'books', values: bookRowFromResult(result, bookId) },
-    { table: 'reads', values: firstReadRow(newId(), bookId, status) },
+    { table: 'books', values: bookRowFromResult(result, bookId, now()) },
+    { table: 'reads', values: firstReadRow(readId, bookId, status) },
   ])
   if (!saved.ok) return saved
   void ensureLocalCover(bookId, result.coverUrl)
-  return ok({ bookId })
+  void ensureBookDetails(bookId)
+  return ok({ bookId, readId })
 }
 
 /** Add a book by hand: the book and its first read, in one transaction. */
 export async function addManually(
   form: BookForm,
   status: AddStatus,
-): Promise<Result<{ bookId: string }>> {
+): Promise<Result<AddedBook>> {
   if (isFaultArmed('bookSave')) return injectedSaveFailure()
   const bookId = newId()
+  const readId = newId()
   const saved = await writeTogether([
     { table: 'books', values: manualBookRow(form, bookId) },
-    { table: 'reads', values: firstReadRow(newId(), bookId, status) },
+    { table: 'reads', values: firstReadRow(readId, bookId, status) },
   ])
-  return saved.ok ? ok({ bookId }) : saved
+  return saved.ok ? ok({ bookId, readId }) : saved
 }
 
 export interface EditableBook extends StoredBookFields {
@@ -160,6 +183,7 @@ export async function getEditableBook(bookId: string): Promise<EditableBook | nu
       isbn13: books.isbn13,
       isbn10: books.isbn10,
       coverColor: books.coverColor,
+      description: books.description,
       coverUrl: books.coverUrl,
       coverLocalPath: books.coverLocalPath,
     })

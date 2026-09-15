@@ -229,6 +229,11 @@ and Open Library for coverage gaps. Cache every result permanently in local SQLi
 >   publisher of its own, and results matching none of the typed words are dropped.
 > - **Offline is told apart from a broken server by what the request failed with.** Expo's
 >   fetch rejects offline with a `FetchError`, not a `TypeError`.
+> - **Book details (Slice 5):** Google's search result already carries description, categories
+>   and viewability, so adding a Google book costs no extra request. An Open Library book fetches
+>   its work (`/works/<id>.json`) once, in the background. A book from before Slice 5 fetches
+>   once when opened: a Google volume (`/volumes/<id>`, one quota request per book, ever) or an
+>   Open Library work. `db/bookDetails.ts`, beside `coverFiles.ts`.
 >
 > See `DECISIONS.md`, 2026-09-14.
 

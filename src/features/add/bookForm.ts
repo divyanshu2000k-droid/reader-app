@@ -19,6 +19,7 @@
 
 import type { ReadStatus } from '@/db/schema'
 import type { PatchFor, RowFor } from '@/db/write'
+import { DESCRIPTION_MAX_LENGTH } from '@/domain/bookDetails'
 import { isValidIsbn10, toIsbn13 } from '@/domain/isbn'
 
 export type BookShape = 'print' | 'audio'
@@ -40,6 +41,8 @@ export interface BookForm {
   readonly isbn: string
   /** A reader-chosen fallback colour, or null to derive it from the title. */
   readonly coverColor: string | null
+  /** The summary on book detail. Often filled from the source; always the reader's to change. */
+  readonly description: string
 }
 
 /** The book columns this form edits, as stored. */
@@ -53,6 +56,7 @@ export interface StoredBookFields {
   readonly isbn13: string | null
   readonly isbn10: string | null
   readonly coverColor: string | null
+  readonly description: string | null
 }
 
 export const EMPTY_FORM: BookForm = {
@@ -64,6 +68,7 @@ export const EMPTY_FORM: BookForm = {
   year: '',
   isbn: '',
   coverColor: null,
+  description: '',
 }
 
 export function formFromBook(book: StoredBookFields): BookForm {
@@ -78,6 +83,7 @@ export function formFromBook(book: StoredBookFields): BookForm {
     year: book.publishedYear === null ? '' : String(book.publishedYear),
     isbn: book.isbn13 ?? book.isbn10 ?? '',
     coverColor: book.coverColor,
+    description: book.description ?? '',
   }
 }
 
@@ -87,6 +93,7 @@ export interface BookFormCheck {
     readonly length?: string
     readonly year?: string
     readonly isbn?: string
+    readonly description?: string
   }
   readonly canSave: boolean
 }
@@ -97,7 +104,13 @@ function text(v: string): string | null {
 }
 
 export function checkBookForm(form: BookForm, currentYear: number): BookFormCheck {
-  const errors: { title?: string; length?: string; year?: string; isbn?: string } = {}
+  const errors: {
+    title?: string
+    length?: string
+    year?: string
+    isbn?: string
+    description?: string
+  } = {}
   const title = form.title.trim()
   if (title.length > TITLE_MAX) errors.title = `Up to ${TITLE_MAX} characters`
 
@@ -123,6 +136,10 @@ export function checkBookForm(form: BookForm, currentYear: number): BookFormChec
     errors.isbn = 'That is not a valid ISBN. Check the digits, or leave it empty.'
   }
 
+  if (form.description.trim().length > DESCRIPTION_MAX_LENGTH) {
+    errors.description = `Up to ${DESCRIPTION_MAX_LENGTH} characters`
+  }
+
   return { errors, canSave: title.length > 0 && Object.keys(errors).length === 0 }
 }
 
@@ -141,6 +158,7 @@ function fields(form: BookForm): StoredBookFields {
     isbn13: toIsbn13(compact),
     isbn10: compact !== null && isValidIsbn10(compact) ? compact : null,
     coverColor: form.coverColor,
+    description: text(form.description),
   }
 }
 
@@ -186,6 +204,7 @@ export function bookPatch(original: StoredBookFields, form: BookForm): PatchFor<
   if (next.isbn13 !== original.isbn13) patch.isbn13 = next.isbn13
   if (next.isbn10 !== original.isbn10) patch.isbn10 = next.isbn10
   if (next.coverColor !== original.coverColor) patch.coverColor = next.coverColor
+  if (next.description !== original.description) patch.description = next.description
   return patch
 }
 

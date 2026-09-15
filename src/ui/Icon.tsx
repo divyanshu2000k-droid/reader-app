@@ -38,7 +38,8 @@ export type IconName =
   | 'close'
   | 'search'
   | 'wifi'
-  | 'image'
+  | 'calendar'
+  | 'star'
   | 'check'
 
 interface Props {
@@ -163,6 +164,9 @@ function paths(name: IconName) {
           <Path d="M9 7V4h6v3" />
         </>
       )
+    // The actions sheet's rating row: the same star as `Stars`, as an outline.
+    case 'star':
+      return <Path d="M12 2l3 6.5 7 .9-5 4.9 1.2 7L12 18l-6.2 3.3L7 14.3l-5-4.9 7-.9z" />
     // Book detail's session rows, from BookDetail.dc.html.
     case 'pencil':
       return (
@@ -202,13 +206,12 @@ function paths(name: IconName) {
           <Path d="M12 20v.01" />
         </>
       )
-    // The cover picker, from ManualEntry.dc.html.
-    case 'image':
+    // The finish flow's date row, from FinishBook.dc.html.
+    case 'calendar':
       return (
         <>
-          <Path d="M5.5 4h13A2.5 2.5 0 0121 6.5v11a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 17.5v-11A2.5 2.5 0 015.5 4z" />
-          <Circle cx="8.5" cy="9.5" r="1.8" />
-          <Path d="M21 15l-5-4-6 5" />
+          <Path d="M5.5 5h13A2.5 2.5 0 0121 7.5v11a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 18.5v-11A2.5 2.5 0 015.5 5z" />
+          <Path d="M3 10h18M8 3v4M16 3v4" />
         </>
       )
     // Manual entry's reassurance line, from ManualEntry.dc.html.

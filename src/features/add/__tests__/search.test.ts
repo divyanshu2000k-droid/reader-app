@@ -104,6 +104,30 @@ describe('Google Books, real responses', () => {
     assert.deepEqual(byId(godaan, 'sTCOAAAAMAAJ')?.authors, [])
   })
 
+  test('a search result carries its description, categories and preview link', () => {
+    const first = byId(piranesi, 'pPa0DwAAQBAJ')
+    assert.match(first?.description ?? '', /^Winner of the 2021 Women's Prize for Fiction/)
+    assert.deepEqual(first?.categories, ['Fiction'])
+    assert.equal(
+      first?.previewUrl,
+      'https://books.google.com/books?id=pPa0DwAAQBAJ&printsec=frontcover',
+    )
+    // NO_PAGES: no link to a page with nothing to read.
+    const noPages = godaan.find((h) => h.previewUrl === null)
+    assert.ok(noPages, 'the capture should hold a volume with nothing viewable')
+  })
+
+  test('an Open Library hit has no details of its own, and a merge keeps Google’s', () => {
+    const ol = parseOpenLibrary(fixture('openlibrary-piranesi-clarke.json'))
+    assert.equal(ol[0]?.description, null)
+    const merged = mergeResults('piranesi clarke', piranesi, ol).find(
+      (r) => r.title === 'Piranesi',
+    )
+    assert.match(merged?.description ?? '', /Women's Prize/)
+    const olFirst = mergeResults('piranesi clarke', null, ol)[0]
+    assert.equal(olFirst?.description, null)
+  })
+
   test('a Devanagari title arrives intact', () => {
     assert.equal(byId(godaan, '624xEQAAQBAJ')?.title, 'Godaan (Hindi) - गोदान')
   })
@@ -288,6 +312,28 @@ describe('remembered results, for offline', () => {
     const [first] = results
     assert.ok(first)
     assert.equal(parseRememberedResult(JSON.stringify({ ...first, pageCount: '272' })), null)
+  })
+
+  test('a result remembered before Slice 5, with no details at all, still reads back', () => {
+    const [first] = results
+    assert.ok(first)
+    const { description: _d, categories: _c, previewUrl: _p, ...slice4 } = first
+    const read = parseRememberedResult(JSON.stringify(slice4))
+    assert.ok(read, 'an older remembered result was rejected, which empties offline search')
+    assert.equal(read.description, null)
+    assert.deepEqual(read.categories, [])
+    assert.equal(read.previewUrl, null)
+    assert.equal(read.title, first.title)
+  })
+
+  test('details of the wrong type are still refused', () => {
+    const [first] = results
+    assert.ok(first)
+    assert.equal(
+      parseRememberedResult(JSON.stringify({ ...first, categories: 'Fiction' })),
+      null,
+    )
+    assert.equal(parseRememberedResult(JSON.stringify({ ...first, description: 5 })), null)
   })
 
   test('remembered results are found and ranked by the same words rule', () => {

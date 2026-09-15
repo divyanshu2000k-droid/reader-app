@@ -278,6 +278,8 @@ const row = 8
 export const size = {
   /** Nothing tappable may be smaller than this. */
   minTouch,
+  /** Where a rating star's tap target splits into its left and right half. */
+  ratingHalf: minTouch / 2,
   buttonPrimary: 56,
   buttonSecondary: 46,
   field: 54,
@@ -328,6 +330,8 @@ export const iconSize = {
   raised: 23,
   /** A rating star on book detail. */
   star: 17,
+  /** A star in the finish flow's rating, drawn inside a minTouch-wide tap target. */
+  ratingInput: 34,
 } as const
 
 /** Stroke weights: navigation icons at 1.9, emphasis heavier. */

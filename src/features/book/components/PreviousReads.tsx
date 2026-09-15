@@ -6,6 +6,7 @@
 import { StyleSheet, Text, View } from 'react-native'
 
 import type { ReadSummary } from '../queries'
+import { effectiveFinishedAt } from '@/domain/finishes'
 import { formatDate, formatDuration } from '@/lib/dates'
 import { status as statusCopy } from '@/lib/strings'
 import { Stars } from '@/ui/Stars'
@@ -26,8 +27,8 @@ export function PreviousReads({ reads }: { reads: readonly ReadSummary[] }) {
         Earlier reads
       </Text>
       {reads.map((r) => {
-        // The reader's own dates win; otherwise they come from the sessions (03-DATA-MODEL).
-        const finished = r.finishedAt ?? (r.status === 'finished' ? r.lastSessionAt : null)
+        // One rule for every screen (domain/finishes.ts).
+        const finished = effectiveFinishedAt(r)
         return (
           <View
             key={r.readId}
@@ -41,6 +42,14 @@ export function PreviousReads({ reads }: { reads: readonly ReadSummary[] }) {
               {finished !== null ? ` · ${formatDate(finished)}` : ''}
             </Text>
             {r.rating !== null ? <Stars rating={r.rating} /> : null}
+            {r.review ? (
+              <Text
+                maxFontSizeMultiplier={rules.maxFontScale}
+                style={[typeStyle(font.body), { color: c.textSecondary }]}
+              >
+                {r.review}
+              </Text>
+            ) : null}
             <Text
               maxFontSizeMultiplier={rules.maxFontScale}
               style={[typeStyle(font.secondary), { color: c.textMuted }]}

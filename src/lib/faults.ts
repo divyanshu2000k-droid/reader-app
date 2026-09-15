@@ -21,7 +21,13 @@
  */
 
 export type FaultName =
-  'libraryQuery' | 'bookDetail' | 'bookAction' | 'sessionSave' | 'bookSearch' | 'bookSave'
+  | 'libraryQuery'
+  | 'bookDetail'
+  | 'bookAction'
+  | 'sessionSave'
+  | 'bookSearch'
+  | 'bookSave'
+  | 'finishSave'
 
 export const FAULTS: readonly { readonly name: FaultName; readonly label: string }[] = [
   { name: 'libraryQuery', label: 'Library list fails to load' },
@@ -30,6 +36,7 @@ export const FAULTS: readonly { readonly name: FaultName; readonly label: string
   { name: 'sessionSave', label: 'Saving a session fails' },
   { name: 'bookSearch', label: 'Book search gets a server error' },
   { name: 'bookSave', label: 'Adding or editing a book fails' },
+  { name: 'finishSave', label: 'Finishing a book fails' },
 ]
 
 const armed = new Set<FaultName>()

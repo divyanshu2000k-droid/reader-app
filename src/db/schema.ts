@@ -79,6 +79,28 @@ export const books = sqliteTable(
     source: text('source').$type<BookSource>().notNull().default('manual'),
     /** The upstream id, for a later metadata refresh. */
     sourceId: text('source_id'),
+    /**
+     * The book's summary, as plain text with paragraphs separated by a blank line: the sources'
+     * HTML and Markdown are cleaned on the way in (domain/bookDetails.ts). Reader editable.
+     * Added in 0002, Slice 5.
+     */
+    description: text('description'),
+    /**
+     * The source's own categories, raw, as a JSON array of strings ("Fiction / Fantasy /
+     * General", "genre:fantasy"). Not genres: Slice 7 maps these to a short genre list.
+     */
+    categories: text('categories'),
+    /**
+     * Google's preview page, set only when Google says some pages can be read. "Read a sample"
+     * opens it in the browser; Slice 11 reads it inside the app.
+     */
+    previewUrl: text('preview_url'),
+    /**
+     * When description, categories and preview were last fetched from the source, or null if
+     * never. A book is fetched once: a reader who clears a description is not overruled by the
+     * next launch, which "only fill what is empty" alone could not tell apart from never fetched.
+     */
+    detailsCheckedAt: integer('details_checked_at'),
     ...syncColumns,
   },
   (t) => [

@@ -37,6 +37,8 @@ src/
       searchMerge.ts      Pure: merge, rank by typed words, library match, remembered results
       searchStatus.ts     Pure: offline vs unavailable vs partial, from what the request failed with
       bookForm.ts         Pure: manual entry and edit rules
+    finish/               Finishing a book: rating, note, date, the move to Finished (Slice 5)
+      finishForm.ts       Pure: the date and the override rule, what is written, what the screen says
     session/              Logger, editor, Session complete (Slice 3)
       sessionForm.ts      Pure: what saves, what is refused, what is only pointed out, what is written
       sessionComplete.ts  Pure: what Session complete says, following the edit
@@ -55,11 +57,14 @@ src/
     currentRead.ts        Shared SQL: a book's current read. Every list of books filters with it
     changes.ts            "The library changed": write.ts signals every committed change
     coverFiles.ts         A local copy of every cover, downloaded after adding
+    bookDetails.ts        A book's description, categories and preview, fetched once from its source
+    finishedReads.ts      Shared SQL: every finished read and what its date derives from (finish, Stats)
     migrationPlan.ts      Pure: what is pending, by drizzle's rule
     devchecks.ts          The device pass (dev only)
   ui/                     Shared primitives from the design system sheet
     Button.tsx  Card.tsx  Sheet.tsx  Toast.tsx  InlineError.tsx  Stars.tsx  ConfirmSheet.tsx  ...
-    SearchField.tsx  OfflineBanner.tsx
+    SearchField.tsx  OfflineBanner.tsx  RatingInput.tsx
+    datePicker.ts         Android's date and time dialogs as a promise (logger, finish flow)
     keyboardOverlap.ts    Pure: how much of a full-screen form the keyboard covers
     useUnsavedGuard.ts    Ask before any route leaves a dirty form
     pressGuard.ts         Pure: a double tap is one tap (usePressGuard)
@@ -71,7 +76,9 @@ src/
   domain/                 Business logic shared across features.
     progress.ts           Current page, percent complete
     progressDisplay.ts    What progress says, and the ONE definition of an audiobook
-    reads.ts              When a re-read may start
+    reads.ts              When a re-read may start; MoveStatus (Finished is not a plain move)
+    finishes.ts           Pure: a read's finish date, and which local year it counts in
+    bookDetails.ts        Pure: cleaning descriptions, categories, the preview link, what a fetch writes
     sessionLine.ts        Pure: what a session row says (book detail, Recently Deleted)
     isbn.ts               Pure: ISBN-10/13, checksums, one canonical form
     searchText.ts         Pure: how both searches compare text (case and accents)
@@ -133,7 +140,8 @@ mix conventions within a layer.
 - **Compile-time assertions live in `__tests__/*.types.ts`**: `@ts-expect-error` lines
   that `npm run typecheck` checks and nothing executes. They are deliberately not
   `*.test.ts`, so they never inflate the runtime count. `transaction.types.ts` and
-  `write.types.ts` are the pattern
+  `write.types.ts` are the pattern; `features/book/__tests__/moveStatus.types.ts` holds that a
+  read cannot be moved to Finished without the finish flow
 
 ---
 
@@ -461,6 +469,8 @@ the I/O and calls it. The pattern, in `src/features/launch/`:
 - `src/features/add/searchSources.ts`, `searchMerge.ts`, `searchStatus.ts` and `bookForm.ts`
   beside the Add and form screens; `src/features/library/librarySearch.ts` and `rowLayout.ts`;
   `src/domain/isbn.ts` and `searchText.ts`
+- `src/features/finish/finishForm.ts` beside `FinishScreen.tsx`; `src/domain/finishes.ts` and
+  `bookDetails.ts` beside `db/finishedReads.ts` and `db/bookDetails.ts`
 
 What stays untested is the hook's state transition itself; that half is verified on a
 device, and the entry in `DECISIONS.md` says so.
@@ -538,6 +548,16 @@ TanStack about connectivity; the default would pause an offline query as a spinn
 
 **Parsers of third-party JSON take `unknown` and are tested against captured responses**, in
 `__tests__/fixtures`. A fixture that is not a real capture says so in its `_captured` field.
+
+**A stored JSON payload that gains a field reads its old shape too.** Remembered search results
+written before a field existed must still parse: absent means none, and only a present value of
+the wrong type rejects the payload. Test it with the old shape (`search.test.ts`, Slice 5).
+
+**A read reaches Finished only through the finish flow.** `setReadStatus` takes `MoveStatus`; a
+new way to finish a book routes to `book/finish`, never writes the status.
+
+**Which year something counts in is decided in TypeScript, in the device's zone.** Never SQLite's
+`localtime`, which is not reliably the device zone on Android. Add the suite to `test:tz`.
 
 **A screen that shows the reader's books or sessions reloads with `useReloadOnChange`.** A
 write can come from something that is not another screen: an Undo toast on this one restored a

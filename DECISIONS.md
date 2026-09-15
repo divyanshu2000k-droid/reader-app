@@ -630,6 +630,173 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-15 · Slice 5 verified on the phone
+**All 21 checks run passed** (`docs/device-checks/slice-5.md`, results). The owner's two cases held on
+real screens and in the pulled database:
+- **Case 1:** finishing moved the book off Reading onto Finished, once.
+- **Case 2:** a book finished on 31 Dec 2025, re-read and finished today is two `reads` rows, rated
+  3 and 1.5. Each counts in its own year.
+
+**The open question from 2026-09-14 is measured, not closed.** The device pass passed 5 of 5
+consecutive clean runs (7 of 7 with yesterday's). 14c and 16 passed each time. Their three failures
+came only during mutation runs, have not recurred, and are not explained. The procedure to tell a
+real interference from the network stays in the run sheet.
+
+**Not run, by the owner's choice:** the largest font and 360 dp. Both go into the Slice 11 font pass,
+which already covers every screen built after Slice 3.
+
+**Filed against Slice 11 polish** (found on the phone, no data at risk):
+- **The description field** in Edit details grows to the whole screen's height for a long
+  description.
+- **Finish date wording:** book detail says "Finished 15 Sep 2026" where the finish screen says
+  "Finished today".
+
+**Also corrected:** the Session complete comment and the run sheet said closing the finish screen lands
+on book detail. It returns to where the session was started, which is the Library when that was its
+Continue pill. The behaviour was right; the words were not.
+
+## 2026-09-15 · Slice 5 review pass: two silent bugs, fixed after the phone was disconnected
+The one review pass (CLAUDE.md), looking only for what is silent and wrong in the reader's data.
+
+**Moving a Want to read book with no sessions to Finished defaulted to today.**
+- **Why that is wrong:** that move is almost always "I read this before I used the app", and today
+  put a book read years ago into this year's count. It is the same shape as silent-pass item 9: a
+  number recorded on the reader's behalf that they never gave.
+- **Fixed:** the date starts empty and is asked for, like "I already finished it". A Reading book
+  (even with no sessions yet) and any read with sessions still default to today.
+- **Held by:** a test, watched failing.
+
+**A second "Start the next one" could leave the Library on the wrong tab.**
+- **What happened:** the request was a `tab` route parameter. After the reader moved to another
+  tab, the same parameter arrived again and changed nothing.
+- **Fixed:** the request carries a timestamp, so each one is new.
+- **Not a data bug:** fixed because it is one line, and has no test. Checked on the phone
+  tomorrow.
+
+**Counts after these fixes:**
+- 383 node tests under `cmd` and `sh`; 121 in each of three zones.
+- 16 of 16 mutations red.
+- Typecheck, lint and Prettier clean.
+- **Not re-run:** the device pass, because the phone was disconnected. Both fixes are outside the
+  device checks' paths, but the rule is to re-run after any change, so it runs first tomorrow.
+
+## 2026-09-14 · Slice 5: descriptions, categories and "Read a sample", decided as built
+**Four columns on `books`, in migration 0002:** `description`, `categories` (JSON array of the
+source's raw strings), `preview_url` and `details_checked_at`.
+- **Tested against a populated database:** 2000 books, with a control showing the fingerprint
+  notices one changed book. It also ran on the phone's populated `devcheck.db`.
+- **Why `details_checked_at`:** "fill only what is empty" cannot tell a description never fetched
+  from one the reader deleted. The mark makes each book's fetch happen once, ever.
+- **Over:** refetching whenever a column is empty, which would bring back a description the reader
+  cleared on the next launch.
+- **Known edge, accepted:** a reader who clears the description of a book whose fetch has not
+  happened yet (added offline from Open Library) gets it back once when the fetch runs.
+
+**Where details come from.**
+- **Google:** from the search result itself when added (the search carries description, categories
+  and viewability), so no extra request against the shared quota.
+- **Open Library:** the search has no description, so the work (`/works/<id>.json`) is fetched in
+  the background after adding.
+- **Books added before this slice:** fetched when their detail is first opened online, like cover
+  retries (`db/bookDetails.ts`).
+- **Google without a key:** waits, rather than being marked checked with nothing.
+
+**Descriptions are cleaned to plain paragraphs** (`domain/bookDetails.ts`, tested on captures).
+- **Google volume descriptions are HTML** with entity-encoded text and a publisher's
+  `<b>______</b>` rule.
+- **Open Library's are Markdown**: bold wrapping italics, reference links, and a `----------`
+  rule before an "Also contained in" list of links. The list is cut.
+- **Length:** capped at 4000 characters at a word boundary.
+- **Over:** rendering HTML or Markdown on book detail, which needs a renderer for a nicety and
+  makes the reader's own edits a different kind of text.
+
+**The preview link is built from the volume id** (`books.google.com/books?id=…&printsec=frontcover`),
+never Google's `previewLink`. Google's carries the reader's search words (`dq=`) and a country
+domain. It is set only for PARTIAL or ALL_PAGES viewability: 5 and 8 of 20 in the captures.
+
+**Results remembered before Slice 5 still read back offline.** The three new fields are optional
+in `parseRememberedResult`; only a present value of the wrong type rejects a payload.
+**Over:** requiring them, which would have silently emptied every reader's offline search on
+upgrade. A test uses a Slice 4 payload, and was watched failing.
+
+**Categories are not shown yet.** Raw strings like "nyt:combined-print-and-e-book-fiction" are not
+for readers. Slice 7 maps them to genres. Edit details lets the reader change the description;
+genre editing comes with Slice 7.
+
+**Also found while building:** 05-BUILD-PLAN said the actions sheet "links to notes from Slice 2".
+It does not, and never did; rows appear with the slice that owns them. Slice 5b stays unbuilt, as
+the owner asked.
+
+**Where Slice 5 stands at the end of 2026-09-14: code complete, phone checks not done.** The owner
+disconnected the phone.
+- **Checks:** typecheck, lint and Prettier are clean. 381 node tests pass, and 119 under each of
+  UTC, IST and US Central. 15 of 15 node mutations went red, and the `MoveStatus` type assertion
+  was watched failing.
+- **Device pass on the phone before it was disconnected:** RUNTIME 34/34 · COMPILE-TIME 1/1,
+  twice (the second run from a fresh Metro). Check 15 failed as intended under two mutations
+  (finish without the move; a re-read inheriting a rating). Check 16 failed under one (a fetch
+  replacing the reader's description). Sources were restored and checksummed after each.
+- **Open, not explained:** in those three mutation runs, the network-dependent checks **14c or 16
+  also failed, although their code was not mutated**. 14c: no local cover within 10 s. 16: nothing
+  written. Both passed in both clean runs. It could be a slow network at that moment, or the new
+  background details fetch competing with the cover download in 14c. It is not dismissed:
+  tomorrow's first job is to count clean passes (`docs/device-checks/slice-5.md`).
+- **None of the phone-only checks has been run:** the owner's two cases on real screens, the
+  keyboard over the note, and the date dialog.
+
+## 2026-09-14 · Slice 5: the finish flow, decided as built
+**Finished is reached only through the finish flow.**
+- **What that covers:** the actions sheet's Finished chip, "I finished the book" on Session
+  complete, and "I already finished it" when adding (search and manual). Every one opens
+  `features/finish`, which writes status, rating, note and date as ONE update of the read.
+- **What it replaced:** the status-only moves of Slices 3 and 4.
+- **Held structurally:** `setReadStatus` takes `MoveStatus` (`ReadStatus` without `finished`), so
+  a plain move to Finished does not compile.
+- **Over:** keeping the chip as a plain move beside the flow, which leaves finished books with
+  no date and no rating prompt.
+- **The owner's named case:** a book finished here always leaves Currently Reading, because the
+  move and the finish are the same write.
+
+**The finish date and the override rule.** `finished_at` null means "derive it from the last
+session", and a computed value is never written (03-DATA-MODEL).
+- **Finishing now:** the date starts at today and is stored when the reader saves. It is their
+  answer to "when did you finish?", not a cache of the sessions.
+- **A read already finished without a date:** shows its last session's date as derived, and
+  saving without touching it writes nothing.
+- **Finished with no sessions and no date** ("I already finished it"): no date is shown and none
+  invented. It counts as finished and in no year. **Over:** defaulting to today, which would put
+  every book from years ago into this year's count.
+- **Refused:** a date after today, or before the read's last session or stored start.
+
+**Which year a finish counts in is decided in TypeScript, in the device's zone**
+(`domain/finishes.ts`), from `db/finishedReads.ts`. SQLite's `localtime` is not reliably the
+device zone on Android. Every read counts, so a book finished in 2025 and re-read to the end in
+2026 is one book in each year. Tested under UTC, IST and US Central with an 11 pm New Year's Eve
+finish.
+
+**One rule for a finish date.** Book detail's earlier reads and library search each spelled
+`finishedAt ?? lastSessionAt` inline, and the earlier-reads copy also showed a date for a DNF
+read. Both now call `effectiveFinishedAt`.
+
+**Rating:** tap the left or right half of a star. Tapping the rating shown clears it, because a
+rating is optional and nothing else returns it to none. Each star is a 44 dp target. TalkBack
+hears one adjustable "Rating" control that steps in halves.
+
+**"Start the next one"** saves the same way, then opens the Library on Want to read, through a
+`tab` route parameter. **Over:** the Add tab, since the next book is usually already on Want to
+read.
+
+**Closing without saving changes nothing.** It asks first only if a rating, note or date was
+changed. The book stays on its shelf, and a book added as "I already finished it" stays
+finished without a date.
+
+**A finished read can be changed later** from the actions sheet: "Rating, note and finish date"
+opens the same screen, with Save. Earlier reads are not editable yet. Filed against Slice 11
+polish.
+
+**Also:** a `finishSave` forced failure; the date dialog is now `ui/datePicker.ts`, shared with
+the session logger; the unused `image` icon from Slice 4 became `calendar`.
+
 ## 2026-09-14 · Descriptions, genres and "Read a sample": planned by the owner
 **The owner's decision, after seeing what Google actually returns.** Book metadata richer than
 title and author feeds three later features, so it is captured from Slice 5, not when each

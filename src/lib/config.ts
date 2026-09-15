@@ -56,7 +56,9 @@ export const config = {
   /**
    * Google Books, for search (02-ARCHITECTURE, ADR 005). Unset = Google is not asked and search
    * uses Open Library alone: unkeyed requests were refused outright on 2026-09-14. A public key,
-   * meant to be restricted to this app's package and signing certificate in Google Cloud.
+   * restricted to the Books API only. NOT to this app's package: that restriction needs the
+   * X-Android-Package and X-Android-Cert headers, which nothing sends yet (DECISIONS.md,
+   * 2026-09-14; filed against Slice 11).
    */
   googleBooksApiKey: value(process.env.EXPO_PUBLIC_GOOGLE_BOOKS_API_KEY),
 } as const

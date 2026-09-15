@@ -84,6 +84,11 @@ export function AddScreen() {
       if (!added.ok) return added
       setPicking(null)
       router.push({ pathname: '/book/[id]', params: { id: added.value.bookId } })
+      // "I already finished it": the book is on Finished with no date yet. The finish flow opens
+      // over its detail to ask for a rating and the date; closing it leaves the book as added.
+      if (status === 'finished') {
+        router.push({ pathname: '/book/finish', params: { read: added.value.readId } })
+      }
       return ok(undefined)
     },
     [router],

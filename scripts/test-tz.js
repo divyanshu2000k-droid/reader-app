@@ -21,6 +21,9 @@ const SUITES = [
   'src/features/session/__tests__/sessionForm.test.ts',
   'src/features/session/__tests__/sessionComplete.test.ts',
   'src/features/stats/__tests__/paceChart.test.ts',
+  // Slice 5: which year a finish counts in, and the finish flow's date checks.
+  'src/domain/__tests__/finishes.test.ts',
+  'src/features/finish/__tests__/finishForm.test.ts',
 ]
 
 let failed = false

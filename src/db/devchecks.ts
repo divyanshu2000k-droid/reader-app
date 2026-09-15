@@ -29,7 +29,9 @@ import { File, Paths } from 'expo-file-system'
 
 import { subscribeDataChanges } from './changes'
 import { checkpointWal, dangerouslyExecDevSql, DATABASE_NAME, getDb } from './client'
+import { ensureBookDetails } from './bookDetails'
 import { ensureLocalCover } from './coverFiles'
+import { getFinishedReads } from './finishedReads'
 import { books, reads, sessions, syncQueue } from './schema'
 import { isCurrentRead } from './currentRead'
 import { progressAggregates } from './progressAggregates'
@@ -52,6 +54,7 @@ import {
 import { SCHEMA_VERSION } from './migrate'
 import { seedSampleLibrary, SEEDED_TITLE } from './seed'
 import { currentPosition } from '@/domain/progress'
+import { finishedInYear } from '@/domain/finishes'
 import { totals } from '@/domain/stats'
 // Check 13 drives the session logger's own modules: the device pass exists to run the real
 // path, and for Slice 3 the real path starts in the feature, not in write.ts.
@@ -70,6 +73,9 @@ import {
 } from '@/features/session/sessionForm'
 import { addFromSearch, searchRemembered } from '@/features/add/queries'
 import type { SearchResult } from '@/features/add/searchMerge'
+import { startReread } from '@/features/book/queries'
+import { checkFinish, formFromRead, withFinishDate } from '@/features/finish/finishForm'
+import { getFinishContext, saveFinish } from '@/features/finish/queries'
 import { getSessionsSince } from '@/features/stats/queries'
 import { getDeletedItems } from '@/features/trash/queries'
 import { addDays, now, todayLocalDay, toLocalDay, withLocalTime } from '@/lib/dates'
@@ -1434,6 +1440,9 @@ async function checkAddingBooks() {
         isbn10: null,
         isbns: [],
         coverUrl: null,
+        description: null,
+        categories: [],
+        previewUrl: null,
         sources: ['openlibrary'],
       }
       const cached = await cacheSearchResults([
@@ -1473,6 +1482,9 @@ async function checkAddingBooks() {
           isbn10: null,
           isbns: [],
           coverUrl,
+          description: null,
+          categories: [],
+          previewUrl: null,
           sources: ['openlibrary'],
         },
         'reading',
@@ -1562,6 +1574,200 @@ async function cleanup() {
   })
 }
 
+// ─── 15. FINISH, RE-READ, FINISH AGAIN: TWO READS, EACH IN ITS OWN YEAR ──────
+
+async function checkFinishAndReread() {
+  /**
+   * Slice 5's "done when", through the finish flow's own path (features/finish) and the actions
+   * sheet's re-read (features/book): finishing then re-reading a book produces two reads with
+   * separate ratings and dates, and each counts in its own year. Plus the owner's named case:
+   * finishing moves the book off Reading.
+   *
+   * The first read is finished at 11 pm on last New Year's Eve, local time: the one instant a
+   * UTC bucket would file under this year in a zone behind UTC, and the next in one ahead of it.
+   */
+  await check(
+    '15. finish, re-read and finish again: two reads, each in its own year',
+    async () => {
+      const { bookId, readId: first } = await devBook('Devcheck Finish Reread')
+      const thisYear = new Date(now()).getFullYear()
+      const lastYear = thisYear - 1
+      const newYearsEve = new Date(lastYear, 11, 31, 23, 0, 0, 0).getTime()
+
+      const s1 = await writeRow('sessions', {
+        id: newId(),
+        readId: first,
+        occurredAt: new Date(lastYear, 11, 30, 20, 0, 0, 0).getTime(),
+        format: 'pages',
+        fromPosition: 0,
+        toPosition: 240,
+        isTimed: 0,
+      })
+      assert(s1.ok, 'could not log the first read')
+
+      // ── Finish the first read, as the finish screen does. ──
+      const ctx1 = await getFinishContext(first)
+      assert(ctx1 !== null, 'the finish flow could not open the first read')
+      const form1 = {
+        ...withFinishDate(formFromRead(ctx1.read, now()), newYearsEve),
+        rating: 4,
+        review: 'Devcheck first time',
+      }
+      assert(checkFinish(form1, ctx1.read, now()).canSave, 'the first finish was refused')
+      const saved1 = await saveFinish(ctx1.read, form1)
+      assert(saved1.ok && saved1.value.changed, 'the first finish did not save')
+
+      const onReading = async () =>
+        getDb()
+          .select({ id: reads.id })
+          .from(reads)
+          .where(
+            and(
+              eq(reads.bookId, bookId),
+              eq(reads.status, 'reading'),
+              isNull(reads.deletedAt),
+              isCurrentRead,
+            ),
+          )
+      assert(
+        (await onReading()).length === 0,
+        'the finished book is still on Currently Reading',
+      )
+
+      // ── Re-read, through the actions sheet's own call, and finish again this year. ──
+      const reread = await startReread(bookId)
+      assert(reread.ok, 'the re-read did not start')
+      const secondRows = await getDb()
+        .select({ id: reads.id })
+        .from(reads)
+        .where(and(eq(reads.bookId, bookId), eq(reads.readNumber, 2), isNull(reads.deletedAt)))
+      const second = secondRows[0]?.id
+      assert(second !== undefined, 'no second read was created')
+      assert((await onReading()).length === 1, 'the re-read is not on Currently Reading')
+
+      const s2 = await writeRow('sessions', {
+        id: newId(),
+        readId: second,
+        occurredAt: withLocalTime(now(), 0, 1),
+        format: 'pages',
+        fromPosition: 0,
+        toPosition: 240,
+        isTimed: 0,
+      })
+      assert(s2.ok, 'could not log the second read')
+      const ctx2 = await getFinishContext(second)
+      assert(ctx2 !== null, 'the finish flow could not open the second read')
+      assert(ctx2.read.rating === null, 'the re-read started with the first read’s rating')
+      const form2 = { ...formFromRead(ctx2.read, now()), rating: 2.5 }
+      const saved2 = await saveFinish(ctx2.read, form2)
+      assert(saved2.ok && saved2.value.changed, 'the second finish did not save')
+      assert((await onReading()).length === 0, 'the re-read, finished, is still on Reading')
+
+      // ── Two rows, independent. ──
+      const both = await getDb()
+        .select({
+          id: reads.id,
+          status: reads.status,
+          rating: reads.rating,
+          review: reads.review,
+          finishedAt: reads.finishedAt,
+          readNumber: reads.readNumber,
+        })
+        .from(reads)
+        .where(and(eq(reads.bookId, bookId), isNull(reads.deletedAt)))
+        .orderBy(reads.readNumber)
+      assert(both.length === 2, `the book has ${both.length} live reads, not 2`)
+      const [r1, r2] = both
+      assert(r1 !== undefined && r2 !== undefined, 'reads missing')
+      assert(r1.id === first && r2.id === second, 'the reads are not the ones finished')
+      assert(r1.status === 'finished' && r2.status === 'finished', 'a read is not finished')
+      assert(r1.rating === 4, `the first read's rating is ${r1.rating}, not 4`)
+      assert(r2.rating === 2.5, `the second read's rating is ${r2.rating}, not 2.5`)
+      assert(
+        r1.review === 'Devcheck first time' && r2.review === null,
+        'the notes crossed over',
+      )
+      assert(r1.finishedAt === newYearsEve, 'finishing the re-read moved the first read’s date')
+      assert(
+        r2.finishedAt !== null && r2.finishedAt !== r1.finishedAt,
+        'the dates are not separate',
+      )
+
+      // ── Each in its own year, by the query Stats will use. ──
+      const finished = await getFinishedReads()
+      const inYear = (year: number, readId: string) =>
+        finishedInYear(finished, year) - finishedInYear(finished, year, readId)
+      assert(inYear(lastYear, first) === 1, `the first read does not count in ${lastYear}`)
+      assert(inYear(thisYear, first) === 0, `the first read also counts in ${thisYear}`)
+      assert(inYear(thisYear, second) === 1, `the second read does not count in ${thisYear}`)
+      assert(inYear(lastYear, second) === 0, `the second read also counts in ${lastYear}`)
+
+      return `read 1: 4★, ${toLocalDay(r1.finishedAt)} counts in ${lastYear}; read 2: 2.5★, ${toLocalDay(r2.finishedAt)} counts in ${thisYear}; off Reading both times`
+    },
+  )
+}
+
+// ─── 16. A BOOK'S DETAILS, FETCHED ONCE, NEVER OVER THE READER'S WORDS ─────
+
+async function checkBookDetails() {
+  /**
+   * Needs a network, as 14c does: a real Open Library work (Piranesi). The node tests hold the
+   * parsing on captured responses; this holds the path: the fetch, the write, the once-only mark,
+   * and a reader's description surviving it.
+   */
+  await check(
+    '16. book details are fetched once, and never replace the reader’s words',
+    async () => {
+      const fetchedId = newId()
+      const keptId = newId()
+      const a = await writeRow('books', {
+        id: fetchedId,
+        title: 'Devcheck Details Fetched',
+        source: 'openlibrary',
+        sourceId: 'OL20893680W',
+      })
+      const b = await writeRow('books', {
+        id: keptId,
+        title: 'Devcheck Details Kept',
+        source: 'openlibrary',
+        sourceId: 'OL20893680W',
+        description: 'Devcheck reader words',
+      })
+      assert(a.ok && b.ok, 'could not create the test books')
+
+      assert(await ensureBookDetails(fetchedId), 'nothing was written (offline?)')
+      assert(await ensureBookDetails(keptId), 'nothing was written for the second book')
+      const row = async (id: string) =>
+        (
+          await getDb()
+            .select({
+              description: books.description,
+              categories: books.categories,
+              checked: books.detailsCheckedAt,
+            })
+            .from(books)
+            .where(eq(books.id, id))
+        )[0]
+      const fetched = await row(fetchedId)
+      const kept = await row(keptId)
+      assert(fetched?.description?.includes('Piranesi') === true, 'no description was stored')
+      assert(!fetched.description.includes('**'), 'the description kept its Markdown')
+      assert(
+        fetched.categories !== null && fetched.checked !== null,
+        'categories or the mark missing',
+      )
+      assert(
+        kept?.description === 'Devcheck reader words',
+        'the reader’s description was replaced',
+      )
+
+      // Once per launch, and once per book: a second call does nothing.
+      assert(!(await ensureBookDetails(fetchedId)), 'the same book was fetched twice')
+      return `${fetched.description.length} characters stored; the reader's description untouched`
+    },
+  )
+}
+
 // ─── ENTRY POINT ─────────────────────────────────────────────────────────────
 
 export async function runDeviceChecks(): Promise<CheckResult[]> {
@@ -1582,6 +1788,8 @@ export async function runDeviceChecks(): Promise<CheckResult[]> {
   await checkCurrentRead()
   await checkBackdatedSession()
   await checkAddingBooks()
+  await checkFinishAndReread()
+  await checkBookDetails()
   await cleanup()
 
   const runtime = results.filter((r) => r.kind === 'runtime')

@@ -16,6 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 
+import { AboutCard } from './components/AboutCard'
 import { BookActionsSheet } from './components/BookActionsSheet'
 import { BookHero } from './components/BookHero'
 import { PreviousReads } from './components/PreviousReads'
@@ -29,7 +30,7 @@ import {
   startReread,
   type SessionEntry,
 } from './queries'
-import type { ReadStatus } from '@/db/schema'
+import type { MoveStatus } from '@/domain/reads'
 import { appError, err, ok } from '@/lib/result'
 import { toasts } from '@/lib/strings'
 import { EmptyState } from '@/ui/EmptyState'
@@ -77,7 +78,7 @@ export function BookDetailScreen() {
   const keyExtractor = useCallback((item: SessionEntry) => item.id, [])
 
   const onMove = useCallback(
-    async (status: ReadStatus) => {
+    async (status: MoveStatus) => {
       if (!detail) return err(appError('recoverable', 'This book is no longer here'))
       const result = await setReadStatus(detail.current.readId, status)
       reload()
@@ -147,7 +148,19 @@ export function BookDetailScreen() {
               ListHeaderComponent={
                 <View style={styles.header}>
                   <BookHero book={detail.book} read={detail.current} />
+                  {detail.current.review ? (
+                    <Text
+                      maxFontSizeMultiplier={rules.maxFontScale}
+                      style={[typeStyle(font.body), { color: c.textSecondary }]}
+                    >
+                      {detail.current.review}
+                    </Text>
+                  ) : null}
                   <ProgressCard book={detail.book} read={detail.current} onLog={openLog} />
+                  <AboutCard
+                    description={detail.book.description}
+                    previewUrl={detail.book.previewUrl}
+                  />
                   {sessions.length > 0 ? (
                     <Text
                       accessibilityRole="header"
@@ -174,6 +187,13 @@ export function BookDetailScreen() {
               onEdit={() => {
                 setSheetOpen(false)
                 router.push({ pathname: '/book/edit', params: { id: bookId } })
+              }}
+              onFinish={() => {
+                setSheetOpen(false)
+                router.push({
+                  pathname: '/book/finish',
+                  params: { read: detail.current.readId },
+                })
               }}
             />
           </>

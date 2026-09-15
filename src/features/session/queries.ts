@@ -258,8 +258,3 @@ export async function deleteSession(sessionId: string): Promise<Result<WriteOutc
 export async function restoreSession(sessionId: string): Promise<Result<WriteOutcome>> {
   return restoreRow('sessions', sessionId)
 }
-
-/** "I finished the book" on Session complete. Status only: see `setReadStatus` in book. */
-export async function markReadFinished(readId: string): Promise<Result<WriteOutcome>> {
-  return updateRow('reads', readId, { status: 'finished' })
-}

@@ -183,6 +183,7 @@ guard that has stopped matching fails instead of passing.
 
 **Structural** (the mistake cannot be written, or the check reads the real artefact):
 `RowFor` / `PatchFor` / `DerivedColumn`; `runInTransaction`'s `() => undefined`;
+`MoveStatus` (no plain move to Finished, `moveStatus.types.ts`);
 `_shapeCheck`; `Palette` with `satisfies`; `UndoAction` returning a `Result`;
 `exactOptionalPropertyTypes`; the two tsconfigs; `brand-font.test.ts` and
 `native-fonts.test.ts` (they read the evaluated config and the built APK);
@@ -324,6 +325,29 @@ Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
+**Slice 5 is built and verified on the phone.** 21 of 21 phone checks passed on 2026-09-15.
+- **The owner's cases:** finishing moves the book off Reading. Finish, re-read and finish again is
+  two rows, one counting in 2025 and one in 2026.
+- **Device pass:** 5 of 5 clean runs.
+- **Not run:** the largest font and 360 dp, on the Slice 11 font pass.
+- Results: `docs/device-checks/slice-5.md`.
+- **What it does:**
+  - **The finish flow:** half-star rating, private note, finish date with Android's date dialog.
+    It is the only way a read reaches Finished: the Finished chip, "I finished the book" and "I
+    already finished it" all open it. "Start the next one" is there too.
+  - **Book detail:** shows the rating, finish date and note. It has an About card with the
+    description, More/Less and "Read a sample". A book's description, categories and preview are
+    fetched once. Edit details has the description.
+- **Migration 0002:** four `books` columns, tested on a populated database, and applied on the
+  phone's populated `devcheck.db`.
+- **Checks:** typecheck, lint and Prettier are clean. 383 node tests pass under `cmd` and `sh`,
+  and 121 in each of three zones. 16 of 16 mutations went red, plus the `MoveStatus` type
+  assertion. Device pass RUNTIME 34/34 · COMPILE-TIME 1/1, with checks 15 and 16 watched failing.
+  It ran before the 2026-09-15 review fixes, and is re-run first next session.
+- **Open, measured:** 14c and 16 (network) failed in three mutation runs that did not touch them.
+  They have passed in 7 of 7 clean runs since. Not explained; the run sheet has the procedure if
+  it recurs.
+
 **Slice 4 is built and verified on the phone, online and in airplane mode.**
 - **What it does:** search Open Library (and Google Books, once an API key is set) with results
   merged, ranked by the typed words, and remembered; "Which shelf?"; Add manually and Edit
@@ -340,9 +364,7 @@ Build locally for day to day work. EAS is for release builds only.
   the Books API only. Restricting it to the app would break search until `api.ts` sends the
   Android headers (Slice 11). Tests run on real Google captures; 321 tests pass.
 
-**Next: Slice 5, finishing a book.** "I finished the book" and "I already finished it" move a
-read to Finished with no rating or date until then. The owner added book descriptions and
-categories, a summary on detail, and a "Read a sample" link to it (`05-BUILD-PLAN.md`).
+**Next after Slice 5's phone checks: Slice 5b, notes and quotes.**
 
 **Slice 3 is built and verified on the phone, except four checks that need the owner to change
 phone settings.**

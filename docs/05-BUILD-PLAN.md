@@ -322,6 +322,20 @@ a searched book stays fully usable offline afterwards.
 - **"Read a sample"**: a link to Google's preview page, opened in the browser, only when Google
   says pages are viewable. The in-app viewer is Slice 11
 
+**Status, 2026-09-15: built and verified on the phone.** All 21 phone checks passed, including
+the owner's two cases on real screens and in the pulled database. The device pass passed 5 of 5
+consecutive clean runs. Not run: the largest font and 360 dp (on the Slice 11 font pass).
+
+**Before that, 2026-09-14: code complete; phone checks not done.** The owner disconnected the phone
+before them.
+- **Held automatically:** 383 node tests, 16 of 16 mutations red, and the `MoveStatus` type
+  assertion. Device pass 34/34 with checks 15 (finish, re-read, finish: two reads, each in its own
+  year, off Reading both times) and 16 (details fetched once, never over the reader's words),
+  each watched failing.
+- **Next session starts with** `docs/device-checks/slice-5.md`: the owner's two cases on real
+  screens, and why 14c and 16 failed in mutation runs that did not touch them.
+- Details: `DECISIONS.md`, 2026-09-14.
+
 **Done when:** finishing then re-reading a book produces two reads with separate ratings
 and dates, and both count in their own years.
 
@@ -330,8 +344,9 @@ and dates, and both count in their own years.
 ## Slice 5b · Notes and quotes
 **~3 days**
 
-The actions sheet links here from Slice 2 and the screens exist in `design/`. Without this
-slice that link is a dead end.
+The screens exist in `design/`. The actions sheet has no Notes row yet: rows arrive with the
+slice that owns them, so this slice adds it. (Corrected 2026-09-14: this said the sheet linked
+here from Slice 2. It never did.)
 
 - **The undo toast still renders beneath a Modal.** Slice 3 avoided it by leaving the screen
   before toasting. A note deleted from inside a sheet that stays open would raise an invisible
@@ -481,6 +496,13 @@ every book and statistic untouched.
   2026-09-14
 - **Google Books terms and Branding Guidelines**, read before launch: attribution may be required
   wherever Google's data is shown
+- **Editing an earlier read's rating, note and date.** Slice 5 edits the current read only; an
+  earlier read is shown, not editable. Filed from Slice 5
+- **Two Slice 5 polish items:**
+  - The Edit details description field grows to the screen's height for a long description.
+    Cap it, with an inner scroll.
+  - Book detail says "Finished <date>" where the finish screen says "Finished today". Make them
+    match.
 - Play Store listing, screenshots, privacy policy hosted somewhere
 - **Walk every screen at 200% system font scale** (Settings → Display → Font size, max).
   Nothing clips, nothing overlaps, no row loses its label. The primitives carry

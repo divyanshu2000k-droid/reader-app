@@ -34,6 +34,9 @@ export interface SearchResult {
   readonly isbn10: string | null
   readonly isbns: readonly string[]
   readonly coverUrl: string | null
+  readonly description: string | null
+  readonly categories: readonly string[]
+  readonly previewUrl: string | null
   /** Every source that returned this book. */
   readonly sources: readonly SearchSource[]
 }
@@ -84,6 +87,9 @@ function fill(result: SearchResult, extra: SearchHit): SearchResult {
     pageCount: result.pageCount ?? extra.pageCount,
     publishedYear: result.publishedYear ?? extra.publishedYear,
     coverUrl: result.coverUrl ?? extra.coverUrl,
+    description: result.description ?? extra.description,
+    categories: result.categories.length > 0 ? result.categories : extra.categories,
+    previewUrl: result.previewUrl ?? extra.previewUrl,
     authors: result.authors.length > 0 ? result.authors : extra.authors,
     isbns: [...new Set([...result.isbns, ...extra.isbns])],
     sources: result.sources.includes(extra.source)
@@ -173,6 +179,10 @@ export function parseRememberedResult(payload: string): SearchResult | null {
   const isCountOrNull = (v: unknown) =>
     v === null || (typeof v === 'number' && Number.isInteger(v))
   const isTexts = (v: unknown) => Array.isArray(v) && v.every(isText)
+  // Description, categories and preview arrived in Slice 5. Results remembered before then have
+  // none of the three, and are still good results: absent reads as none, and only a PRESENT value
+  // of the wrong type rejects the payload. Rejecting them would have emptied offline search.
+  const optional = (v: unknown, check: (x: unknown) => boolean) => v === undefined || check(v)
   const valid =
     isText(r.key) &&
     (r.source === 'google' || r.source === 'openlibrary') &&
@@ -188,9 +198,20 @@ export function parseRememberedResult(payload: string): SearchResult | null {
     isTexts(r.isbns) &&
     isTextOrNull(r.coverUrl) &&
     Array.isArray(r.sources) &&
-    r.sources.every((s) => s === 'google' || s === 'openlibrary')
+    r.sources.every((s) => s === 'google' || s === 'openlibrary') &&
+    optional(r.description, isTextOrNull) &&
+    optional(r.categories, isTexts) &&
+    optional(r.previewUrl, isTextOrNull)
+  if (!valid) return null
   // Checked field by field above; this is the one place the shape is asserted.
-  return valid ? (value as SearchResult) : null
+  const checked = value as Omit<SearchResult, 'description' | 'categories' | 'previewUrl'> &
+    Partial<Pick<SearchResult, 'description' | 'categories' | 'previewUrl'>>
+  return {
+    ...checked,
+    description: checked.description ?? null,
+    categories: checked.categories ?? [],
+    previewUrl: checked.previewUrl ?? null,
+  }
 }
 
 export interface LibraryBookRef {
