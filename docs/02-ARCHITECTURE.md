@@ -229,6 +229,14 @@ and Open Library for coverage gaps. Cache every result permanently in local SQLi
 >   publisher of its own, and results matching none of the typed words are dropped.
 > - **Offline is told apart from a broken server by what the request failed with.** Expo's
 >   fetch rejects offline with a `FetchError`, not a `TypeError`.
+> - **How a search runs:** no server and no search engine.
+>   - **Book search:** the phone asks Google Books and Open Library at the same time, after a
+>     300 ms pause in typing (`rules.searchDebounceMs`) and from 2 characters, with no automatic
+>     retries.
+>   - **Results:** render as each source answers, merged with Google's edition first, and are
+>     remembered in `metadata_cache` for offline.
+>   - **Library search:** TypeScript over local SQLite rows (accent-insensitive; SQLite `LIKE`
+>     cannot be).
 > - **Book details (Slice 5):** Google's search result already carries description, categories
 >   and viewability, so adding a Google book costs no extra request. An Open Library book fetches
 >   its work (`/works/<id>.json`) once, in the background. A book from before Slice 5 fetches

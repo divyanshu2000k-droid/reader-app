@@ -344,6 +344,12 @@ Build locally for day to day work. EAS is for release builds only.
   and 121 in each of three zones. 16 of 16 mutations went red, plus the `MoveStatus` type
   assertion. Device pass RUNTIME 34/34 · COMPILE-TIME 1/1, with checks 15 and 16 watched failing.
   It ran before the 2026-09-15 review fixes, and is re-run first next session.
+- **Waiting on the owner** (`DECISIONS.md`, 2026-09-15):
+  - Photo covers in Add manually: free or Plus.
+  - When to build the barcode scanner. Recommended with photo covers: one camera rebuild.
+  - Open Library covers at `-L`.
+  - Optionally regenerate the Google key, which was pasted in chat.
+- **Phone automation** lives in `scripts/device/` (README), not in a session scratchpad.
 - **Open, measured:** 14c and 16 (network) failed in three mutation runs that did not touch them.
   They have passed in 7 of 7 clean runs since. Not explained; the run sheet has the procedure if
   it recurs.

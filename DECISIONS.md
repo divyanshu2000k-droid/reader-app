@@ -630,6 +630,62 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-15 · Open owner decisions, and answers given in conversation (Slices 4–5)
+Written so a new session knows what was asked, what was answered and what still waits. Nothing here
+is built unless it says so.
+
+**Waiting on the owner:**
+1. **Photo covers in Add manually / Edit details.**
+   - **The conflict:** ManualEntry.dc.html offers "Snap the front cover, or pick a colour". Slice 4
+     built the colour only and cited 08-MONETISATION's Plus item "Custom shelf colours and covers".
+   - **Recommendation given:** that reading was probably wrong. A book added by hand has no cover
+     at all, the design puts the photo in the free flow, and the Plus item more likely means
+     restyling any book's cover.
+   - **Cost:** a camera/photo-picker module (`expo-image-picker`), a native rebuild
+     (`npm run prebuild`, then `run:android`), and a camera permission.
+   - **Unanswered.** If yes, update 08-MONETISATION in the same task.
+2. **Barcode scanning, and when.** 05-BUILD-PLAN has it as the first item after launch. Recommended:
+   build it together with photo covers, since both need the camera, one native rebuild and one
+   permission. A scan gives the ISBN, then title, author, pages and cover. **Unanswered.**
+3. **Open Library cover size.** Covers are downloaded at `-M` (about 180 px wide), which is soft on
+   book detail's large cover. Offered: download `-L`, a one-line change with larger files.
+   **Unanswered.**
+4. **The Google Books API key was pasted into the chat.** It is restricted to the Books API, so the
+   worst case is quota. Regenerating it and updating `.env` was offered as optional. **Unanswered.**
+
+**Decided in conversation:**
+- **No cover lookup by ISBN for books added by hand.**
+  - **Why:** the ISBN only comes from the reader typing it, so most manual books have none.
+  - **Why again:** a book Open Library could not find by title rarely has a cover there by ISBN.
+  - **Over:** a cover lookup by title alone, which would sometimes show the wrong book's cover,
+    and that is worse than a colour.
+  - **Instead:** the scanner and photo covers above.
+- **Descriptions, categories, a genre filter, genre stats and "Read a sample"** were the owner's
+  additions:
+  - **Slice 5:** descriptions, categories, the summary and the browser link. Built.
+  - **Slice 7:** genre stats and the Library genre filter.
+  - **Slice 11:** the Embedded Viewer inside the app.
+  - **Ratings from Google** were rejected: 1–4 of 20 volumes had one, from 1–2 ratings.
+- **Google quota:** planned, not built (the 2026-09-14 quota entry). Handle a used-up quota quietly
+  and ask Google for more, both before launch; route search through a server only if the numbers
+  demand it.
+
+**Questions answered, recorded as facts:**
+- **No Elasticsearch, and no server.**
+  - **Library search** matches in TypeScript over local SQLite.
+  - **Book search** calls Google Books and Open Library straight from the phone, both at once, after
+    a 300 ms pause in typing and from 2 characters.
+  - **Results** show as each source answers. One book from both is merged with Google's edition
+    first. Every result is remembered for offline.
+- **Open Library covers are free and used.** A result shows its cover when the work has one
+  (`cover_i`), and adding downloads it for offline. Many older, Indian and self-published works have
+  none, so they show the colour.
+
+**Small UI items noticed and filed (Slice 11 polish), none a data risk:**
+- **Log pages** on book detail is a full-width 56 dp primary button where BookDetail.dc.html shows
+  a compact one.
+- **Cover colour swatches** in Add manually wrap onto two lines on the phone.
+
 ## 2026-09-15 · Slice 5 verified on the phone
 **All 21 checks run passed** (`docs/device-checks/slice-5.md`, results). The owner's two cases held on
 real screens and in the pulled database:

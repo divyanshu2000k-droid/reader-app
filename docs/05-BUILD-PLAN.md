@@ -498,6 +498,10 @@ every book and statistic untouched.
   wherever Google's data is shown
 - **Editing an earlier read's rating, note and date.** Slice 5 edits the current read only; an
   earlier read is shown, not editable. Filed from Slice 5
+- **From the Slice 4 phone pass:** book detail's Log pages is full-width where the design shows a
+  compact button; Add manually's cover swatches wrap onto two lines
+- **Owner decisions still open** (photo covers, when to build the barcode scanner, Open Library
+  cover size): `DECISIONS.md`, 2026-09-15. Settle them before this slice's list is final
 - **Two Slice 5 polish items:**
   - The Edit details description field grows to the screen's height for a long description.
     Cap it, with an inner scroll.

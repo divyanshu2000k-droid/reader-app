@@ -15,3 +15,7 @@ ios/
 
 expo-env.d.ts
 # @end expo-cli
+
+# Device-check scripts: screenshots, pulled databases and run state
+scripts/device/out/
+__pycache__/

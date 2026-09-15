@@ -476,6 +476,11 @@ still could not run on a real database. To exercise the upgrade path properly:
 
 ## Driving a phone from a script
 
+**The scripts themselves are in `scripts/device/`, with a README of every trap they hit**: Metro on
+8082 behind `adb reverse tcp:8081 tcp:8082`, 10-minute command limits, verifying airplane mode with a
+ping, clearing a field without DEL acting as Back, and finding the rating's tap targets. Start there
+rather than rebuilding them. They write only to `scripts/device/out/`, which is gitignored.
+
 How Slice 1 was verified on the phone without a human tapping. From Git Bash, with
 `export MSYS_NO_PATHCONV=1 ANDROID_SERIAL=<serial>`. Without the first, Git Bash rewrites
 `/sdcard/...` into a Windows path and adb fails confusingly.
