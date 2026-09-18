@@ -342,9 +342,8 @@ Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
-**Slice 5b is code complete and has not been near a phone.** By the owner's choice, Slice 5's
-outstanding checks and all of Slice 5b run in ONE session, from
-`docs/device-checks/slice-5b.md`. Nothing in this slice is believed until then.
+**Slice 5b is built and verified on the phone.** 43 screen checks passed on 2026-09-18, plus
+the device pass. Results: `docs/device-checks/slice-5b.md`.
 - **What it does:** a Notes row on the actions sheet carrying the book's counts; the notes list
   with All / Quotes / Notes, the counts of the book and export by share sheet; the editor with
   the quote-or-note toggle, the page defaulting to where the reader has got to, and the draft;
@@ -354,9 +353,19 @@ outstanding checks and all of Slice 5b run in ONE session, from
 - **Held automatically:** 445 node tests under `cmd` and `sh`, 121 in each of three zones,
   **25 of 25 mutations red** (`scripts/device/mutate_s5b.py`). Typecheck, lint and Prettier
   clean.
-- **NOT run:** the device pass. Checks 17 (a note survives a re-read and its read being
-  deleted) and 18 (a draft writes no note and no queue row) are written and unwatched — the
-  sheet says how to watch each one fail.
+- **Device pass: RUNTIME 36/36 · COMPILE-TIME 1/1.** Checks 17 and 18 each watched failing
+  twice (`devpass_s5b_mutations.py`). 14c and 16 passed: 8 of 8 clean runs now.
+- **The draft holds on a real phone:** backing out kept 62 characters and said so, a
+  `force-stop` mid-note kept 87, and a saved note did not come back as a draft.
+- **Slice 5's debt is cleared:** the device pass re-ran after the 2026-09-15 fixes, and
+  "Start the next one" was honoured twice in one app session.
+- **Light mode seen, not just screenshotted:** the list, the editor and its draft line, a
+  quote row and Recently Deleted were each read. Nothing measured badly.
+- **The library was untouched, measured at both ends:** `reader.db` md5 `1623cf85…` and wal
+  `6ab7bff2…` byte-identical before and after, still matching 2026-09-14.
+- **No app bug was found in 43 checks.** Every failure was the script's, and the seven kinds
+  are written down in the run sheet. Stated as a fact, not a result to be pleased about.
+- **Not run, deferred as agreed:** the largest font and 360 dp, on the Slice 11 font pass.
 - **Two mutations went green on the first sweep, and both were the TEST**, not the code
   (silent-pass item 19). The sweep is the only reason either was found.
 - **Also fixed, found while building:** `typeStyle` dropped every token's `letterSpacing`
@@ -409,9 +418,9 @@ outstanding checks and all of Slice 5b run in ONE session, from
   the Books API only. Restricting it to the app would break search until `api.ts` sends the
   Android headers (Slice 11). Tests run on real Google captures; 321 tests pass.
 
-**Next: the batched phone session** — the device pass re-run, Slice 5's two leftovers and all
-of Slice 5b (`docs/device-checks/slice-5b.md`). **Then Slice 6, the timer**, which has a hard
-two-week limit written down before it starts.
+**Next: Slice 6, the timer** — the hardest technical work in Phase 1, with a hard two-week
+limit written down before it starts (`DECISIONS.md`, 2026-09-03). Build to the phone at the
+START of that slice, not the end.
 
 **Slice 3 is built and verified on the phone, except four checks that need the owner to change
 phone settings.**

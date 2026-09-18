@@ -133,16 +133,22 @@ def main() -> int:
     green: list[str] = []
     for label, rel, find, replace, suite in MUTATIONS:
         path = ROOT / rel
-        original = path.read_text(encoding="utf-8")
-        if find not in original:
+        # BYTES, not text. `write_text` on Windows rewrites every \n as \r\n, so
+        # restoring a file changed all its line endings. Git normalises them, so the diff
+        # stayed empty and nothing complained — but a script that mutates source must put
+        # it back exactly as it found it, and prove it did.
+        original = path.read_bytes()
+        text = original.decode("utf-8")
+        if find not in text:
             print(f"SKIP  {label}\n      (pattern not found in {rel} - the code was rewritten)")
             green.append(label)
             continue
-        path.write_text(original.replace(find, replace, 1), encoding="utf-8")
+        path.write_bytes(text.replace(find, replace, 1).encode("utf-8"))
         try:
             passed = run(suite)
         finally:
-            path.write_text(original, encoding="utf-8")
+            path.write_bytes(original)
+            assert path.read_bytes() == original, f"{rel} was not restored byte for byte"
         if passed:
             print(f"GREEN {label}  <-- the guard did not catch this")
             green.append(label)

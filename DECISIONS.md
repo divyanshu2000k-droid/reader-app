@@ -630,6 +630,74 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-18 · Slice 5b and Slice 5's leftovers, verified on the phone
+**39 screen checks passed, plus RUNTIME 36/36 · COMPILE-TIME 1/1 on the device pass.** Full
+results in `docs/device-checks/slice-5b.md`. Slice 5's two open items are closed: the device
+pass re-ran after the 2026-09-15 review fixes, and "Start the next one" was honoured twice in
+one app session.
+
+**The draft holds, which was the slice's done-when.** Backing out kept 62 characters and said
+so; `am force-stop` mid-note kept 87; a saved note did not come back as a draft. That last one
+is the bug `draftAction` was written against before it could happen.
+
+**Light mode passed, and was READ rather than captured.** `s5b_light.py` refuses to run
+unless `cmd uimode night` reports the phone is really in light mode, but a script can only
+prove it took a screenshot — so the four were looked at. The accent QUOTE badge and the muted
+NOTE badge both hold on white; the quote body in near-black and the note body in dark grey
+stay distinguishable without dark mode's contrast; the focused field, the draft line and Save
+note are all legible. This mattered: the design sheet's own light-mode colours failed WCAG AA
+and shipped for two slices because nothing looked at them (item 10).
+
+**The library was untouched, measured at both ends.** `reader.db` md5
+`1623cf85872260684723c84a1636ab7a` and wal `6ab7bff24d26b872974e4739ede746cd` before the
+session and byte-identical after, both still matching 2026-09-14.
+
+**No bug in the app was found in 43 checks**, which is worth stating plainly rather than
+celebrating. Slices 3, 4 and 5 each found real bugs on the phone. Two readings are available
+and only time separates them: the pure modules and 25 node mutations genuinely did the work
+up front, or these checks are shaped like the code rather than like a reader. The one finding
+that did come out of looking at a screen — the book title and draft line scrolling out of view
+behind a long note — came from a screenshot, not from an assertion, which is mild evidence for
+the second reading.
+
+**Every failure this session was the script's.** Seven kinds, each now written down in the run
+sheet because they will recur: a placeholder read as content, a book below the fold, a toast
+sampled after its 5 s life, `ping` writing to stderr where `phone.adb()` reads only stdout, a
+regex group that did not exist, an assertion against what the script hoped to type rather than
+what `adb input text` actually delivered (it truncates), and a card selected by an
+accessibility HINT that uiautomator does not expose.
+
+## 2026-09-18 · A script must not read a screen that is not ours
+**What happened:** a run continued while the owner was in WhatsApp, and `uiautomator dump`
+captured a private conversation into the session log. The phone is the owner's; the app under
+test is a guest on it.
+
+**Chose:** `phone.require_our_app()`, called by every `dump()`. It reads the foreground package
+and refuses unless it is ours, looking twice 1.5 s apart so a launch's transient launcher is
+not mistaken for somebody's screen.
+**Over:** remembering to check, which is the strategy that failed.
+**Watched firing:** against a deliberately wrong package, and then twice in the wild — it
+caught Instagram and the camera on later runs and stopped both.
+**Cost, and it is real:** an extra `adb` round trip before every dump. That pushed the first
+post-delete sample past the undo toast's 5 s life and made check 6.4 fail twice before the
+cause was understood. Tap a toast's action from the same dump that finds it.
+
+**Also added:** `wait_free.sh`, which waits for the phone to be free rather than competing for
+the foreground, and `s3lib.open_by_search()`, which reaches a book through the Library's own
+search instead of scrolling a tab — three runs failed only because a book was below the fold.
+
+## 2026-09-18 · An unexplained soft delete, recorded rather than waved away
+A note was soft-deleted at 15:43:33 IST with its own `sync_queue` delete row, during a window
+when the phone was in the owner's hands with the app in the foreground. **No script reached a
+delete in that window** — all three had aborted earlier, at a selector, at a foreign screen,
+and at a precondition.
+
+**Most likely the owner tapping around**, and the app behaved correctly throughout: the delete
+went through `softDelete` and queued exactly one row, which is what a delete from the UI does.
+Written down anyway, because "a row vanished and nobody knows why" is the shape this project
+takes seriously. If a note ever disappears WITHOUT a queue row, this entry is the precedent:
+that would be a different and much worse thing.
+
 ## 2026-09-18 · `typeStyle` dropped every token's letterSpacing, for eight slices
 Found while adding a tracked-out token for the notes badge: `typeStyle` takes `size`, `weight`
 and `lineHeight` and returns them, and seven tokens in the scale carry a `letterSpacing` it

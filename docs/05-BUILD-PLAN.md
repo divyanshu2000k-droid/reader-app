@@ -364,16 +364,24 @@ backing out of a half written note does not lose it.
 > Draft autosave matters more than it looks. Losing a half written review is a live
 > StoryGraph complaint.
 
-**Status, 2026-09-18: code complete; phone checks not run.** The phone is not attached, and by
-the owner's choice Slice 5's outstanding checks and this slice's are run together in one
-session. `docs/device-checks/slice-5b.md` is the sheet.
+**Status, 2026-09-18: built and verified on the phone.** 43 screen checks passed, plus the
+device pass at RUNTIME 36/36 · COMPILE-TIME 1/1, in one session that also cleared Slice 5's
+two outstanding items. Results: `docs/device-checks/slice-5b.md`.
+
+**Done when, met:** a quote captured mid-session survived a re-read of that book (item 7, and
+device check 17), and backing out of a half-written note did not lose it — including an
+`am force-stop` mid-note, which kept 87 characters (item 5).
+
+**Light mode was read, not just captured**, and the library's md5 was byte-identical before
+and after the session. **Not run, deferred as agreed:** the largest font and 360 dp, which go
+to the Slice 11 font pass with every screen built after Slice 3.
 - **What it does:** a Notes row on the actions sheet carrying the book's counts; the notes list
   with All / Quotes / Notes and the counts of the book; the editor with the quote-or-note
   toggle, the page defaulting to where the reader has got to, and the draft; delete with undo;
   export by share sheet.
-- **Held automatically:** 438 node tests, 22 of 22 mutations red. Device checks 17 (a note
+- **Held automatically:** 445 node tests, 25 of 25 mutations red. Device checks 17 (a note
   survives a re-read AND its read being deleted) and 18 (a draft writes no note and no queue
-  row) are written and have NOT been run: they need the phone.
+  row) were each watched failing twice on the phone.
 - **Decided while building** (`DECISIONS.md`, 2026-09-18): the draft lives in `metadata_cache`
   and never syncs; there is no "Discard changes?" because nothing is discarded; an audiobook is
   offered no page, because `notes.page` means a page; a quote is not italic, because no italic

@@ -108,3 +108,32 @@ def field_value(root, label):
         if n.get('class') == 'android.widget.EditText' and n.get('content-desc') == label:
             return n.get('text')
     return None
+
+def open_by_search(title):
+    """
+    Open a book through the Library's own search, rather than scrolling a tab.
+
+    Several runs failed with "<title> not on screen" simply because the book was below the
+    fold on a long tab. Search reaches any book in two taps and does not care which tab it
+    is on, which also stops a check depending on a book's status staying put.
+    """
+    to_library()
+    tap(r'Search your library', 'the library search button')
+    time.sleep(2)
+    phone.adb('shell', 'input', 'text', title.replace(' ', '%s')[:40])
+    time.sleep(2.5)
+    root, hit = require(re.escape(title), f'{title} in the search results', 12)
+    cards = [n for n in phone.nodes(root)
+             if n.get('clickable') == 'true' and title in (n.get('content-desc') or '')]
+    phone.tap_node(cards[0] if cards else hit[0])
+    time.sleep(3)
+    require(r'Book actions', 'book detail', 15)
+
+
+def open_notes(title):
+    open_by_search(title)
+    tap(r'Book actions', 'Book actions')
+    time.sleep(2)
+    tap(r'Notes and quotes', 'Notes and quotes')
+    time.sleep(2.5)
+    require(r'Notes & quotes', 'the notes list', 12)

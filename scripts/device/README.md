@@ -19,6 +19,11 @@ and after any session with them:
 | `devpass.sh` | One device pass: restarts Metro on port 8082 with `EXPO_PUBLIC_DEVICE_PASS=1`, launches, waits for the result, writes `C:/Temp/devpass-<label>.txt` |
 | `devpass_s5_mutations.py` | Breaks one source line at a time, runs a device pass, restores the file. The pattern for watching a device check fail |
 | `mutate_s5.py` | The same for node tests: 16 Slice 5 mutations, each restored in `finally` |
+| `devpass_s5b_mutations.py` | Watches device checks 17 and 18 fail: four mutations of `write.ts`, each restored in `finally` with its md5 verified |
+| `run_one_mutation.py` | Runs one mutation from the above by label prefix, for when one needs correcting |
+| `s5b_*.py` | Slice 5b's run sheet as steps: `notes`, `draft`, `edit`, `undo2`, `64`, `reread`, `export`, `offline`, `longnote`, `keyboard`, `light`. **`s5b_light.py` has never been run** |
+| `s5b_prep_reading.py` | Puts two books on Reading, so run-sheet item 1 can finish two in ONE app session |
+| `wait_free.sh` | Waits for the phone to be free (our app, the launcher, or a dark screen) before driving it |
 | `mutate_s5b.py` | Slice 5b: 25 mutations over notes, drafts, export, Recently Deleted, the theme and the tab request. Exits non-zero if any goes GREEN **or stops matching** — a rewritten rule must be re-watched |
 | `s5_phone.py`, `s5_more.py`, `s5_twice.py`, `s5_edit.py`, `s5_sample.py`, `s5_offline.py`, `s5_look.py` | Slice 5's run sheet (`docs/device-checks/slice-5.md`) as steps. `python s5_more.py 1 1db 2 2db 3 want refuse already about fault` |
 
@@ -54,4 +59,20 @@ and after any session with them:
 - **`sqlite3` holds the pulled `-shm` open.** Pull into a fresh folder name for a second pull in the
   same process.
 - **In the Bash tool, a heredoc containing quotes can fail with "unexpected EOF".** Write the script
-  to a file and run it.
+  to a file and run it. This bit twice more on 2026-09-18.
+- **A dump reads WHATEVER is on screen.** `phone.dump()` now calls `require_our_app()` and
+  refuses when our app is not in the foreground. It exists because a run continued into the
+  owner's WhatsApp and put a private conversation in the session log. Do not weaken it; use
+  `wait_free.sh` to wait for the phone instead.
+- **The guard costs a round trip per dump, and a toast lives 5 s.** Tap an undo from the SAME
+  dump that finds it, never after another dump. Check 6.4 failed twice on this.
+- **uiautomator reports an empty `EditText`'s text as its PLACEHOLDER.** "What do you want to
+  remember?" is not characters of draft.
+- **An accessibility HINT is not exposed.** A note card is found by its `content-desc`, which
+  is `noteAnnouncement` plus the note's words, not by "Opens this note to edit it".
+- **`adb shell input text` truncates a long string** (1488 characters became 463). Assert
+  against what was actually typed or stored, never against what the script meant to type.
+- **`ping` writes to stderr and `phone.adb()` returns stdout only.** Use
+  `adb shell 'ping ... 2>&1'`, or an offline check silently concludes the phone is online.
+- **A book below the fold is not a missing book.** Use `s3lib.open_by_search()` rather than
+  scrolling a tab; three runs failed on this alone.

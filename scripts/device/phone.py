@@ -21,7 +21,42 @@ def adb(*args, check=True):
     return r.stdout
 
 
+class ForeignScreen(Exception):
+    """Something other than the app under test is on screen."""
+
+
+def foreground():
+    # One grep on the device rather than megabytes over USB: this runs before every dump.
+    out = adb('shell', 'dumpsys activity activities | grep -m1 topResumedActivity', check=False)
+    m = re.search(r'\s([A-Za-z0-9_.]+)/', out)
+    return m.group(1) if m else None
+
+
+def require_our_app():
+    """
+    Refuse to dump anything that is not our app.
+
+    A dump captures every string on screen. On 2026-09-18 a run continued while the owner
+    was in WhatsApp and a private conversation went into the session log. The phone belongs
+    to the owner; a script that reads whatever happens to be in front of it is a script that
+    reads their mail. Abort loudly instead.
+    """
+    # Two looks, because a launch legitimately shows the launcher for a moment. Anything
+    # that is still in front 1.5s later is somebody's actual screen, not a transient.
+    top = foreground()
+    if top is None or top == PKG:
+        return
+    time.sleep(1.5)
+    top = foreground()
+    if top is None or top == PKG:
+        return
+    raise ForeignScreen(
+        f'{top} is in the foreground, not {PKG}. Stopping rather than reading '
+        "someone else's screen. Bring the app forward and re-run.")
+
+
 def dump():
+    require_our_app()
     adb('shell', 'uiautomator', 'dump', '/sdcard/ui.xml', check=False)
     xml = adb('shell', 'cat', '/sdcard/ui.xml')
     xml = xml[xml.find('<?xml'):]
