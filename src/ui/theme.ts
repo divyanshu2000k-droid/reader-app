@@ -211,6 +211,10 @@ const scale = {
   buttonSmall: { size: 13.5, weight: '600', lineHeight: 19 },
   chip:        { size: 12.5, weight: '500', lineHeight: 17 },
   input:       { size: 18, weight: '600', lineHeight: 24 },
+  /** A saved quote, set a size above a note and led more loosely. Notes.dc.html. */
+  quote:       { size: 14, weight: '500', lineHeight: 23 },
+  /** "QUOTE · P.212". Tracked out because it is set in capitals. Notes.dc.html. */
+  noteBadge:   { size: 10, weight: '700', letterSpacing: 1 },
 } as const
 
 export const font = {
@@ -254,12 +258,20 @@ export function typeStyle(token: {
   readonly size: number
   readonly weight?: string
   readonly lineHeight?: number
+  readonly letterSpacing?: number
 }): TextStyle {
   return {
     fontFamily: font.family,
     fontSize: token.size,
     fontWeight: token.weight as TextStyle['fontWeight'],
     lineHeight: token.lineHeight,
+    // Seven tokens have carried a `letterSpacing` since the first commit and this function
+    // dropped every one of them, so every display size in the app rendered at the typeface's
+    // default tracking while the scale said otherwise. Exactly the shape of `font.family`,
+    // which was declared here and applied by nothing for a week (CLAUDE.md, item 18): a
+    // token nothing reads cannot fail, it can only be wrong quietly. theme.test.ts asserts
+    // that every token carrying one reaches the style.
+    letterSpacing: token.letterSpacing,
   }
 }
 
@@ -509,6 +521,8 @@ export const rules = {
   maxFontScale: 2.0,
   /** A sheet never covers the whole screen: what is behind it stays visible. */
   sheetMaxHeightFraction: 0.9,
+  /** Lines of a note shown in the list before it is cut. The editor shows all of it. */
+  noteLines: 6,
 } as const
 
 // ─── THEME OBJECT ────────────────────────────────────────────────────────────

@@ -180,6 +180,7 @@ export const toasts = {
   noteDeleted: 'Note deleted',
   bookRestored: 'Book restored',
   sessionRestored: 'Session restored',
+  noteRestored: 'Note restored',
 } as const
 
 /**

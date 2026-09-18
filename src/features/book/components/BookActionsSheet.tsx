@@ -1,9 +1,9 @@
 /**
  * The actions sheet, from `BookActions.dc.html`: the hub for managing a book (Journey H).
  *
- * Move to another status (including DNF), start a re-read, edit details, and remove. The
- * artboard's "Notes" and "Share progress" open screens that belong to Slices 5b and 11; they
- * appear with those screens, not as rows that go nowhere.
+ * Move to another status (including DNF), notes and quotes, start a re-read, edit details,
+ * and remove. The artboard's "Share progress" opens a screen that belongs to Slice 11; a row
+ * arrives with the screen it opens, not before it.
  *
  * **Finished is not a plain move.** Its chip opens the finish flow (Slice 5), which moves the
  * book with its rating and date, and a finished read gets a row to change those. A status-only
@@ -22,7 +22,9 @@ import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 
 import type { BookSummary, ReadSummary } from '../queries'
+import type { NoteCounts } from '@/db/noteCounts'
 import type { ReadStatus } from '@/db/schema'
+import { countsLine } from '@/domain/noteLine'
 import type { MoveStatus } from '@/domain/reads'
 import { canStartReread } from '@/domain/reads'
 import type { AppError, Result } from '@/lib/result'
@@ -50,6 +52,10 @@ interface Props {
   onRemove: () => Promise<Result<unknown>>
   /** Opens Edit details. The sheet closes first. */
   onEdit: () => void
+  /** Opens the book's notes and quotes. The sheet closes first. */
+  onNotes: () => void
+  /** Of the BOOK, across every read (db/noteCounts.ts). */
+  notes: NoteCounts
 }
 
 type Busy = ReadStatus | 'reread' | 'remove' | null
@@ -64,11 +70,16 @@ export function BookActionsSheet({
   onRemove,
   onEdit,
   onFinish,
+  onNotes,
+  notes,
 }: Props) {
   const c = useColors()
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState<Busy>(null)
   const [error, setError] = useState<AppError | null>(null)
+  // "Nothing saved yet" rather than "0 notes": a zero invites the reader to wonder what
+  // happened to theirs, where an empty invitation reads as an empty book.
+  const notesDetail = notes.total === 0 ? 'Nothing saved yet' : countsLine(notes)
 
   function close() {
     if (busy !== null) return
@@ -159,6 +170,13 @@ export function BookActionsSheet({
               onPress={onFinish}
             />
           ) : null}
+          <ActionRow
+            icon="note"
+            title="Notes and quotes"
+            detail={notesDetail}
+            disabled={busy !== null}
+            onPress={onNotes}
+          />
           {/* Only once the current read has ended (domain/reads.ts). */}
           {canStartReread(read.status) ? (
             <ActionRow

@@ -19,6 +19,7 @@ and after any session with them:
 | `devpass.sh` | One device pass: restarts Metro on port 8082 with `EXPO_PUBLIC_DEVICE_PASS=1`, launches, waits for the result, writes `C:/Temp/devpass-<label>.txt` |
 | `devpass_s5_mutations.py` | Breaks one source line at a time, runs a device pass, restores the file. The pattern for watching a device check fail |
 | `mutate_s5.py` | The same for node tests: 16 Slice 5 mutations, each restored in `finally` |
+| `mutate_s5b.py` | Slice 5b: 25 mutations over notes, drafts, export, Recently Deleted, the theme and the tab request. Exits non-zero if any goes GREEN **or stops matching** — a rewritten rule must be re-watched |
 | `s5_phone.py`, `s5_more.py`, `s5_twice.py`, `s5_edit.py`, `s5_sample.py`, `s5_offline.py`, `s5_look.py` | Slice 5's run sheet (`docs/device-checks/slice-5.md`) as steps. `python s5_more.py 1 1db 2 2db 3 want refuse already about fault` |
 
 ## Setup, every session

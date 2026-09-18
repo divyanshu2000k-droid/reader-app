@@ -31,6 +31,7 @@ src/
       hooks/
       queries.ts          All SQL for this feature
       tabData.ts          Pure: a tab never shows another tab's rows
+      tabRequest.ts       Pure: a navigation asking for a tab is honoured every time
     book/                 Detail, sessions, actions sheet (Slice 2)
     add/                  Add a book: search, Which shelf?, Add manually / Edit details (Slice 4)
       searchSources.ts    Pure: the two APIs' requests and parsers, tested on captured responses
@@ -39,22 +40,30 @@ src/
       bookForm.ts         Pure: manual entry and edit rules
     finish/               Finishing a book: rating, note, date, the move to Finished (Slice 5)
       finishForm.ts       Pure: the date and the override rule, what is written, what the screen says
+    notes/                Notes and quotes: the list, the editor, the draft (Slice 5b)
+      noteForm.ts         Pure: what saves, what is refused, what is written, what changed
+      noteDraft.ts        Pure: the half-written note — where it is filed, when it comes back
+      noteList.ts         Pure: the filter, the counts, what a row's badge says
+      noteExport.ts       Pure: one book's notes as shareable text
     session/              Logger, editor, Session complete (Slice 3)
       sessionForm.ts      Pure: what saves, what is refused, what is only pointed out, what is written
       sessionComplete.ts  Pure: what Session complete says, following the edit
       pickWhen.ts         Android's date then time dialogs, as a promise
     stats/                The daily pace chart (Slice 3); the rest in Slice 7
       paceChart.ts        Pure: a bar for every day, pages and time apart
-    trash/                Recently deleted: books, and sessions deleted on their own
+    trash/                Recently deleted: books, sessions and notes deleted on their own
+      deletedLine.ts      Pure: what one deleted row says, per kind
     settings/
     import/  sync/  timer/     (later slices)
   db/
     schema.ts             Drizzle schema, single source of truth
     migrations/
     client.ts             The only raw SQLite handle
-    write.ts              The only write path: writeRow, writeBatch, updateRow, softDelete, restoreRow
+    write.ts              The only write path: writeRow, writeBatch, updateRow, softDelete, restoreRow.
+                          Also the local-only writes, which queue nothing: cacheSearchResults, saveDraft
     progressAggregates.ts Shared SQL: a read's progress. Held equal to domain/stats.ts by check 10
     currentRead.ts        Shared SQL: a book's current read. Every list of books filters with it
+    noteCounts.ts         Shared SQL: how many notes and quotes a book has
     changes.ts            "The library changed": write.ts signals every committed change
     coverFiles.ts         A local copy of every cover, downloaded after adding
     bookDetails.ts        A book's description, categories and preview, fetched once from its source
@@ -80,6 +89,7 @@ src/
     finishes.ts           Pure: a read's finish date, and which local year it counts in
     bookDetails.ts        Pure: cleaning descriptions, categories, the preview link, what a fetch writes
     sessionLine.ts        Pure: what a session row says (book detail, Recently Deleted)
+    noteLine.ts           Pure: "6 notes · 3 quotes" (the notes list, the actions sheet)
     isbn.ts               Pure: ISBN-10/13, checksums, one canonical form
     searchText.ts         Pure: how both searches compare text (case and accents)
     streaks.ts            Streak and goal calculation
@@ -513,6 +523,20 @@ state:
 **Every list of books filters with `isCurrentRead`** (`db/currentRead.ts`). A book's tab is
 its current read's status. Filtering each read by its own status put a re-read book on two
 tabs. Device check 12 holds it.
+
+**A mutation sweep is a script, not a memory.** `scripts/device/mutate_s5b.py` holds one
+entry per rule this slice added: the file, the exact change that breaks it, and the suite that
+must go red. It restores every file whatever happens, and a rule whose mutation goes GREEN —
+or whose pattern no longer matches, because the code was rewritten — fails the run. Two of
+Slice 5b's first twenty-two went green, and both were the TEST being weaker than the rule it
+claimed to hold: a fixture that would have passed either way, and a set of inputs where
+"digits only" and `Number()` happen to agree. Neither would have been found by reading.
+
+**Every type token reaches the style.** `typeStyle` is the only way a `<Text>` gets its font,
+and it silently dropped the `letterSpacing` of all seven tokens carrying one, for eight
+slices — the same shape as `font.family`, declared from the first commit and applied by
+nothing. `theme.test.ts` now asserts it for *every token that carries one*, by iterating the
+scale rather than by listing names, so a token added later is covered by construction.
 
 **Every tappable that navigates or writes goes through `usePressGuard`**, or through
 `Button`, which uses it. A double tap on a Library row used to open book detail twice.

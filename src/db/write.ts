@@ -687,6 +687,65 @@ export async function cacheSearchResults(
   )
 }
 
+// ─── LOCAL ONLY: DRAFTS ──────────────────────────────────────────────────────
+
+/**
+ * A half-written note, kept while it is being typed (features/notes/noteDraft.ts).
+ *
+ * In `metadata_cache` for the same reasons as the search cache: it is local only, never
+ * enqueues and never signals a change. A draft is NOT the reader's library — it must not
+ * reach the server, must not appear in any list, and must not count toward anything. The
+ * alternative, writing the real `notes` row on every keystroke, would have done all three.
+ *
+ * Here rather than in a `queries.ts` file because this is the only file allowed to write to
+ * the database (no-bypass.test.ts).
+ */
+export async function saveDraft(
+  source: string,
+  key: string,
+  payload: string,
+): Promise<Result<void>> {
+  return attempt(
+    async () => {
+      const ts = now()
+      const db = getDb()
+      runInTransaction(() => {
+        db.insert(metadataCache)
+          .values({ source, sourceId: key, payload, fetchedAt: ts })
+          .onConflictDoUpdate({
+            target: [metadataCache.source, metadataCache.sourceId],
+            set: { payload, fetchedAt: ts },
+          })
+          .run()
+      })
+    },
+    (cause) =>
+      appError('recoverable', 'Could not keep that draft', {
+        safe: 'What you have typed is still on screen. Saving the note itself still works.',
+        cause,
+      }),
+  )
+}
+
+/** Forget a draft: it was saved as a real note, or the reader discarded it. */
+export async function clearDraft(source: string, key: string): Promise<Result<void>> {
+  return attempt(
+    async () => {
+      const db = getDb()
+      runInTransaction(() => {
+        db.delete(metadataCache)
+          .where(and(eq(metadataCache.source, source), eq(metadataCache.sourceId, key)))
+          .run()
+      })
+    },
+    (cause) =>
+      appError('recoverable', 'Could not clear that draft', {
+        safe: 'Your note is saved. The draft may be offered again.',
+        cause,
+      }),
+  )
+}
+
 /**
  * Soft delete, cascading to children. Deletes are soft everywhere, no exceptions:
  * `deleted_at` is set, the row syncs, and a purge job removes rows older than 30 days.

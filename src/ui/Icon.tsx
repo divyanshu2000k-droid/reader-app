@@ -41,6 +41,7 @@ export type IconName =
   | 'calendar'
   | 'star'
   | 'check'
+  | 'note'
 
 interface Props {
   name: IconName
@@ -167,6 +168,18 @@ function paths(name: IconName) {
     // The actions sheet's rating row: the same star as `Stars`, as an outline.
     case 'star':
       return <Path d="M12 2l3 6.5 7 .9-5 4.9 1.2 7L12 18l-6.2 3.3L7 14.3l-5-4.9 7-.9z" />
+    // Notes and quotes, from Notes.dc.html. A page with written lines, distinct from
+    // `pencil`: the actions sheet shows both rows at once and two pencils read as one row
+    // repeated.
+    case 'note':
+      return (
+        <>
+          <Path d="M5 3.5h9L19 8.5V20.5H5z" />
+          <Path d="M14 3.5V9h5" />
+          <Path d="M8.5 13h7" />
+          <Path d="M8.5 16.5h4.5" />
+        </>
+      )
     // Book detail's session rows, from BookDetail.dc.html.
     case 'pencil':
       return (

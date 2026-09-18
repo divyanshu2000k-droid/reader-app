@@ -630,6 +630,113 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-18 · `typeStyle` dropped every token's letterSpacing, for eight slices
+Found while adding a tracked-out token for the notes badge: `typeStyle` takes `size`, `weight`
+and `lineHeight` and returns them, and seven tokens in the scale carry a `letterSpacing` it
+never read. Every display size in the app — hero, displayLg, display, title, heading,
+bodyStrong, notice — has rendered at Plus Jakarta Sans's default tracking since the first
+commit, while the scale said otherwise.
+
+**This is item 18's shape exactly**, and item 18 is in `CLAUDE.md`: `font.family` was declared
+in this file from the first commit and applied by nothing, so the whole app rendered in Roboto
+for a week. A token nothing reads cannot fail loudly. It can only be wrong quietly.
+
+**Chose:** fix it now, one line, with a test.
+**Over:** filing it as Slice 11 polish. It is a one-line fix in the file I was already editing,
+and rule 4 ("look for the same class of bug in the rest of that file") is what found it. Eight
+slices of a design token being decoration is long enough.
+**The test iterates the scale rather than listing names**, so a token added later is covered by
+construction — the failure mode of a list is that it stops covering things. Watched failing
+twice, before and after the test was rewritten for the type checker.
+**For the phone:** this changes the metrics of every heading in the app, subtly. Nothing can
+break, but it should be LOOKED at — added to the batched pass. If the owner dislikes it, the
+honest fix is to remove the values from the scale, not to go back to ignoring them.
+
+## 2026-09-18 · Slice 5b: notes and quotes, decided as built
+**A draft lives in `metadata_cache`, not in `notes` and not in MMKV.**
+- **Over:** writing the real `notes` row on every keystroke. That would put an abandoned
+  thought in the reader's list, in `sync_queue`, and from Slice 8 on their other phone.
+- **Over:** installing MMKV, which is still deferred to the slice that first needs it
+  (2026-09-03) and brings Nitro Modules and a native rebuild with it.
+- **Because:** `metadata_cache` is already local-only by construction — it is absent from
+  `SYNCABLE`, so writing to it through the sync path is a compile error. No new storage, no new
+  dependency, no migration. `source` is `note_draft`; `source_id` is `new:<book>` or
+  `edit:<note>`, so a new note drafts per book and an edit per note.
+- **Held by:** device check 18 (no queue row, no note), and node tests for the encoding.
+
+**There is no "Discard changes?" on the note editor, unlike the session logger.**
+- **Because:** that question exists where leaving loses what you typed. Here the draft keeps
+  it. The first version of the screen had both, and its confirm sheet read "Discard changes? …
+  Your draft is kept", which is a warning that argues against itself. A question whose answer
+  does not matter is worse than no question.
+- **Revisit if:** drafts ever become unreliable, in which case the guard comes back and the
+  draft is what needs fixing.
+
+**The after-save flush was a bug before it was written.** The draft writer flushes on unmount,
+which is the whole point — backing out is the case it exists for. But the editor saves, clears
+the draft and leaves, and the unmount that follows would flush the saved words straight back
+under `new:<book id>`, so the next "Add a note" for that book would open holding the previous
+note. `draftAction` returns `'none'` once the phase is `finished`, the rule is pure and tested,
+and the mutation that removes it goes red. Phone check 5.7 is the reader's version of it.
+
+**An audiobook is offered no page.** `notes.page` means a page, and an audiobook has none by
+the one definition (`domain/progressDisplay.ts`). **Over:** labelling the field "Minute" and
+storing minutes in a column named `page`, which is the silent-wrongness this project exists not
+to produce; and **over** a `position_minutes` column, which is a migration this slice was not
+asked for. **Filed:** a note on an audiobook has no position until such a column exists.
+**Note the near miss:** the first test for this used a fixture with `currentPage: null`, which
+passes whether or not the rule is there. The mutation sweep caught it, not review.
+
+**A quote is not italic, although `Notes.dc.html` is.** Only the five upright weights are
+embedded (`src/ui/brand.json`); the italic files exist in the package and are not in the build.
+`fontStyle: 'italic'` on a custom Android family with no italic file renders upright with no
+error — the same silent shape as the app spending a week in Roboto. A quote is set apart by the
+accent badge, the larger size and the brighter ink instead. **Revisit if** the owner wants
+italic: it is five more files in `brand.json` and a native rebuild, for one row's styling.
+
+**Export is plain text through Android's own share sheet.** **Over:** `expo-sharing` and a
+written file, which is a new dependency and a native rebuild. **Over:** silently truncating a
+large export — a payload past Android's transaction limit now fails out loud with its own
+message, because half an export that looks complete is the worse failure. It exports what is on
+screen, with the filter named in the subject, so the text is self-describing once it leaves.
+
+**Delete is in the editor, not the list.** The undo toast still renders beneath a Modal (filed
+from Slice 3), so deleting from a list would raise an invisible Undo. The editor already has
+the pattern that works: ask once, leave, then toast.
+
+**Notes joined Recently Deleted in this slice**, which `04-SCREENS.md` and `trash/queries.ts`
+both said they would. Found while updating the docs: the editor's own "not here any more" copy
+already promised "anything deleted waits in Recently Deleted for 30 days", which would have
+been false for notes. A row is named by its opening words, kind, page and book — a quote's first
+words alone cannot tell two quotes from the same book apart. `deletedLine.ts` is pure and tested.
+
+**Counts:** 445 node tests under `cmd` and `sh`, 121 in each of three zones, 25 of 25 mutations
+red. Typecheck, lint and Prettier clean. **Not run: the device pass**, which needs the phone.
+
+## 2026-09-18 · The "Start the next one" tab fix now has a check, and lives in a pure module
+The 2026-09-15 review fixed it in one line inside `LibraryScreen` and recorded "not a data bug,
+has no test". Standing rule 1 has no exception for cheap fixes, and three bugs in this log came
+back inside their own fixes, so the reconciliation moved to `features/library/tabRequest.ts` and
+is asserted in both directions.
+
+**Chose:** a pure `readTabRequest(params, seenKey, tabs)` returning `{ key, tab }`, with the
+screen holding `key` in state.
+**Over:** testing it through the component, which would need a renderer this project does not
+have, or leaving it to the phone check alone.
+**Because:** the two guarantees run opposite ways and only one of them is the bug that happened:
+a NEW request must switch the tab even when it names the tab a previous request named, and a
+re-render with no new request must leave the reader on the chip they tapped. A test of either
+alone passes over the other.
+**Watched failing, twice:** with `at` dropped from the key (the pre-fix spelling) the repeat
+request goes red; with the `seenKey` comparison removed, the re-render test goes red. 388 node
+tests pass.
+
+**Also:** an unknown `tab` value is ignored rather than trusted, because the parameter reaches
+this screen from a deep link, which is outside input. That was already true and is now asserted.
+
+**Still owed:** the phone step, in the batched Slice 5 + 5b pass. It is one tap sequence —
+finish a book, Start the next one, tap Finished, finish another, Start the next one.
+
 ## 2026-09-15 · Open owner decisions, and answers given in conversation (Slices 4–5)
 Written so a new session knows what was asked, what was answered and what still waits. Nothing here
 is built unless it says so.

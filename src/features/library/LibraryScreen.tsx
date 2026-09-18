@@ -25,6 +25,7 @@ import { StyleSheet, View } from 'react-native'
 import { BookRow } from './components/BookRow'
 import { STATUS_ORDER, StatusTabs } from './components/StatusTabs'
 import { useLibraryRows } from './hooks/useLibraryRows'
+import { readTabRequest } from './tabRequest'
 import type { LibraryRow } from './queries'
 import type { ReadStatus } from '@/db/schema'
 import { empty, nav } from '@/lib/strings'
@@ -49,16 +50,15 @@ export function LibraryScreen() {
   const router = useRouter()
   // "Start the next one" in the finish flow opens the Library on Want to read, through `tab`.
   // Adjusted during render, not in an effect, so the first frame is already the right tab.
-  // `at` makes a repeat request a new one: without it, a second "Start the next one" after the
-  // reader had moved to another tab carried the same `tab` and changed nothing.
-  const { tab, at } = useLocalSearchParams<{ tab?: string; at?: string }>()
-  const [status, setStatus] = useState<ReadStatus>(isTab(tab) ? tab : 'reading')
-  const request = `${tab ?? ''}@${at ?? ''}`
-  const [seenRequest, setSeenRequest] = useState(request)
-  if (request !== seenRequest) {
-    setSeenRequest(request)
-    if (isTab(tab)) setStatus(tab)
-  }
+  // What counts as a new request, and why `at` exists, is in `tabRequest.ts`.
+  const params = useLocalSearchParams<{ tab?: string; at?: string }>()
+  const [status, setStatus] = useState<ReadStatus>(isTab(params.tab) ? params.tab : 'reading')
+  const [seenRequest, setSeenRequest] = useState(
+    () => readTabRequest(params, '', STATUS_ORDER).key,
+  )
+  const request = readTabRequest(params, seenRequest, STATUS_ORDER)
+  if (request.key !== seenRequest) setSeenRequest(request.key)
+  if (request.tab !== null) setStatus(request.tab)
   const { rows, libraryEmpty, error, reload } = useLibraryRows(status)
 
   const push = useCallback(

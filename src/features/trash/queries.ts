@@ -1,12 +1,13 @@
 /**
  * src/features/trash/queries.ts
  *
- * All SQL for Recently Deleted: removed books, and since Slice 3, sessions deleted on their
- * own. Notes join with Slice 5b, the slice that lets a reader delete one.
+ * All SQL for Recently Deleted: removed books, sessions deleted on their own (Slice 3), and
+ * notes deleted on their own (Slice 5b).
  *
- * A session deleted WITH its book is not listed separately: restoring the book brings it back
+ * A child deleted WITH its book is not listed separately: restoring the book brings it back
  * (write.ts, the cascade), and listing it twice would offer to restore it under a book that is
- * still deleted, which `restoreRow` refuses. So only sessions whose read and book are live.
+ * still deleted, which `restoreRow` refuses. So only sessions whose read and book are live,
+ * and only notes whose book is live.
  *
  * The 30-day purge (03-DATA-MODEL, sync rule 6) is not built; it arrives with sync in
  * Slice 8. Until then nothing is ever removed for good, so this lists everything deleted
@@ -17,7 +18,7 @@
 import { and, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm'
 
 import { getDb } from '@/db/client'
-import { books, reads, sessions, type SessionFormat } from '@/db/schema'
+import { books, notes, reads, sessions, type NoteType, type SessionFormat } from '@/db/schema'
 import { restoreRow, type WriteOutcome } from '@/db/write'
 import type { UnixMs } from '@/lib/dates'
 import type { Result } from '@/lib/result'
@@ -45,7 +46,17 @@ export interface DeletedSession {
   readonly deletedAt: UnixMs
 }
 
-export type DeletedItem = DeletedBook | DeletedSession
+export interface DeletedNote {
+  readonly kind: 'note'
+  readonly id: string
+  readonly bookTitle: string
+  readonly type: NoteType
+  readonly content: string
+  readonly page: number | null
+  readonly deletedAt: UnixMs
+}
+
+export type DeletedItem = DeletedBook | DeletedSession | DeletedNote
 
 /** Deleted books, most recently removed first. */
 async function getDeletedBooks(): Promise<DeletedBook[]> {
@@ -87,13 +98,43 @@ async function getDeletedSessions(): Promise<DeletedSession[]> {
   return rows.map((r) => ({ kind: 'session', ...r }))
 }
 
-/** Everything deleted, most recently deleted first. */
-export async function getDeletedItems(): Promise<DeletedItem[]> {
-  const [bookRows, sessionRows] = await Promise.all([getDeletedBooks(), getDeletedSessions()])
-  return [...bookRows, ...sessionRows].sort((a, b) => b.deletedAt - a.deletedAt)
+/**
+ * Notes deleted on their own, under a live book.
+ *
+ * Joined to `books`, not to `reads`: a note belongs to the book, and one written during a read
+ * that has since been deleted is still the book's and still restorable (db/write.ts lists
+ * `books` as a note's only parent).
+ */
+async function getDeletedNotes(): Promise<DeletedNote[]> {
+  const rows = await getDb()
+    .select({
+      id: notes.id,
+      bookTitle: books.title,
+      type: notes.type,
+      content: notes.content,
+      page: notes.page,
+      deletedAt: sql<number>`${notes.deletedAt}`,
+    })
+    .from(notes)
+    .innerJoin(books, eq(notes.bookId, books.id))
+    .where(and(isNotNull(notes.deletedAt), isNull(books.deletedAt)))
+    .orderBy(desc(notes.deletedAt))
+  return rows.map((r) => ({ kind: 'note', ...r }))
 }
 
-/** Restore a book and exactly what its removal took with it, or one session. */
+/** Everything deleted, most recently deleted first. */
+export async function getDeletedItems(): Promise<DeletedItem[]> {
+  const [bookRows, sessionRows, noteRows] = await Promise.all([
+    getDeletedBooks(),
+    getDeletedSessions(),
+    getDeletedNotes(),
+  ])
+  return [...bookRows, ...sessionRows, ...noteRows].sort((a, b) => b.deletedAt - a.deletedAt)
+}
+
+const TABLE = { book: 'books', session: 'sessions', note: 'notes' } as const
+
+/** Restore a book and exactly what its removal took with it, or one session, or one note. */
 export async function restoreDeleted(item: DeletedItem): Promise<Result<WriteOutcome>> {
-  return restoreRow(item.kind === 'book' ? 'books' : 'sessions', item.id)
+  return restoreRow(TABLE[item.kind], item.id)
 }

@@ -12,7 +12,7 @@ import { test } from 'node:test'
 
 import brand from '../brand.json'
 import { hexToRgb, shiftHsl, withAlpha } from '../color'
-import { accentVariants, dark, light, size, space } from '../theme'
+import { accentVariants, dark, font, light, size, space, typeStyle } from '../theme'
 
 /**
  * The design sheet's values for the shipping accent, #F9BE3D. `inkOnLight` is the
@@ -76,4 +76,39 @@ test('the computed size tokens hold the relationships they were once typed as', 
   // And the values the design sheet showed, so a derivation that is consistent but wrong
   // is caught too.
   assert.deepEqual([size.tabRaised, size.iconButtonHitSlop, space.toastLift], [62, 3, 66])
+})
+
+/**
+ * EVERY PART OF A TYPE TOKEN REACHES THE STYLE.
+ *
+ * `letterSpacing` was declared on seven tokens and dropped by `typeStyle` for eight slices,
+ * so the whole scale's tracking was decoration. It is the same shape as `font.family`, which
+ * was declared in this file from the first commit and applied by nothing (CLAUDE.md item 18):
+ * a token nothing reads cannot fail loudly, only quietly.
+ *
+ * Written as "every token that carries one", not as a list, so a token added later is
+ * covered by construction rather than by remembering to extend this test.
+ */
+test('every type token carrying a letterSpacing gets it applied', () => {
+  let tracked = 0
+  for (const [name, token] of Object.entries(font)) {
+    // `font.family` is the one string in here; everything else is a token.
+    if (typeof token === 'string') continue
+    if (!('letterSpacing' in token)) continue
+    tracked += 1
+    assert.equal(typeStyle(token).letterSpacing, token.letterSpacing, name)
+  }
+  assert.ok(tracked >= 7, `expected the scale to track some tokens, found ${tracked}`)
+})
+
+test('a token with no letterSpacing does not invent one', () => {
+  assert.equal(typeStyle({ size: 13, weight: '500' }).letterSpacing, undefined)
+})
+
+test('the family, size, weight and line height still reach the style', () => {
+  const style = typeStyle(font.heading)
+  assert.equal(style.fontFamily, brand.fontFamily)
+  assert.equal(style.fontSize, font.heading.size)
+  assert.equal(style.fontWeight, font.heading.weight)
+  assert.equal(style.lineHeight, font.heading.lineHeight)
 })

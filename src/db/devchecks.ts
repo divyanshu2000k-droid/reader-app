@@ -32,12 +32,14 @@ import { checkpointWal, dangerouslyExecDevSql, DATABASE_NAME, getDb } from './cl
 import { ensureBookDetails } from './bookDetails'
 import { ensureLocalCover } from './coverFiles'
 import { getFinishedReads } from './finishedReads'
-import { books, reads, sessions, syncQueue } from './schema'
+import { books, metadataCache, notes, reads, sessions, syncQueue } from './schema'
 import { isCurrentRead } from './currentRead'
 import { progressAggregates } from './progressAggregates'
 import {
   cacheSearchResults,
+  clearDraft,
   restoreRow,
+  saveDraft,
   softDelete,
   updateRow,
   writeBatch,
@@ -53,6 +55,7 @@ import {
 } from './backup'
 import { SCHEMA_VERSION } from './migrate'
 import { seedSampleLibrary, SEEDED_TITLE } from './seed'
+import { DRAFT_SOURCE } from '@/features/notes/noteDraft'
 import { currentPosition } from '@/domain/progress'
 import { finishedInYear } from '@/domain/finishes'
 import { totals } from '@/domain/stats'
@@ -1768,6 +1771,150 @@ async function checkBookDetails() {
   )
 }
 
+// ─── 17. A NOTE IS THE BOOK'S, AND SURVIVES EVERYTHING THAT HAPPENS TO A READ ─
+
+async function checkNotesSurviveReads() {
+  /**
+   * Slice 5b's done-when: "a quote survives a re-read of that book".
+   *
+   * Asserted in the direction the guarantee runs, which is the direction that can fail
+   * silently. `notes` is deliberately NOT a cascade child of `reads` in write.ts, so the
+   * sharp step is 3: deleting the read a note was written during must leave the note alone.
+   * If notes were ever added to that cascade, every quote from a first read would vanish the
+   * day the reader tidied up an old read, and nothing else in the app would notice.
+   */
+  await check('17. a note survives a re-read, and its read being deleted', async () => {
+    const bookId = newId()
+    const read1 = newId()
+    const read2 = newId()
+    const noteId = newId()
+    const created = await writeTogether([
+      {
+        table: 'books',
+        values: { id: bookId, title: 'Devcheck Notes Survive', pageCount: 300 },
+      },
+      { table: 'reads', values: { id: read1, bookId, readNumber: 1, status: 'reading' } },
+    ])
+    assert(created.ok, 'could not create the book and its first read')
+
+    // Written during read 1, against the BOOK, with the read for provenance only.
+    const wrote = await writeRow('notes', {
+      id: noteId,
+      bookId,
+      readId: read1,
+      type: 'quote',
+      content: 'Devcheck: the trees are the connective tissue.',
+      page: 212,
+    })
+    assert(wrote.ok, 'could not write the note')
+
+    const liveNote = async () =>
+      (
+        await getDb()
+          .select({
+            id: notes.id,
+            readId: notes.readId,
+            content: notes.content,
+            page: notes.page,
+          })
+          .from(notes)
+          .where(and(eq(notes.id, noteId), isNull(notes.deletedAt)))
+      )[0]
+
+    // 1. Finish read 1 and start read 2, which is what a re-read is.
+    const finished = await updateRow('reads', read1, { status: 'finished', finishedAt: now() })
+    const second = await writeRow('reads', {
+      id: read2,
+      bookId,
+      readNumber: 2,
+      status: 'reading',
+    })
+    assert(finished.ok && second.ok, 'could not finish read 1 and start read 2')
+    const afterReread = await liveNote()
+    assert(afterReread !== undefined, 'THE NOTE DID NOT SURVIVE THE RE-READ')
+    assert(afterReread.readId === read1, 'the note moved to the new read')
+    assert(afterReread.page === 212, 'the note lost its page')
+
+    // 2. The note belongs to the book, so the book's list still has it under read 2.
+    const forBook = await getDb()
+      .select({ id: notes.id })
+      .from(notes)
+      .where(and(eq(notes.bookId, bookId), isNull(notes.deletedAt)))
+    assert(forBook.length === 1, `the book should have 1 note, it has ${forBook.length}`)
+
+    // 3. THE SHARP ONE: deleting the read it was written during must not take it.
+    const deletedRead = await softDelete('reads', read1)
+    assert(deletedRead.ok, 'could not delete the first read')
+    const afterReadDeleted = await liveNote()
+    assert(
+      afterReadDeleted !== undefined,
+      'THE NOTE WENT WITH ITS READ - notes must not be a cascade child of reads',
+    )
+
+    // 4. Deleting the BOOK does take it, and restoring the book brings it back.
+    const deletedBook = await softDelete('books', bookId)
+    assert(deletedBook.ok, 'could not delete the book')
+    assert((await liveNote()) === undefined, 'the note outlived its deleted book')
+    const restored = await restoreRow('books', bookId)
+    assert(restored.ok, 'could not restore the book')
+    const afterRestore = await liveNote()
+    assert(afterRestore !== undefined, 'restoring the book did not bring its note back')
+    assert(afterRestore.content.includes('connective tissue'), 'the note came back changed')
+
+    return 'the note survived the re-read and its read being deleted, and came back with the book'
+  })
+}
+
+// ─── 18. A DRAFT IS NOT A NOTE ───────────────────────────────────────────────
+
+async function checkDraftsAreLocal() {
+  /**
+   * A half-written note lives in `metadata_cache`, which never syncs. The claim worth holding
+   * against a real database is the negative one: writing a draft must leave NO queue row and
+   * NO note. If a draft ever reached `notes`, every abandoned thought would appear in the
+   * reader's list and, from Slice 8, on their other phone.
+   */
+  await check(
+    '18. a draft writes no note and no queue row, and clears completely',
+    async () => {
+      const key = `devcheck:${newId()}`
+      const before = (await getDb().select({ id: syncQueue.id }).from(syncQueue)).length
+      const notesBefore = (await getDb().select({ id: notes.id }).from(notes)).length
+
+      const saved = await saveDraft(
+        DRAFT_SOURCE,
+        key,
+        '{"type":"note","content":"half a","page":""}',
+      )
+      assert(saved.ok, 'could not save the draft')
+
+      const stored = await getDb()
+        .select({ payload: metadataCache.payload })
+        .from(metadataCache)
+        .where(and(eq(metadataCache.source, DRAFT_SOURCE), eq(metadataCache.sourceId, key)))
+      assert(stored.length === 1, `the draft should be stored once, found ${stored.length}`)
+
+      const after = (await getDb().select({ id: syncQueue.id }).from(syncQueue)).length
+      const notesAfter = (await getDb().select({ id: notes.id }).from(notes)).length
+      assert(
+        after === before,
+        `the draft enqueued ${after - before} sync rows; it must enqueue 0`,
+      )
+      assert(notesAfter === notesBefore, 'the draft created a row in notes')
+
+      const cleared = await clearDraft(DRAFT_SOURCE, key)
+      assert(cleared.ok, 'could not clear the draft')
+      const left = await getDb()
+        .select({ payload: metadataCache.payload })
+        .from(metadataCache)
+        .where(and(eq(metadataCache.source, DRAFT_SOURCE), eq(metadataCache.sourceId, key)))
+      assert(left.length === 0, 'the draft was still there after being cleared')
+
+      return 'a draft stored and cleared, with 0 queue rows and 0 notes'
+    },
+  )
+}
+
 // ─── ENTRY POINT ─────────────────────────────────────────────────────────────
 
 export async function runDeviceChecks(): Promise<CheckResult[]> {
@@ -1790,6 +1937,8 @@ export async function runDeviceChecks(): Promise<CheckResult[]> {
   await checkAddingBooks()
   await checkFinishAndReread()
   await checkBookDetails()
+  await checkNotesSurviveReads()
+  await checkDraftsAreLocal()
   await cleanup()
 
   const runtime = results.filter((r) => r.kind === 'runtime')

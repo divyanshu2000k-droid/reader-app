@@ -364,6 +364,24 @@ backing out of a half written note does not lose it.
 > Draft autosave matters more than it looks. Losing a half written review is a live
 > StoryGraph complaint.
 
+**Status, 2026-09-18: code complete; phone checks not run.** The phone is not attached, and by
+the owner's choice Slice 5's outstanding checks and this slice's are run together in one
+session. `docs/device-checks/slice-5b.md` is the sheet.
+- **What it does:** a Notes row on the actions sheet carrying the book's counts; the notes list
+  with All / Quotes / Notes and the counts of the book; the editor with the quote-or-note
+  toggle, the page defaulting to where the reader has got to, and the draft; delete with undo;
+  export by share sheet.
+- **Held automatically:** 438 node tests, 22 of 22 mutations red. Device checks 17 (a note
+  survives a re-read AND its read being deleted) and 18 (a draft writes no note and no queue
+  row) are written and have NOT been run: they need the phone.
+- **Decided while building** (`DECISIONS.md`, 2026-09-18): the draft lives in `metadata_cache`
+  and never syncs; there is no "Discard changes?" because nothing is discarded; an audiobook is
+  offered no page, because `notes.page` means a page; a quote is not italic, because no italic
+  font file is embedded; export is plain text through Android's share sheet.
+- **Found while building, fixed, not part of this slice:** `typeStyle` dropped the
+  `letterSpacing` of all seven tokens that carry one. Every display size in the app has
+  rendered at the typeface's default tracking since the first commit.
+
 ---
 
 ## Slice 6 · The timer

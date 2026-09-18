@@ -108,6 +108,23 @@ The four, as evidence:
    the books searched before. Found only by turning the network off on a phone and logging the
    real error; the test now uses that exact error.
 
+18b. **The same file did it again, with `letterSpacing`.** `typeStyle` is the only way any
+   `<Text>` gets its type, and it read `size`, `weight` and `lineHeight` and silently dropped
+   the fourth field. Seven tokens in the scale carry a `letterSpacing`; every display size in
+   the app rendered at the typeface's default tracking for eight slices while the scale said
+   otherwise. Found in 2026-09-18 only by adding a tracked token and checking whether it
+   arrived. `theme.test.ts` now asserts it for every token that carries one, by iterating the
+   scale rather than listing names.
+
+19. **A test that would have passed either way.** The rule "an audiobook is offered no page"
+   was tested with a fixture whose page was `null` — which produces an empty field with or
+   without the rule. Deleting the rule kept the suite green. Found by the mutation sweep, not
+   by review, and it sat beside a second one in the same file: a page validator tested only
+   with `'p. 212'`, where the strict check and a bare `Number()` happen to agree. `'1e3'` and
+   `'212.5'` are where they do not, and one of those writes a fractional page into an INTEGER
+   column. **Two of the first twenty-two mutations went green, and both were the test, not the
+   code.**
+
 Add another if the theme counts: `font.family` was declared from the first commit and
 applied by nothing, so the entire app rendered in the wrong typeface without a single
 error anywhere.
@@ -325,6 +342,28 @@ Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
+**Slice 5b is code complete and has not been near a phone.** By the owner's choice, Slice 5's
+outstanding checks and all of Slice 5b run in ONE session, from
+`docs/device-checks/slice-5b.md`. Nothing in this slice is believed until then.
+- **What it does:** a Notes row on the actions sheet carrying the book's counts; the notes list
+  with All / Quotes / Notes, the counts of the book and export by share sheet; the editor with
+  the quote-or-note toggle, the page defaulting to where the reader has got to, and the draft;
+  delete with undo; notes in Recently Deleted.
+- **The draft** lives in `metadata_cache`: local only, never synced, never in the list, counting
+  toward nothing. There is deliberately no "Discard changes?", because nothing is discarded.
+- **Held automatically:** 445 node tests under `cmd` and `sh`, 121 in each of three zones,
+  **25 of 25 mutations red** (`scripts/device/mutate_s5b.py`). Typecheck, lint and Prettier
+  clean.
+- **NOT run:** the device pass. Checks 17 (a note survives a re-read and its read being
+  deleted) and 18 (a draft writes no note and no queue row) are written and unwatched — the
+  sheet says how to watch each one fail.
+- **Two mutations went green on the first sweep, and both were the TEST**, not the code
+  (silent-pass item 19). The sweep is the only reason either was found.
+- **Also fixed, found while building:** `typeStyle` dropped every token's `letterSpacing`
+  (item 18b). This changes the tracking of every heading in the app and wants a look on the
+  phone. And the 2026-09-15 "Start the next one" fix now has a test and lives in
+  `features/library/tabRequest.ts`.
+
 **Slice 5 is built and verified on the phone.** 21 of 21 phone checks passed on 2026-09-15.
 - **The owner's cases:** finishing moves the book off Reading. Finish, re-read and finish again is
   two rows, one counting in 2025 and one in 2026.
@@ -370,7 +409,9 @@ Build locally for day to day work. EAS is for release builds only.
   the Books API only. Restricting it to the app would break search until `api.ts` sends the
   Android headers (Slice 11). Tests run on real Google captures; 321 tests pass.
 
-**Next after Slice 5's phone checks: Slice 5b, notes and quotes.**
+**Next: the batched phone session** — the device pass re-run, Slice 5's two leftovers and all
+of Slice 5b (`docs/device-checks/slice-5b.md`). **Then Slice 6, the timer**, which has a hard
+two-week limit written down before it starts.
 
 **Slice 3 is built and verified on the phone, except four checks that need the owner to change
 phone settings.**

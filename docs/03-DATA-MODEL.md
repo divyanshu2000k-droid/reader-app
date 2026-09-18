@@ -270,6 +270,23 @@ opened online. Adding never waits for it.
 **A new book and its first read are written by `writeTogether`,** one transaction for rows of
 different tables. Written separately, a failure between them left a book with no read.
 
+**As built in Slice 5b: the table also holds half-written notes.**
+- **`source` is `note_draft`**, and `source_id` is `new:<book id>` or `edit:<note id>`, so a
+  new note drafts per book and an edit per note. Written by `saveDraft` and removed by
+  `clearDraft`, both in `write.ts`, both of which queue nothing and signal nothing.
+- **Why here rather than in `notes`:** a draft must not reach the server, must not appear in
+  the reader's list, and must not count toward anything. Writing the real `notes` row on every
+  keystroke would have done all three. This table is the one place that is already local-only
+  by construction, so no new storage and no new native dependency was needed.
+- **A payload that is not a draft reads as no draft.** It is validated field by field, because
+  it came off disk and may have been written by an older build. A corrupt cache must not be
+  able to stop the editor opening.
+
+**`notes.read_id` is provenance and nothing else.** Nothing filters on it, `notes` is not a
+cascade child of `reads`, and `books` is a note's only guarded parent in `write.ts`. All three
+are the same decision: a quote captured during a first read is still the book's during a third,
+and deleting an old read does not take the notes written during it. Device check 17 holds it.
+
 ---
 
 ## Derived values, never stored

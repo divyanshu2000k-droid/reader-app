@@ -8,6 +8,7 @@
 import { and, desc, eq, isNull } from 'drizzle-orm'
 
 import { getDb } from '@/db/client'
+import { getNoteCounts, type NoteCounts } from '@/db/noteCounts'
 import { progressAggregates } from '@/db/progressAggregates'
 import { books, reads, sessions, type ReadStatus, type SessionFormat } from '@/db/schema'
 import { restoreRow, softDelete, updateRow, writeRow, type WriteOutcome } from '@/db/write'
@@ -59,6 +60,11 @@ export interface BookDetail {
   readonly current: ReadSummary
   /** Earlier reads, newest first. Each keeps its own rating, dates and sessions. */
   readonly previous: readonly ReadSummary[]
+  /**
+   * Of the BOOK, across every read: a quote saved during a first read is still the book's
+   * during a third (`db/noteCounts.ts`). The actions sheet's Notes row says how many.
+   */
+  readonly notes: NoteCounts
 }
 
 export interface SessionEntry {
@@ -123,7 +129,7 @@ export async function getBookDetail(bookId: string): Promise<BookDetail | null> 
 
   const [current, ...previous] = readRows
   if (!current) return null
-  return { book, current, previous }
+  return { book, current, previous, notes: await getNoteCounts(bookId) }
 }
 
 /** Every live session of one read, newest first, furthest first within one instant. */

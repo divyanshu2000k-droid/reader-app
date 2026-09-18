@@ -283,6 +283,29 @@ quote and note, page defaulting to the current page, draft autosaved while typin
 losing a half written note is a live StoryGraph complaint. Notes attach to the book rather
 than the read, so they survive re-reads.
 
+**As built in Slice 5b:**
+- **Reached from the actions sheet**, whose Notes row carries the book's counts, or
+  "Nothing saved yet".
+- **The counts in the header are of the BOOK, not of the filter**, so tapping Quotes does not
+  change the number just read. Each chip carries its own count, so an empty filter is visibly
+  not worth a tap. A filter with nothing in it says so, and does not say the book is empty.
+- **The editor is a full screen, not a sheet.** A multiline editor is the worst case for the
+  keyboard, and Android does not resize an edge-to-edge Modal for it (09-ENVIRONMENT).
+- **The draft is kept as it is typed**, in `metadata_cache`: local only, never synced, never
+  in the list, counting toward nothing. Reopening restores it and says that it did. There is
+  therefore **no "Discard changes?"** on this screen, unlike the session logger: that question
+  belongs where leaving loses what you typed, and here it does not.
+- **A page is only offered when the book has pages.** `notes.page` means a page, and an
+  audiobook has none (the one definition, `domain/progressDisplay.ts`). A page past the page
+  count is pointed out, never refused: page counts from the APIs are frequently wrong.
+- **Empty is not a note.** Save is unavailable until there are words, which is what an empty
+  editor already looks like; nothing is refused out loud.
+- **Delete is in the editor, not the list.** It asks once, leaves, then raises the undo toast,
+  so the toast is never drawn beneath the confirm sheet's Modal.
+- **Export shares what is on screen**, as plain text through Android's share sheet, with the
+  filter named in the subject. A payload too large for Android fails out loud rather than
+  being silently cut short.
+
 ---
 
 ## Journey H · Managing a book
@@ -318,14 +341,16 @@ not failure and the data should not treat it as such.
 - **Recently Deleted** is in Settings. It lists removed books and, since Slice 3, sessions
   deleted on their own, each named by its pages, book and date. A session deleted with its
   book is not listed: restoring the book brings it back. Restore brings back exactly what the
-  removal took. Notes join it with Slice 5b.
+  removal took. **Notes deleted on their own joined it in Slice 5b**, each named by its opening
+  words, its kind, its page and its book — a quote's first words alone cannot tell two quotes
+  from the same book apart.
 - **A book appears once in the Library, on its current read's tab.** A re-read book is on
   Reading, not also on Finished.
 - **Start a re-read is offered only when the current read is finished or DNF**, and
   `startReread` refuses otherwise.
 - **A double tap on a row or a header button is one tap.**
 - **Not yet, with the slice that owns each:** the Continue pill and Log pages (3), Start timer
-  and the dock (6), search, Discover and Edit details (4), notes (5b), the stats strip (7),
+  and the dock (6), search, Discover and Edit details (4), the stats strip (7),
   and share (11). None renders as a control that goes nowhere.
 - **About this book (Slice 5):** the description, five lines until More, and "Read a sample"
   opening Google's preview in the browser, only when pages are viewable. No card when there is

@@ -1,6 +1,6 @@
 /**
- * Recently Deleted, reachable from Settings (Journey K). Where a removed book or a deleted
- * session waits, and where it comes back from.
+ * Recently Deleted, reachable from Settings (Journey K). Where a removed book, a deleted
+ * session or a deleted note waits, and where it comes back from.
  *
  * Restoring brings back exactly what the removal took: the reads, sessions, notes and shelf
  * assignments deleted with it, and nothing deleted before it (write.ts, the cascade). A
@@ -12,8 +12,8 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { memo, useCallback, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 
+import { deletedLine } from './deletedLine'
 import { getDeletedItems, restoreDeleted, type DeletedItem } from './queries'
-import { sessionLine } from '@/domain/sessionLine'
 import { formatRelativeDay, formatWhen } from '@/lib/dates'
 import { appError, type AppError } from '@/lib/result'
 import { actions, empty, toasts } from '@/lib/strings'
@@ -27,6 +27,12 @@ import { SkeletonGate } from '@/ui/Skeleton'
 import { font, rules, space, typeStyle } from '@/ui/theme'
 import { useToast } from '@/ui/Toast'
 import { useColors } from '@/ui/useTheme'
+
+const RESTORED = {
+  book: toasts.bookRestored,
+  session: toasts.sessionRestored,
+  note: toasts.noteRestored,
+} as const
 
 export function RecentlyDeletedScreen() {
   const router = useRouter()
@@ -67,7 +73,7 @@ export function RecentlyDeletedScreen() {
       }
       setError(null)
       if (result.value.changed) {
-        toast.show(item.kind === 'book' ? toasts.bookRestored : toasts.sessionRestored)
+        toast.show(RESTORED[item.kind])
       }
       await load()
     },
@@ -128,14 +134,11 @@ interface RowProps {
 
 const DeletedRow = memo(function DeletedRow({ item, busy, disabled, onRestore }: RowProps) {
   const c = useColors()
-  const removed = `${formatRelativeDay(item.deletedAt).toLowerCase()}`
-  // A session is named by what it was and which book it was for: "28 pages · 184 → 212" alone
-  // cannot tell two deleted sessions apart.
-  const title = item.kind === 'book' ? item.title : sessionLine(item).amount
-  const detail =
-    item.kind === 'book'
-      ? `Removed ${removed}`
-      : `${item.bookTitle} · ${formatWhen(item.occurredAt)} · deleted ${removed}`
+  // What each kind of row says is in `deletedLine.ts`, tested.
+  const { title, detail } = deletedLine(item, {
+    removed: formatRelativeDay(item.deletedAt).toLowerCase(),
+    when: item.kind === 'session' ? formatWhen(item.occurredAt) : '',
+  })
   return (
     <View style={styles.row}>
       {item.kind === 'book' ? (
