@@ -1,0 +1,26 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!--
+    The permissions and the service declaration live WITH the service.
+
+    They used to be added by `plugins/withReadingService.js`, which declared a class name
+    from `expo-notifications` that does not exist. Keeping the declaration next to the
+    Kotlin means the name cannot drift from the class again: if this file names something
+    absent, the module does not compile.
+  -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <application>
+    <service
+      android:name="expo.modules.readingservice.ReadingService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse"
+      android:stopWithTask="false">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="Keeps a reading session timing while the reader is reading, and shows the elapsed time with pause and finish controls. The session ends when the reader ends it." />
+    </service>
+  </application>
+</manifest>

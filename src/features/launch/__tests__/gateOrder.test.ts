@@ -28,6 +28,8 @@ const SESSION: OpenSession = {
   coverLocalPath: null,
   coverUrl: null,
   coverColor: null,
+  boundedSeconds: 60,
+  maxSeconds: 60,
 }
 const DONE: MigrationStatus = { ok: true, state: 'done', version: 2 }
 const PENDING: MigrationStatus = { state: 'pending' }

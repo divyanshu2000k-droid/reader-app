@@ -17,10 +17,11 @@
  * discovered as a reader's missing data. See DECISIONS.md, 2026-09-03.
  */
 
-import { and, eq, isNotNull, isNull, sql, type SQL } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, isNull, sql, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn, SQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core'
 
 import { notifyDataChanged } from './changes'
+import { DRAFT_SOURCE, RUN_SOURCE } from './localRecords'
 import { getDb, runInTransaction, type Database } from './client'
 import {
   bookShelves,
@@ -687,20 +688,26 @@ export async function cacheSearchResults(
   )
 }
 
-// ─── LOCAL ONLY: DRAFTS ──────────────────────────────────────────────────────
+// ─── LOCAL ONLY: DEVICE STATE ────────────────────────────────────────────────
 
 /**
- * A half-written note, kept while it is being typed (features/notes/noteDraft.ts).
+ * A keyed local record in `metadata_cache`: device state that must never sync.
  *
- * In `metadata_cache` for the same reasons as the search cache: it is local only, never
- * enqueues and never signals a change. A draft is NOT the reader's library — it must not
- * reach the server, must not appear in any list, and must not count toward anything. The
- * alternative, writing the real `notes` row on every keystroke, would have done all three.
+ * Two users so far, and both would be actively harmful in `sync_queue`:
+ *   - **a half-written note** (`features/notes/noteDraft.ts`), which must not reach the
+ *     server, appear in any list, or count toward anything;
+ *   - **a running timer's segments and heartbeat** (`features/timer/timerRun.ts`), which
+ *     mean nothing on another device and, beaten every 30 seconds through the normal write
+ *     path, would append 120 queue rows per hour of reading.
  *
+ * Local only, exactly like the search cache: enqueues nothing and signals no library change.
  * Here rather than in a `queries.ts` file because this is the only file allowed to write to
  * the database (no-bypass.test.ts).
+ *
+ * **Renamed from `saveDraft` in Slice 6.** It was always generic; the name stopped being
+ * true the moment the timer became its second caller.
  */
-export async function saveDraft(
+export async function saveLocalRecord(
   source: string,
   key: string,
   payload: string,
@@ -720,15 +727,15 @@ export async function saveDraft(
       })
     },
     (cause) =>
-      appError('recoverable', 'Could not keep that draft', {
-        safe: 'What you have typed is still on screen. Saving the note itself still works.',
+      appError('recoverable', 'Could not save that in the background', {
+        safe: 'What is on screen is unaffected, and saving it for real still works.',
         cause,
       }),
   )
 }
 
-/** Forget a draft: it was saved as a real note, or the reader discarded it. */
-export async function clearDraft(source: string, key: string): Promise<Result<void>> {
+/** Forget a local record: the note was saved or discarded, or the timer finished. */
+export async function clearLocalRecord(source: string, key: string): Promise<Result<void>> {
   return attempt(
     async () => {
       const db = getDb()
@@ -739,11 +746,117 @@ export async function clearDraft(source: string, key: string): Promise<Result<vo
       })
     },
     (cause) =>
-      appError('recoverable', 'Could not clear that draft', {
-        safe: 'Your note is saved. The draft may be offered again.',
+      appError('recoverable', 'Could not clear that background record', {
+        safe: 'Your work is saved. It may be offered again.',
         cause,
       }),
   )
+}
+
+/**
+ * Delete local records whose subject is gone, and report how many went.
+ *
+ * ─── WHY A SWEEP EXISTS AT ALL ───────────────────────────────────────────────
+ *
+ * Every local record is cleaned on its happy path: a note saves or is discarded, a timer
+ * finishes or is recovered. This is for the unhappy ones, which are the ones nobody writes
+ * code for — a process killed between the write and the clear, a build where the clear did
+ * not exist yet, a draft whose book was deleted while it was open.
+ *
+ * **One orphan is already known**, from a session discarded on 2026-09-18 before the recovery
+ * path cleared runs. Nothing would ever have read or removed it. One row is nothing; the
+ * shape is not, because it grows once per crash forever and nothing would ever notice.
+ *
+ * ─── WHAT COUNTS AS ORPHANED ─────────────────────────────────────────────────
+ *
+ * Deliberately conservative. A record goes only when its subject CANNOT come back:
+ *   - a `timer_run` whose session is finished (it has a duration), soft-deleted, or absent;
+ *   - a `note_draft` keyed `edit:<note id>` whose note is soft-deleted or absent;
+ *   - a `note_draft` keyed `new:<book id>` whose book is soft-deleted or absent.
+ *
+ * **A draft for a LIVE book is never touched, however old.** A half-written note is the
+ * reader's, and "they have not come back to it in a while" is not a reason to throw their
+ * words away — that is the entire promise of the draft.
+ *
+ * Queues nothing and signals nothing: `metadata_cache` is local-only. Intended to run once at
+ * launch, after migrations, where a failure is swallowed — tidying up must never be able to
+ * stop the app opening.
+ */
+export async function sweepLocalRecords(): Promise<Result<number>> {
+  return attempt(
+    async () => {
+      const db = getDb()
+      const rows = await db
+        .select({ source: metadataCache.source, sourceId: metadataCache.sourceId })
+        .from(metadataCache)
+        .where(inArray(metadataCache.source, [RUN_SOURCE, DRAFT_SOURCE]))
+      if (rows.length === 0) return 0
+
+      const orphans: { source: string; sourceId: string }[] = []
+      for (const row of rows) {
+        if (await isOrphanedRecord(db, row.source, row.sourceId)) orphans.push(row)
+      }
+      if (orphans.length === 0) return 0
+
+      // One transaction: a half-finished sweep would make the count mean nothing.
+      runInTransaction(() => {
+        for (const orphan of orphans) {
+          db.delete(metadataCache)
+            .where(
+              and(
+                eq(metadataCache.source, orphan.source),
+                eq(metadataCache.sourceId, orphan.sourceId),
+              ),
+            )
+            .run()
+        }
+      })
+      return orphans.length
+    },
+    (cause) =>
+      appError('recoverable', 'Could not tidy up old drafts', {
+        safe: 'Nothing of yours was affected. This is housekeeping only.',
+        cause,
+      }),
+  )
+}
+
+async function isOrphanedRecord(
+  db: Database,
+  source: string,
+  sourceId: string,
+): Promise<boolean> {
+  if (source === RUN_SOURCE) {
+    const found = await db
+      .select({ duration: sessions.durationSeconds, deleted: sessions.deletedAt })
+      .from(sessions)
+      .where(eq(sessions.id, sourceId))
+      .limit(1)
+    const row = found[0]
+    // Absent, finished or deleted: in all three the run describes nothing that is running.
+    return row === undefined || row.duration !== null || row.deleted !== null
+  }
+  if (source !== DRAFT_SOURCE) return false
+  if (sourceId.startsWith('edit:')) {
+    const found = await db
+      .select({ deleted: notes.deletedAt })
+      .from(notes)
+      .where(eq(notes.id, sourceId.slice('edit:'.length)))
+      .limit(1)
+    const row = found[0]
+    return row === undefined || row.deleted !== null
+  }
+  if (sourceId.startsWith('new:')) {
+    const found = await db
+      .select({ deleted: books.deletedAt })
+      .from(books)
+      .where(eq(books.id, sourceId.slice('new:'.length)))
+      .limit(1)
+    const row = found[0]
+    return row === undefined || row.deleted !== null
+  }
+  // A key in neither shape was written by a build that no longer exists.
+  return true
 }
 
 /**
@@ -915,10 +1028,16 @@ export async function updateRow<K extends SyncableTable>(
  * No-op until Slice 8, when the body is replaced with a Supabase push and pull. Nothing
  * else in the app changes at that point, which is the entire reason the queue ships now.
  *
- * When it is implemented, two rules from DECISIONS.md are not optional:
+ * When it is implemented, THREE rules from DECISIONS.md are not optional:
  *   1. `updated_at` comes back from the server and is written to the local row.
  *   2. A pull SKIPS any row with a pending queue entry, or it clobbers unsynced local
  *      work.
+ *   3. **The push SKIPS a `sessions` row that is still open** — `is_timed = 1` with
+ *      `duration_seconds IS NULL`. That is a timer RUNNING on this phone, and pushing it
+ *      would hand another device a session it would read as "still running" and offer its
+ *      owner a recovery sheet for. A running timer is device state until it stops; the row
+ *      goes up the moment it has a duration, which is the moment it becomes a session.
+ *      Decided 2026-09-19, before sync existed, so it cannot be discovered afterwards.
  */
 export async function drainSyncQueue(): Promise<Result<{ drained: number }>> {
   return attempt(

@@ -19,10 +19,12 @@
  */
 
 import { isDirty, type NoteForm } from './noteForm'
+import { DRAFT_SOURCE } from '@/db/localRecords'
 import type { NoteType } from '@/db/schema'
 
-/** The `metadata_cache.source` every note draft is filed under. */
-export const DRAFT_SOURCE = 'note_draft'
+// The storage key lives in `db/localRecords.ts` with the timer's, so nothing else has to
+// import this feature to know what a draft is filed under.
+export { DRAFT_SOURCE }
 
 /** What is being edited: a new note for a book, or an existing note. */
 export type DraftTarget =

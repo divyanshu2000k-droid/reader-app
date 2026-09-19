@@ -1,0 +1,7 @@
+{
+  "name": "reading-service",
+  "version": "0.1.0",
+  "description": "A real Android foreground service for a running reading session",
+  "main": "index.ts",
+  "private": true
+}

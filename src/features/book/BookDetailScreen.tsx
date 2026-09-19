@@ -63,6 +63,12 @@ export function BookDetailScreen() {
       [router, bookId],
     ),
   )
+  const startTimer = usePressGuard(
+    useCallback(
+      () => router.push({ pathname: '/session/timer', params: { book: bookId } }),
+      [router, bookId],
+    ),
+  )
   const editSession = usePressGuard(
     useCallback(
       (sessionId: string) =>
@@ -156,7 +162,15 @@ export function BookDetailScreen() {
                       {detail.current.review}
                     </Text>
                   ) : null}
-                  <ProgressCard book={detail.book} read={detail.current} onLog={openLog} />
+                  <ProgressCard
+                    book={detail.book}
+                    read={detail.current}
+                    onLog={openLog}
+                    // Only while the book is actually being read: see ProgressCard's props.
+                    onStartTimer={
+                      detail.current.status === 'reading' ? () => void startTimer() : undefined
+                    }
+                  />
                   <AboutCard
                     description={detail.book.description}
                     previewUrl={detail.book.previewUrl}

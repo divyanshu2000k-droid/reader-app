@@ -5,8 +5,23 @@ node_modules/
 !.env.example
 .expo/
 dist/
-android/
-ios/
+# ANCHORED with a leading slash, and it matters. An unanchored `android/` matches a
+# directory of that name at ANY depth, so it silently swallowed
+# `modules/reading-service/android/` — the entire Kotlin foreground service — which would
+# have been committed as a module with no native code in it, and a clean checkout would
+# have had no service at all. These two are the prebuild output at the repo root and
+# nothing else.
+/android/
+/ios/
+
+# A local native module's SOURCE is committed; its build output is not. Anchoring the two
+# rules above (correctly) also stopped them hiding `modules/*/android/build/`, and the first
+# `git add -A` after that tried to stage Gradle's transform cache and died on a dex file with
+# a path too long for Windows.
+modules/*/android/build/
+modules/*/android/.gradle/
+modules/*/android/.cxx/
+modules/*/ios/build/
 *.log
 .DS_Store
 

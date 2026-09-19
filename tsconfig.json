@@ -22,7 +22,8 @@
       "@/ui/*": ["./src/ui/*"],
       "@/db/*": ["./src/db/*"],
       "@/domain/*": ["./src/domain/*"],
-      "@/lib/*": ["./src/lib/*"]
+      "@/lib/*": ["./src/lib/*"],
+      "@/modules/*": ["./modules/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],

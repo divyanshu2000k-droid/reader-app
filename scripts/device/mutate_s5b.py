@@ -11,6 +11,7 @@ is the only interesting result.
 
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -119,6 +120,32 @@ MUTATIONS = [
 ]
 
 
+def restore(path, original, label):
+    """
+    Put a mutated file back, and REFUSE to continue quietly if it cannot be put back.
+
+    On 2026-09-18 a run died with `OSError: [Errno 22] Invalid argument` while writing —
+    a transient Windows lock, almost certainly from the `tsx` process still holding the file —
+    and the mutation was left in the source. The suite then failed on the next run and the
+    cause took a diff to find.
+
+    Windows file locks are transient, so retry; if it still will not write, say so loudly and
+    name the git command that fixes it, rather than exiting with the tree broken.
+    """
+    for attempt in range(5):
+        try:
+            path.write_bytes(original)
+            if path.read_bytes() == original:
+                return
+        except OSError:
+            pass
+        time.sleep(0.4 * (attempt + 1))
+    raise SystemExit(
+        f"\n!!! COULD NOT RESTORE {path} after mutation {label!r}.\n"
+        f"!!! THE SOURCE IS STILL MUTATED. Run:  git checkout -- {path}\n"
+    )
+
+
 def run(suite: str) -> bool:
     """True when the suite passes."""
     result = subprocess.run(
@@ -147,8 +174,7 @@ def main() -> int:
         try:
             passed = run(suite)
         finally:
-            path.write_bytes(original)
-            assert path.read_bytes() == original, f"{rel} was not restored byte for byte"
+            restore(path, original, label)
         if passed:
             print(f"GREEN {label}  <-- the guard did not catch this")
             green.append(label)

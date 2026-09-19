@@ -284,6 +284,8 @@ const fab = 52
 const tabBar = 58
 const tabRaiseRing = 5
 const minTouch = 44
+const timerRing = 268
+const timerRingRadius = 116
 const iconButton = 38
 const row = 8
 
@@ -301,6 +303,12 @@ export const size = {
   iconButtonLarge: 44,
   fab,
   timerButton: 68,
+  /** The reading timer's ring, from Reading.dc.html: a 268 box with a 116 radius. */
+  timerRing: timerRing,
+  timerRingRadius: timerRingRadius,
+  /** Its centre and circumference, named here rather than computed in the component. */
+  timerRingCentre: timerRing / 2,
+  timerRingCircumference: 2 * Math.PI * timerRingRadius,
   coverList: { w: 50, h: 74 },
   coverHeader: { w: 44, h: 64 },
   coverDock: { w: 38, h: 54 },
@@ -349,6 +357,9 @@ export const iconSize = {
 /** Stroke weights: navigation icons at 1.9, emphasis heavier. */
 export const iconStroke = {
   base: 1.9,
+  /** The timer ring's track and its filled arc. Reading.dc.html draws them 2.5 and 3. */
+  ringTrack: 2.5,
+  ringProgress: 3,
   header: 2,
   notice: 1.8,
   raised: 2.5,
@@ -523,6 +534,12 @@ export const rules = {
   sheetMaxHeightFraction: 0.9,
   /** Lines of a note shown in the list before it is cut. The editor shows all of it. */
   noteLines: 6,
+  /**
+   * How often the running timer re-renders. The elapsed time is DERIVED from timestamps
+   * (features/timer/timerState.ts), so this only decides how often the clock redraws — a
+   * missed tick costs a frame, never a second.
+   */
+  timerTickMs: 1000,
 } as const
 
 // ─── THEME OBJECT ────────────────────────────────────────────────────────────

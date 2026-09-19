@@ -16,7 +16,7 @@ import { StyleSheet, Text, View } from 'react-native'
 
 import { discardOpenSession, keepOpenSession, type OpenSession } from '../queries'
 import { checkMinutes, recoveryOffer } from '../recoveryPolicy'
-import { formatDuration, now } from '@/lib/dates'
+import { formatDuration } from '@/lib/dates'
 import { launch } from '@/lib/strings'
 import { BookCover } from '@/ui/BookCover'
 import { Button } from '@/ui/Button'
@@ -38,13 +38,14 @@ export function SessionRecoverySheet({ session, onResolved }: Props) {
   const [busy, setBusy] = useState<'keep' | 'discard' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Measured once, when the sheet appears: the bound should not keep growing while the
-  // reader is answering the question.
-  const elapsedSeconds = useMemo(
-    () => (now() - session.occurredAt) / 1000,
-    [session.occurredAt],
+  // Measured ONCE, by the query, bounded by the timer's last heartbeat where there was one
+  // (`features/launch/queries.ts`). Not recomputed here: the bound must not keep growing
+  // while the reader is answering the question, and `now - occurredAt` would also throw the
+  // heartbeat away — which is exactly what this screen did for all of Slice 6's first day.
+  const offer = useMemo(
+    () => recoveryOffer(session.boundedSeconds, session.maxSeconds),
+    [session.boundedSeconds, session.maxSeconds],
   )
-  const offer = useMemo(() => recoveryOffer(elapsedSeconds), [elapsedSeconds])
   const [minutesText, setMinutesText] = useState(
     offer.suggestedMinutes === null ? '' : String(offer.suggestedMinutes),
   )
@@ -127,7 +128,15 @@ export function SessionRecoverySheet({ session, onResolved }: Props) {
           {/* From the FLOORED bound, not the raw elapsed time: formatDuration rounds, so
               540.7 minutes read "9h 1m" here while the field refused anything over 540. */}
           {copy.started(formatDuration(offer.maxMinutes * 60))}{' '}
-          {offer.suggestedMinutes === null ? copy.asked : copy.offered}
+          {offer.suggestedMinutes === null
+            ? copy.asked
+            : offer.stoppedEarly
+              ? /* The app died before the session did — the phone stopped the timer while
+                   the reader carried on. Saying "this is the most it could have been" here
+                   would be false, and it is the ordinary case on a phone with background
+                   usage restricted. */
+                copy.stoppedEarly(formatDuration(offer.suggestedMinutes * 60))
+              : copy.offered}
         </Text>
 
         <Field

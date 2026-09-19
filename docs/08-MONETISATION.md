@@ -39,13 +39,23 @@ that would justify the anger the research documents, and we are not going to mak
 |---|---|---|
 | Reading soundscapes while the timer runs | 10 | Proven by Margins, genuinely used |
 | Comparative statistics | 10 | The only one with real pull at launch |
-| Custom shelf colours and covers | 10 | Cosmetic, but identity sells |
+| Custom shelf colours and covers | 10 | Cosmetic, but identity sells. **Restyling a cover, not photographing one** — see below |
 | Home screen widgets | v1.1 | **Not on the Plus list until it ships** |
 
 **Comparative statistics** is the one that earns money, so make it good. Not "you read 31
 books", which is free. Rather: *you read 40% more literary fiction than last year, your pace
 doubled in March, you finish audiobooks 30% faster than print.* Computed insight about
 their reading, not a readout of their data.
+
+**"Custom shelf colours and covers" does NOT mean photographing a cover.** Decided by the
+owner on 2026-09-18: **the camera is free, all three of its uses.** Photographing a cover,
+scanning a barcode to add a book, and snapping a page into a note are all free forever. A book
+added by hand has no cover at all, and charging to fix that would be charging for the app to
+work. The Plus item is restyling a cover the reader already has.
+
+This matters more than it looks, because of the rule at the top of this file: **the free list
+never shrinks.** Putting the camera behind Plus later would be exactly the move the research
+documents anger about, so it is settled now, before the feature is built.
 
 **Be realistic:** this is not a compelling ₹699 a year on its own. Expect **1 to 2%
 conversion at launch**, not the 3% in `01-PRODUCT.md`. Slice 10 is plumbing the payment

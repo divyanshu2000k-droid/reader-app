@@ -20,7 +20,10 @@ from phone import StepFailed, dump, find, require, tap, texts
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-WANT = ['Idgah', 'Godaan Test']  # visible without scrolling; Winter Letters is below the fold
+# The two books are CHOSEN FROM THE SCREEN, not named here. A hardcoded pair
+# (`['Idgah', 'Godaan Test']`) broke the moment the sandbox was reseeded with different
+# titles, and the failure looked like a missing book rather than a stale script.
+WANT_COUNT = 2
 
 
 def move_to_reading(title):
@@ -39,7 +42,31 @@ def move_to_reading(title):
     print(f'  moved {title} to Reading')
 
 
-for t in WANT:
+def top_want_titles(n):
+    """The first n books on the Want tab, read off the phone."""
+    s3lib.launch()
+    tap(r'^Want books$', 'Want tab')
+    time.sleep(2.5)
+    root = dump()
+    seen, titles = set(), []
+    for node in phone.nodes(root):
+        desc = node.get('content-desc') or ''
+        if node.get('clickable') != 'true' or ',' not in desc:
+            continue
+        if 'Cover of' in desc or 'Log a session' in desc:
+            continue
+        title = desc.split(',')[0].strip()
+        if title and title not in seen:
+            seen.add(title)
+            titles.append(title)
+        if len(titles) == n:
+            break
+    if len(titles) < n:
+        raise StepFailed(f'only {len(titles)} books on Want, need {n}')
+    return titles
+
+
+for t in top_want_titles(WANT_COUNT):
     move_to_reading(t)
 
 con = pulldb.pull('prep-%d' % int(time.time()))

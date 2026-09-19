@@ -54,7 +54,9 @@ src/
     trash/                Recently deleted: books, sessions and notes deleted on their own
       deletedLine.ts      Pure: what one deleted row says, per kind
     settings/
-    import/  sync/  timer/     (later slices)
+    timer/                The reading timer (Slice 6): ring, run state, heartbeat
+      queries.ts          Start/finish/discard, and the local run record
+    import/  sync/            (later slices)
   db/
     schema.ts             Drizzle schema, single source of truth
     migrations/
@@ -64,6 +66,7 @@ src/
     progressAggregates.ts Shared SQL: a read's progress. Held equal to domain/stats.ts by check 10
     currentRead.ts        Shared SQL: a book's current read. Every list of books filters with it
     noteCounts.ts         Shared SQL: how many notes and quotes a book has
+    localRecords.ts       The metadata_cache keys for device state, shared by features
     changes.ts            "The library changed": write.ts signals every committed change
     coverFiles.ts         A local copy of every cover, downloaded after adding
     bookDetails.ts        A book's description, categories and preview, fetched once from its source
@@ -90,6 +93,8 @@ src/
     bookDetails.ts        Pure: cleaning descriptions, categories, the preview link, what a fetch writes
     sessionLine.ts        Pure: what a session row says (book detail, Recently Deleted)
     noteLine.ts           Pure: "6 notes · 3 quotes" (the notes list, the actions sheet)
+    timerState.ts         Pure: segments, elapsed time, the clock and the ring
+    timerRun.ts           Pure: a running timer's stored state and the heartbeat bound
     isbn.ts               Pure: ISBN-10/13, checksums, one canonical form
     searchText.ts         Pure: how both searches compare text (case and accents)
     streaks.ts            Streak and goal calculation
@@ -506,8 +511,17 @@ in `CLAUDE.md`; this is what it means while writing code.
 
 **Every textual guard carries a positive control.** A regex over source text fails in one
 direction: it stops matching, and passes. So each one is fed a known-bad sample every run,
-and prose it must not flag. See `no-bypass.test.ts`, `contrast.test.ts` and
-`test-runner.test.ts`. A guard without a control is not a guard.
+and prose it must not flag. See `no-bypass.test.ts`, `contrast.test.ts`,
+`test-runner.test.ts` and `features/timer/__tests__/runtime-not-in-components.test.ts`. A
+guard without a control is not a guard.
+
+**The timer's runtime lives in `timerService.ts` and in no component.** Nothing else in
+`features/timer` may own a `setInterval`, a `setTimeout`, an `AppState` listener or a
+notification-response listener. A screen or hook that owns one stops the moment the reader
+navigates away, while the session stays open — which is audit finding 1, and which then
+happened a second time inside the fix for it, in the one listener that fix left behind.
+`runtime-not-in-components.test.ts` asserts the rule rather than the instances, and checks
+in both directions: nothing else has them, and the service still does.
 
 **Where we still have the weaker form.** Each is a candidate for a type, not an accepted
 state:
@@ -531,6 +545,13 @@ or whose pattern no longer matches, because the code was rewritten — fails the
 Slice 5b's first twenty-two went green, and both were the TEST being weaker than the rule it
 claimed to hold: a fixture that would have passed either way, and a set of inputs where
 "digits only" and `Number()` happen to agree. Neither would have been found by reading.
+
+**A unit test proves a function computes; it does not prove anyone calls it.** Slice 6's
+heartbeat had twelve passing assertions and no caller: the recovery sheet still computed
+`now - occurred_at`, so the tighter bound never reached a reader (silent-pass item 20).
+When a module exists to change what another module does, **assert the join**, in a test
+that would fail if the call were removed — and check the two paths give DIFFERENT
+answers, or the test passes against both.
 
 **Every type token reaches the style.** `typeStyle` is the only way a `<Text>` gets its font,
 and it silently dropped the `letterSpacing` of all seven tokens carrying one, for eight

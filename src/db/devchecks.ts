@@ -37,9 +37,10 @@ import { isCurrentRead } from './currentRead'
 import { progressAggregates } from './progressAggregates'
 import {
   cacheSearchResults,
-  clearDraft,
+  clearLocalRecord,
   restoreRow,
-  saveDraft,
+  saveLocalRecord,
+  sweepLocalRecords,
   softDelete,
   updateRow,
   writeBatch,
@@ -55,7 +56,8 @@ import {
 } from './backup'
 import { SCHEMA_VERSION } from './migrate'
 import { seedSampleLibrary, SEEDED_TITLE } from './seed'
-import { DRAFT_SOURCE } from '@/features/notes/noteDraft'
+import { DRAFT_SOURCE, RUN_SOURCE } from './localRecords'
+import { finishTimer, getTimerContext, saveRun, startTimer } from '@/features/timer/queries'
 import { currentPosition } from '@/domain/progress'
 import { finishedInYear } from '@/domain/finishes'
 import { totals } from '@/domain/stats'
@@ -1881,7 +1883,7 @@ async function checkDraftsAreLocal() {
       const before = (await getDb().select({ id: syncQueue.id }).from(syncQueue)).length
       const notesBefore = (await getDb().select({ id: notes.id }).from(notes)).length
 
-      const saved = await saveDraft(
+      const saved = await saveLocalRecord(
         DRAFT_SOURCE,
         key,
         '{"type":"note","content":"half a","page":""}',
@@ -1902,7 +1904,7 @@ async function checkDraftsAreLocal() {
       )
       assert(notesAfter === notesBefore, 'the draft created a row in notes')
 
-      const cleared = await clearDraft(DRAFT_SOURCE, key)
+      const cleared = await clearLocalRecord(DRAFT_SOURCE, key)
       assert(cleared.ok, 'could not clear the draft')
       const left = await getDb()
         .select({ payload: metadataCache.payload })
@@ -1913,6 +1915,201 @@ async function checkDraftsAreLocal() {
       return 'a draft stored and cleared, with 0 queue rows and 0 notes'
     },
   )
+}
+
+// ─── 19. A TIMED SESSION, THROUGH THE TIMER'S OWN WRITE PATH ─────────────────
+
+async function checkTimedSession() {
+  /**
+   * The timer writes to `sessions` like everything else, so the class of bug device checks
+   * exist for applies to it — and until 2026-09-19 none of the 36 checks touched a timed
+   * session at all.
+   *
+   * Asserted in the direction that can fail silently: an OPEN timed session is what the
+   * launch recovery gate looks for, so getting its shape wrong means either a reader is asked
+   * about a session that is finished, or never asked about one that is not.
+   */
+  await check(
+    '19. a timed session is open while it runs and closed when it finishes',
+    async () => {
+      const bookId = newId()
+      const readId = newId()
+      const created = await writeTogether([
+        {
+          table: 'books',
+          values: { id: bookId, title: 'Devcheck Timed Session', pageCount: 300 },
+        },
+        { table: 'reads', values: { id: readId, bookId, readNumber: 1, status: 'reading' } },
+      ])
+      assert(created.ok, 'could not create the book and its read')
+
+      const openBefore = await getDb()
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.isTimed, 1),
+            isNull(sessions.durationSeconds),
+            isNull(sessions.deletedAt),
+          ),
+        )
+      const context = await getTimerContext(bookId)
+      assert(context !== null, 'the timer could not find the book it was just given')
+      const started = await startTimer(context)
+      assert(started.ok, 'starting the timer failed')
+      const sessionId = started.value.sessionId
+
+      // OPEN: is_timed = 1 with no duration. That pair IS the schema's "still running".
+      const openRow = (
+        await getDb()
+          .select({
+            isTimed: sessions.isTimed,
+            duration: sessions.durationSeconds,
+            from: sessions.fromPosition,
+            to: sessions.toPosition,
+            localDay: sessions.localDay,
+          })
+          .from(sessions)
+          .where(eq(sessions.id, sessionId))
+      )[0]
+      assert(openRow !== undefined, 'Start wrote no session row')
+      assert(openRow.isTimed === 1, 'the timer wrote a session that is not marked timed')
+      assert(openRow.duration === null, 'a running timer already has a duration')
+      assert(openRow.to === null, 'a running timer already has an end position')
+      assert(openRow.localDay === toLocalDay(now()), 'local_day was not derived for the timer')
+
+      const openDuring = await getDb()
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.isTimed, 1),
+            isNull(sessions.durationSeconds),
+            isNull(sessions.deletedAt),
+          ),
+        )
+      assert(
+        openDuring.length === openBefore.length + 1,
+        `expected one more open session, went from ${openBefore.length} to ${openDuring.length}`,
+      )
+
+      // Exactly one queue row so far: the insert. A heartbeat must never enqueue.
+      await saveRun({ ...started.value.run, lastBeatAt: now() })
+      await saveRun({ ...started.value.run, lastBeatAt: now() + 1 })
+      const afterBeats = await queueRowsFor('sessions', sessionId)
+      assert(
+        afterBeats.length === 1,
+        `two heartbeats queued ${afterBeats.length - 1} extra sync rows; they must queue none`,
+      )
+
+      // CLOSED: finishing writes the duration, which is what takes it out of the gate's sight.
+      const finished = await finishTimer(sessionId, 754, 120)
+      assert(finished.ok, 'finishing the timer failed')
+      const closed = (
+        await getDb()
+          .select({ duration: sessions.durationSeconds, to: sessions.toPosition })
+          .from(sessions)
+          .where(eq(sessions.id, sessionId))
+      )[0]
+      assert(closed?.duration === 754, `duration is ${closed?.duration}, expected 754`)
+      assert(closed.to === 120, 'the end position was not written')
+
+      const openAfter = await getDb()
+        .select({ id: sessions.id })
+        .from(sessions)
+        .where(
+          and(
+            eq(sessions.isTimed, 1),
+            isNull(sessions.durationSeconds),
+            isNull(sessions.deletedAt),
+          ),
+        )
+      assert(
+        openAfter.length === openBefore.length,
+        `${openAfter.length - openBefore.length} sessions are still open after finishing`,
+      )
+      const finalQueue = await queueRowsFor('sessions', sessionId)
+      assert(
+        finalQueue.length === 2,
+        `expected 2 queue rows (insert, update), got ${finalQueue.length}`,
+      )
+      return `open then closed; 754s written; ${finalQueue.length} queue rows, none from heartbeats`
+    },
+  )
+}
+
+// ─── 20. THE SWEEP TAKES ORPHANS AND LEAVES THE READER'S WORK ────────────────
+
+async function checkLocalRecordSweep() {
+  /**
+   * The sweep's danger is not that it misses something — it is that it takes something.
+   * A draft for a live book is the reader's half-written note, and no age makes it rubbish.
+   * So this asserts both directions, and the KEEP direction is the one that matters.
+   */
+  await check('20. the sweep removes orphaned local records and keeps live ones', async () => {
+    const liveBookId = newId()
+    const deadBookId = newId()
+    const readId = newId()
+    const created = await writeTogether([
+      { table: 'books', values: { id: liveBookId, title: 'Devcheck Sweep Live' } },
+      { table: 'books', values: { id: deadBookId, title: 'Devcheck Sweep Dead' } },
+      {
+        table: 'reads',
+        values: { id: readId, bookId: liveBookId, readNumber: 1, status: 'reading' },
+      },
+    ])
+    assert(created.ok, 'could not create the sweep books')
+
+    // A finished timed session: its run is rubbish the moment the duration is written.
+    const doneSessionId = newId()
+    const doneSession = await writeRow('sessions', {
+      id: doneSessionId,
+      readId,
+      occurredAt: now(),
+      format: 'pages',
+      fromPosition: 0,
+      toPosition: 10,
+      durationSeconds: 60,
+      isTimed: 1,
+      note: null,
+    })
+    assert(doneSession.ok, 'could not create the finished session')
+
+    const deletedBook = await softDelete('books', deadBookId)
+    assert(deletedBook.ok, 'could not delete the sweep book')
+
+    const records = [
+      { source: RUN_SOURCE, key: doneSessionId, why: 'run for a finished session' },
+      { source: RUN_SOURCE, key: newId(), why: 'run for a session that does not exist' },
+      { source: DRAFT_SOURCE, key: `new:${deadBookId}`, why: 'draft for a deleted book' },
+      { source: DRAFT_SOURCE, key: `edit:${newId()}`, why: 'draft for a note that is gone' },
+    ]
+    for (const r of records) {
+      const saved = await saveLocalRecord(r.source, r.key, '{"kept":false}')
+      assert(saved.ok, `could not write the ${r.why}`)
+    }
+    // The one that must SURVIVE: a half-written note for a book that is still here.
+    const keeper = `new:${liveBookId}`
+    const kept = await saveLocalRecord(DRAFT_SOURCE, keeper, '{"content":"half a thought"}')
+    assert(kept.ok, 'could not write the draft that must survive')
+
+    const swept = await sweepLocalRecords()
+    assert(swept.ok, 'the sweep failed')
+
+    const left = await getDb()
+      .select({ source: metadataCache.source, sourceId: metadataCache.sourceId })
+      .from(metadataCache)
+      .where(inArray(metadataCache.source, [RUN_SOURCE, DRAFT_SOURCE]))
+    const leftKeys = left.map((r) => `${r.source}:${r.sourceId}`)
+    for (const r of records) {
+      assert(!leftKeys.includes(`${r.source}:${r.key}`), `the sweep left the ${r.why} behind`)
+    }
+    assert(
+      leftKeys.includes(`${DRAFT_SOURCE}:${keeper}`),
+      "THE SWEEP TOOK A LIVE BOOK'S DRAFT — the reader's half-written note",
+    )
+    return `${swept.value} orphans removed, the live draft kept`
+  })
 }
 
 // ─── ENTRY POINT ─────────────────────────────────────────────────────────────
@@ -1939,6 +2136,8 @@ export async function runDeviceChecks(): Promise<CheckResult[]> {
   await checkBookDetails()
   await checkNotesSurviveReads()
   await checkDraftsAreLocal()
+  await checkTimedSession()
+  await checkLocalRecordSweep()
   await cleanup()
 
   const runtime = results.filter((r) => r.kind === 'runtime')

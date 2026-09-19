@@ -55,6 +55,34 @@ def require_our_app():
         "someone else's screen. Bring the app forward and re-run.")
 
 
+# The ONLY packages that may be dumped besides our own, and only ever through
+# `dump_permission_dialog` below. Android's permission dialog is raised BY our app, shows our
+# app's name and two buttons, and contains nothing of the owner's. Nothing else goes on this
+# list: `require_our_app` stays exactly as strict as it was written, because the run that put
+# a private WhatsApp conversation into a session log is the reason it exists.
+PERMISSION_UI = ('com.google.android.permissioncontroller',
+                 'com.android.permissioncontroller')
+
+
+def dump_permission_dialog():
+    """
+    Dump Android's own permission dialog, and nothing else.
+
+    `require_our_app` refuses it, correctly — it is a different package. But the notification
+    permission is a ONE-SHOT dialog: spend it and it never appears again short of a fresh
+    install, so it has to be driven, not skipped. This refuses just as loudly for anything
+    that is not the permission UI.
+    """
+    top = foreground()
+    if top not in PERMISSION_UI:
+        raise ForeignScreen(
+            f'{top} is in the foreground, and it is not the permission dialog. '
+            "Refusing to dump it.")
+    adb('shell', 'uiautomator', 'dump', '/sdcard/ui.xml', check=False)
+    xml = adb('shell', 'cat', '/sdcard/ui.xml')
+    return ET.fromstring(xml[xml.find('<?xml'):])
+
+
 def dump():
     require_our_app()
     adb('shell', 'uiautomator', 'dump', '/sdcard/ui.xml', check=False)

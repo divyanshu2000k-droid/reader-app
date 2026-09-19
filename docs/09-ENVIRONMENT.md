@@ -1,5 +1,34 @@
 # ENVIRONMENT
 
+## Two traps that each cost a run on 2026-09-19
+
+**A dev client ignores `adb reverse`.** `expo run:android` bakes the LAN URL
+(`192.168.x.x:8081`) into the development client, and the client keeps using it. Serving a
+device-pass bundle on any other port means the phone quietly loads the ORDINARY bundle from
+8081 instead: the pass never runs, nothing is logged, and it looks exactly like a hang.
+`devpass.sh` now kills 8081 AND 8082 and serves on **8081**.
+
+**A local native module is not a config plugin.** Anything under `modules/` needs
+`npm run prebuild` and then `npx expo run:android` — a JS reload cannot pick up Kotlin. And
+`expo-module-gradle-plugin` fails configuration without `versionCode` and `versionName` in
+the module's `defaultConfig`, with the unhelpful message
+`'android.defaultConfig.versionName' is not defined`.
+
+## Driving the phone when it is the owner's
+
+`scripts/device/phone.py` refuses to dump any app but ours, and it will abort a run when a
+call comes in or the owner opens something else. That is correct and it is not a bug to work
+around: a run on 2026-09-18 continued while the owner was in WhatsApp and captured a private
+conversation into the session log.
+
+**The phone has a PIN**, so a script that sleeps the screen ends the whole session at a lock
+screen. Anything queued behind it fails at its first step. Put the locking run last.
+
+**Temporary phone state must be restored in a `finally`.** `s6_pocket.py` simulates
+unplugging (`dumpsys battery unplug`), forces deep doze (`dumpsys deviceidle force-idle`) and
+sometimes restricts background usage. All three are undone whatever happens, because they are
+the owner's phone's settings and a crashed script must not leave them set.
+
 How to build and run this project on a machine that has never built it, and how to run the
 device pass.
 
@@ -11,6 +40,29 @@ Nothing here is a decision. The reasoning behind these choices is in `DECISIONS.
 is the recipe.
 
 ---
+
+
+## The Gradle build needs a TEMP path without an 8.3 short name
+
+`npx expo run:android` fails on this machine with:
+
+```
+java.io.IOException: Unable to establish loopback connection
+```
+
+That is the AF_UNIX problem from `DECISIONS.md` (2026-09-03): Gradle opens a socket under
+the temp directory, and connect fails when the path is the 8.3 short-name form
+`C:\Users\DIVYAN~1\AppData\Local\Temp`. It is not a Gradle version, a JDK or a firewall
+problem, and `--no-daemon` does not help.
+
+**The fix, every time:**
+
+```sh
+TEMP="C:\gtmp" TMP="C:\gtmp" npx expo run:android
+```
+
+Any directory whose full path has no `~1` in it works. Verified 2026-09-18: the same
+build failed immediately with the default TEMP and succeeded in 5m 30s with this one.
 
 ## What is installed, exactly
 

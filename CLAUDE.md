@@ -125,6 +125,85 @@ The four, as evidence:
    column. **Two of the first twenty-two mutations went green, and both were the test, not the
    code.**
 
+20. **The heartbeat was written every 30 seconds and read by nobody.** Slice 6 added it so a
+   crashed timed session could be bounded by the last moment the app was known alive rather
+   than by how long the app was shut. Twelve node tests covered the arithmetic, including the
+   overnight case, and passed. **The recovery sheet never called any of it** — it still
+   computed `now - occurred_at`, as it had since Slice 1, so a session killed at 23:00 and
+   reopened at 08:00 was still offered nine hours. Typecheck, lint, 476 tests and the emulator
+   check were all green, because the emulator killed and relaunched three seconds apart, where
+   the two answers are identical. **The passing check was measuring nothing.** Found by
+   building the case where the answers differ: read 53 seconds, force-stop, wait four minutes,
+   reopen. Wall clock ~5 minutes; the sheet now offers 1.
+
+   The modules were also in the wrong place, and that is why the wiring was missing:
+   `features/launch` could not have called `features/timer`. They are in `domain/` now.
+   **A unit test proves a function computes. It does not prove anyone calls it.**
+
+21. **The notification the permission was asked for was never posted.** The priming sheet is
+   shown AFTER the timer starts, on purpose. So the first post always ran with no permission
+   and was refused, and `renotify` was called from `adopt`, `pause` and `resume` and from
+   nowhere else — **nothing retried**. A reader's first ever timed session therefore ran with
+   no notification, which on Android means no foreground service: the exact thing the
+   permission had just been granted for. Measured on a phone on 2026-09-19: granted, timer
+   running, 60 seconds of polling, zero notifications. **Every automated run had passed,
+   because every automated run was handed the permission with `pm grant` before starting the
+   timer.** The emulator was not wrong; it was never asked the question.
+
+22. **"Not now" was not remembered, because the code asked Android instead.** `shouldPrime`
+   asked whether ANDROID would still show its prompt. But "Not now" is deliberately never
+   passed to Android — that is the entire point of putting an explanation in front of a
+   one-shot dialog — so the status stayed `undetermined`, `canAskAgain` stayed true, and the
+   sheet came back on every new timer. **Android cannot remember an answer it was never
+   given.** The file's own comment said "Nagging is how an app earns a permanent denial",
+   three lines above the code that nagged.
+
+23. **THE FOREGROUND SERVICE DID NOT EXIST, and the whole slice was built on it.** A config
+   plugin declared `<service android:name="expo.modules.notifications.service.NotificationForegroundService">`
+   with the Android 14 type and the Play justification, above a comment reading "the class
+   itself comes from the library". **It does not.** It is not in `expo-notifications`, not
+   anywhere in `node_modules`, and appeared **0 times in the built APK's dex**. An Android
+   manifest happily declares a class that is absent: the merge succeeds, the build succeeds,
+   and nothing ever starts it. On a phone, `dumpsys activity services` said `(nothing)` and
+   the backgrounded process was `cch … (previous-expired)` at `oom_score_adj` **900**, the
+   first thing Android kills. It looked fine for a full slice, an audit and five device
+   scripts, because **an ongoing notification looks exactly the same whether or not a service
+   is behind it** — `s6_notification.py` passed 5/5 throughout.
+   **The general rule this earns:** for anything the OPERATING SYSTEM owns, only the
+   operating system is the authority. Not the config, not the manifest, not the code, and
+   emphatically not a notification that appears. `dumpsys` would have answered it in one
+   second on day one. **And a config plugin can only ever DECLARE** — something has to BE the
+   service, which is now `modules/reading-service`.
+
+24. **The notification's Finish button was wired to nothing.** The listener handled `pause`
+   and `resume` and fell through on `finish`. The button was built, read off a screenshot of
+   the expanded shade, and written up in three documents as working. The only signal would
+   have been a reader tapping Finish and watching the session carry on. Its identifiers now
+   exist in Kotlin and TypeScript with a test holding them equal, because that pair cannot
+   import each other and a rename on either side is silent.
+
+25. **The heartbeat only ran when it was not needed.** Item 20 was "the heartbeat was
+   written and read by nobody". The fix wired it up, and twelve node tests plus an emulator
+   check went green. Measured on a phone a day later: **2 beats in 75 seconds with the app in
+   front, 0 in the next 75 with it backgrounded, 0 in six minutes of doze.** React Native's
+   timers are driven by frame callbacks and a backgrounded app draws no frames — so the
+   heartbeat, whose entire purpose is bounding a kill that happens while the app is in the
+   background, had never once run in the background. Every test exercised it in the
+   foreground, which is the one place it was never needed. It is a `HandlerThread` in the
+   foreground service now, and the check measures the backgrounded case explicitly.
+
+26. **The cap on a recovered session quietly became a lie.** `recoveryPolicy.ts` refuses
+   anything above `maxMinutes`, and the whole file rests on one sentence: "nobody can have
+   read longer than it". That is true of `now - occurredAt` — wall clock, a physical limit.
+   Slice 6 changed the bound to the heartbeat, which is only how long the APP stayed alive,
+   and **a reader reads for longer than that every time their phone stops the timer.**
+   Nothing noticed, because on a healthy phone the two numbers are identical. With "restrict
+   background usage" set, Android killed the service 67 seconds into a session: five minutes
+   of reading could only be saved as one, and the error said "It started 1 minute ago", which
+   was false. **When you tighten a bound, check every rule that was relying on it being
+   loose.** The app is the authority on how long it was running; the reader is the authority
+   on how long they read.
+
 Add another if the theme counts: `font.family` was declared from the first commit and
 applied by nothing, so the entire app rendered in the wrong typeface without a single
 error anywhere.
@@ -170,6 +249,18 @@ in the same sitting.**
 A fourth has the same shape: fixing the backup's version label introduced the `SELECT` that
 held a read lock and broke the next line's checkpoint. Two fixes in a row, same file, the
 second breaking the first.
+
+**A fifth, 2026-09-19, and it is the cleanest example yet.** Audit finding 1 was that the
+timer's runtime lived in the timer SCREEN, so leaving the screen stopped the heartbeat, the
+notification and its Pause button. The fix moved four things into `timerService.ts` — and
+left the fifth, an `AppState` listener that beats just before the app is backgrounded, in
+`useTimer`. So the beat-before-a-kill still only happened for a reader who was looking at the
+timer, and reading with a timer running is precisely leaving that screen. **The fix's own
+service hid it**: the 30-second tick kept beating, so only the final beat was lost, and
+nothing measured the final beat. The guard that now exists
+(`features/timer/__tests__/runtime-not-in-components.test.ts`) asserts the RULE — nothing in
+the feature but the service owns a subscription or a timer — rather than the four instances
+that were moved.
 
 **What they share, and it is not carelessness:**
 
@@ -342,6 +433,80 @@ Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
 
+**Slice 6, the timer, is BUILT AND VERIFIED ON A REAL PHONE** (Nothing Phone 2a, Android 16),
+2026-09-19. Results and numbers: `docs/device-checks/slice-6.md`.
+
+**The phone found that the foreground service did not exist**, and everything in the slice
+rested on it. `plugins/withReadingService.js` declared a `<service>` naming
+`expo.modules.notifications.service.NotificationForegroundService` — a class that is not in
+`expo-notifications`, not anywhere in `node_modules`, and appeared **0 times in the built
+APK**. `dumpsys activity services` said `(nothing)`; the backgrounded process was `cch` at
+`oom_score_adj` **900**, first in line to be killed. It survived a slice, an audit and five
+green device scripts because **an ongoing notification looks identical whether or not a
+service is behind it**. Silent-pass item 23.
+
+- **The fix is `modules/reading-service`**, a local Expo module wrapping a real Kotlin
+  `Service`. **A config plugin can only DECLARE; something has to BE the service.** It owns
+  the notification (because `startForeground` demands its own) and the Pause/Finish
+  `PendingIntent`s (because they must work when no JavaScript is running).
+- **Re-measured, backgrounded: `fg +50 F/S/FGS (fg-service-act)`, adj 50.** Item 1, twenty
+  minutes locked in forced deep doze: service foreground at **13 of 13** samples, notification
+  13 of 13, native heartbeat **11 s old** at the end. VERDICT: SURVIVED, against DID NOT
+  SURVIVE for the same run against the build as it arrived.
+- **Swiping the app off Recents does not stop it** (`stopWithTask="false"` holds).
+  **Restricting background usage does**, at 67 s — Android demotes the service the instant the
+  restriction is applied. That cannot be prevented; what the app now gets right is the
+  aftermath.
+- **What the timer costs:** `cpu:bg=0.0341 mAh` for 20 minutes in deep doze, about 0.1 mAh an
+  hour. The screen in the same window was 60.1. Item 7, measured rather than assumed.
+- **Audit finding 6 is CLOSED:** the `displayLg` clock fits at 200% font and at 360 dp, dark
+  and light, with Pause and Finish still on screen.
+
+**Six more bugs came out of the same session, each now with a check watched failing:**
+1. **A reader's first ever timed session got no notification at all** — the priming sheet
+   comes after the timer starts, so the first post is always refused, and nothing retried.
+   Item 21.
+2. **The `AppState` listener was still in the screen** — audit finding 1 living on inside its
+   own fix. Guarded by `runtime-not-in-components.test.ts`, which asserts the RULE.
+3. **"Not now" was not remembered**, so the sheet returned on every new timer. Item 22.
+4. **The notification's Finish button was wired to nothing.** Item 24.
+5. **The heartbeat only ran when it was not needed.** Measured: 2 beats / 75 s with the app in
+   front, **0** backgrounded, **0** in six minutes of doze. React Native's timers need frames.
+   It is a `HandlerThread` in the service now — 12 s old after six minutes of doze. Item 25.
+6. **The recovery cap quietly became a lie.** `maxMinutes` rests on "nobody can have read
+   longer than it", true of wall clock and false of the heartbeat. With background usage
+   restricted, Android killed the service at 67 s and five minutes of reading could only be
+   saved as one. `maxMinutes` is the wall clock again; the heartbeat is the SUGGESTION.
+   Item 26.
+
+**Held automatically:** **506 node tests**, 121 per timezone, typecheck, lint and Prettier
+clean, **22/22 Slice 6 mutations red**, **4/4 device-check mutations red**, device pass
+**RUNTIME 38/38 · COMPILE-TIME 1/1**. `reader.db` md5 `1623cf85…` and wal `6ab7bff2…`
+identical before and after the whole session.
+
+- **`14c` is explained and CLOSED.** It failed on the emulator and was written up as
+  unexplained; on the phone it passed. It was the emulator's network.
+- **Background restriction kills the timer, and always will** — Android demotes the service
+  the moment it is applied. What the app now gets right is the aftermath: the sheet says how
+  long the session has existed, suggests how long the app was alive, and lets the reader
+  record what they actually read.
+- **The owner's phone is a Nothing Phone 2a**, near-stock AOSP. It is the FLOOR for the
+  background-kill risk, not the test of it; validate on Xiaomi or Samsung via beta testers.
+  The `restricted` run is the closest stand-in available here.
+- **Not run: a real overnight (item 4), the ring past an hour by eye, and item 7 across a
+  full hour** (measured over 20 minutes instead).
+- **Filed against Slice 11, found here:** `MainActivity`'s `configChanges` omits `fontScale`
+  and `density`, so changing the system text size **restarts the app** — a reader who does it
+  mid-session loses the running timer and meets the recovery sheet. App-wide, true since
+  Slice 0, and the font pass is where React Native should be made to handle it.
+- **Filed, not fixed:** the notification is collapsed by default, so Pause needs an expand
+  first. Ordinary for a LOW-importance channel.
+- **Windows build note:** `npx expo run:android` needs `TEMP="C:\gtmp" TMP="C:\gtmp"` or
+  Gradle dies with "Unable to establish loopback connection" (`09-ENVIRONMENT.md`). After
+  changing `app.config.ts`, a plugin, or anything in `modules/`: `npm run prebuild` THEN
+  `npx expo run:android`.
+
+
 **Slice 5b is built and verified on the phone.** 43 screen checks passed on 2026-09-18, plus
 the device pass. Results: `docs/device-checks/slice-5b.md`.
 - **What it does:** a Notes row on the actions sheet carrying the book's counts; the notes list
@@ -393,8 +558,9 @@ the device pass. Results: `docs/device-checks/slice-5b.md`.
   assertion. Device pass RUNTIME 34/34 · COMPILE-TIME 1/1, with checks 15 and 16 watched failing.
   It ran before the 2026-09-15 review fixes, and is re-run first next session.
 - **Waiting on the owner** (`DECISIONS.md`, 2026-09-15):
-  - Photo covers in Add manually: free or Plus.
-  - When to build the barcode scanner. Recommended with photo covers: one camera rebuild.
+  - ~~Photo covers free or Plus~~ — **answered 2026-09-18: the camera is FREE, all three
+    uses** (cover photo, barcode scan, snap a page into a note). Built last, with Slice 11 or
+    post-launch; the three decisions that could not wait are in `DECISIONS.md`.
   - Open Library covers at `-L`.
   - Optionally regenerate the Google key, which was pasted in chat.
 - **Phone automation** lives in `scripts/device/` (README), not in a session scratchpad.
@@ -418,9 +584,10 @@ the device pass. Results: `docs/device-checks/slice-5b.md`.
   the Books API only. Restricting it to the app would break search until `api.ts` sends the
   Android headers (Slice 11). Tests run on real Google captures; 321 tests pass.
 
-**Next: Slice 6, the timer** — the hardest technical work in Phase 1, with a hard two-week
-limit written down before it starts (`DECISIONS.md`, 2026-09-03). Build to the phone at the
-START of that slice, not the end.
+**Next: a real phone, for Slice 6.** Everything is built; nothing is proven.
+`docs/device-checks/slice-6.md`, starting with item 1 — twenty minutes with the phone locked
+in a pocket, then the same with background restricted. That measurement decides whether the
+two-week cut gets invoked.
 
 **Slice 3 is built and verified on the phone, except four checks that need the owner to change
 phone settings.**

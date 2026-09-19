@@ -23,9 +23,37 @@ def step(name, fn):
         return False
 
 
-def launch(wait=r'^Reading books$'):
+RECOVERY = r'A session was still running'
+
+
+def dismiss_recovery():
+    """
+    Discard a recovered session if the launch gate is offering one, and say so.
+
+    OPT-IN, never automatic: `s6_recovery.py` and `s6_overnight.py` exist to READ this sheet,
+    and a launch that silently cleared it would delete the thing they measure. It is here
+    because any check that force-stops a phone with a timer running meets the sheet on the way
+    back, and one left over from an earlier script otherwise fails the next one at its first
+    step with a message about the Reading tab.
+    """
+    root = phone.dump()
+    if not find(root, RECOVERY):
+        return None
+    offered = [t.strip('|') for t in texts(root) if 'You started timing it' in t]
+    tap(r'Discard it', 'discard the recovered session')
+    time.sleep(3)
+    return offered[0] if offered else 'a recovered session'
+
+
+def launch(wait=r'^Reading books$', clear_recovery=False):
     phone.adb('shell', 'am', 'force-stop', phone.PKG)
     subprocess.run(['adb', 'shell', 'monkey', '-p', phone.PKG, '-c', 'android.intent.category.LAUNCHER', '1'], capture_output=True)
+    if clear_recovery:
+        require(rf'{RECOVERY}|{wait[1:-1] if wait.startswith("^") else wait}',
+                'app launched', 150)
+        dismissed = dismiss_recovery()
+        if dismissed:
+            print(f'  (discarded a leftover recovered session: {dismissed[:60]})')
     require(wait, 'app launched', 150)
     time.sleep(1.5)
 

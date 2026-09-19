@@ -1,0 +1,28 @@
+// `expo-module-gradle-plugin` is what every module in node_modules/expo-* uses: it sets the
+// compile/min/target SDKs, the Kotlin and Java versions, and the expo-modules-core
+// dependency from the one place they are defined. A hand-rolled version of this file drifts
+// out of step with the SDK on the next upgrade, silently, until a build fails.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.readingservice'
+version = '0.1.0'
+
+android {
+  namespace 'expo.modules.readingservice'
+
+  // `expo-module-gradle-plugin` reads both of these and fails configuration without them:
+  // "'android.defaultConfig.versionName' is not defined". Every module under node_modules/
+  // declares them too.
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+}
+
+dependencies {
+  // NotificationCompat, for the notification the service must supply to startForeground.
+  implementation 'androidx.core:core-ktx:1.13.1'
+}

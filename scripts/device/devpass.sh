@@ -3,10 +3,16 @@
 set -u
 LABEL=$1
 cd "$(dirname "$0")/../.."
-PID=$(powershell -NoProfile -Command "(Get-NetTCPConnection -LocalPort 8082 -State Listen -ErrorAction SilentlyContinue).OwningProcess")
-[ -n "$PID" ] && taskkill //F //T //PID $PID >/dev/null 2>&1
+# PORT 8081, NOT 8082. A dev client built by `expo run:android` remembers the LAN URL it was
+# built with (192.168.x.x:8081) and IGNORES `adb reverse`. Serving the device-pass bundle on
+# 8082 meant the phone quietly loaded the ORDINARY bundle from 8081 instead: the pass never
+# ran, nothing was logged, and the run looked like a hang. That cost three runs on 2026-09-18.
+for P in 8081 8082; do
+  PID=$(powershell -NoProfile -Command "(Get-NetTCPConnection -LocalPort $P -State Listen -ErrorAction SilentlyContinue).OwningProcess")
+  [ -n "$PID" ] && taskkill //F //T //PID $PID >/dev/null 2>&1
+done
 sleep 2
-EXPO_PUBLIC_DEVICE_PASS=1 npx expo start --dev-client --clear --port 8082 > /c/Temp/metro-dp-$LABEL.log 2>&1 &
+EXPO_PUBLIC_DEVICE_PASS=1 npx expo start --dev-client --clear --port 8081 > /c/Temp/metro-dp-$LABEL.log 2>&1 &
 until grep -q "Waiting on" /c/Temp/metro-dp-$LABEL.log; do sleep 2; done
 adb logcat -c
 adb shell am force-stop com.example.reader

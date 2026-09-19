@@ -89,6 +89,12 @@ const config: ExpoConfig = {
     'expo-status-bar',
     'expo-sqlite',
     /**
+     * The reading timer's foreground service (Slice 6). Adds the permissions and the
+     * Android 14 service type; it writes no Java. See plugins/withReadingService.js for
+     * what is NOT proven about it, which is everything that needs a real phone.
+     */
+    './plugins/withReadingService',
+    /**
      * The Android 12+ system splash. Configured here rather than drawn in JS because the
      * system shows it before any JS exists — which is the only way to hit the sub-800ms
      * budget in docs/05-BUILD-PLAN.md. `src/features/launch` only decides when to HIDE it.

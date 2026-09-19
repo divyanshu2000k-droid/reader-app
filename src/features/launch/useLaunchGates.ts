@@ -43,6 +43,8 @@ import type { UpdateRequirement } from './forceUpdatePolicy'
 import { evaluate, type LaunchGate } from './gateOrder'
 import { getOpenSession, type OpenSession } from './queries'
 import { useMigrationStatus, type MigrationState } from '@/db/migrate'
+import { sweepLocalRecords } from '@/db/write'
+import { devLog } from '@/lib/devLog'
 
 export type { LaunchGate }
 
@@ -124,6 +126,25 @@ export function useLaunchGates(): LaunchState {
     return () => {
       cancelled = true
     }
+  }, [migration.status.state])
+
+  /**
+   * Housekeeping, after the database is migrated and behind everything that matters.
+   *
+   * Removes `metadata_cache` rows whose subject is gone — a timer run for a finished session,
+   * a draft for a deleted book. Each is cleaned on its happy path already; this is for the
+   * unhappy ones, which grow once per crash and which nothing else would ever notice.
+   *
+   * **It gates nothing and it is never awaited by a gate.** A failure is a dev log and
+   * nothing more: tidying up must not be able to stop the app opening. Once per launch is
+   * plenty for something that accumulates one row at a time.
+   */
+  useEffect(() => {
+    if (migration.status.state !== 'done') return
+    void sweepLocalRecords().then((result) => {
+      if (result.ok && result.value > 0)
+        devLog('swept local records', { removed: result.value })
+    })
   }, [migration.status.state])
 
   /** The reader answered the recovery sheet. Nothing left to recover. */

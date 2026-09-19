@@ -149,7 +149,7 @@ module.exports = [
     // Metro, Babel and ESLint's own config are CommonJS by necessity, and so are the
     // developer scripts in scripts/ — they run under bare node, not under Metro. They
     // are also command-line tools whose entire job is printing to stdout.
-    files: ['*.config.js', 'eslint.config.js', 'scripts/**/*.js'],
+    files: ['*.config.js', 'eslint.config.js', 'scripts/**/*.js', 'plugins/**/*.js'],
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
       'no-console': 'off',

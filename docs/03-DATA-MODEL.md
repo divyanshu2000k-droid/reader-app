@@ -282,6 +282,20 @@ different tables. Written separately, a failure between them left a book with no
   it came off disk and may have been written by an older build. A corrupt cache must not be
   able to stop the editor opening.
 
+**As built in Slice 6: the table also holds a running timer.**
+- **`source` is `timer_run`**, keyed by the session id, holding the segments and the last
+  heartbeat. Written by `saveLocalRecord` and removed by `clearLocalRecord`, both in
+  `write.ts`, both of which queue nothing.
+- **Why here and not on `sessions`:** the session ROW is library data and is written at Start.
+  The segments are device state that changes on every pause. Decisively, **a heartbeat every
+  30 seconds through the normal write path would append a `sync_queue` row every 30 seconds** —
+  120 an hour, describing a timer no other device will ever see.
+- **It is cleared on three paths**, and all three matter: finishing, discarding, and the launch
+  recovery gate saving or discarding a crashed session. The third was missing until
+  2026-09-18 and leaked one row per crash.
+- The storage keys for both this and note drafts live in `db/localRecords.ts`, so
+  `features/launch` can clear them without importing the feature that wrote them.
+
 **`notes.read_id` is provenance and nothing else.** Nothing filters on it, `notes` is not a
 cascade child of `reads`, and `books` is a note's only guarded parent in `write.ts`. All three
 are the same decision: a quote captured during a first read is still the book's during a third,
@@ -440,12 +454,18 @@ the two equal** on sampled reads and on deliberately awkward sessions.
 4. Pull uses `updated_at > last_sync_at`, newer wins per row, **except** that a row with a
    pending entry in `sync_queue` is skipped. The un-pushed local edit is the newer one and
    will become authoritative on the next drain
-5. Deletes propagate as `deleted_at` being set, never as row removal
-6. A purge job removes rows with `deleted_at` older than 30 days, on both ends. **Not built
+5. **The push skips a `sessions` row that is still open** — `is_timed = 1` with
+   `duration_seconds IS NULL`. That row is a timer running on THIS device. Pushing it would
+   give another device a session it reads as "still running", and its owner a recovery sheet
+   for a timer on a phone they are not holding. It goes up the moment it has a duration, which
+   is the moment it stops being device state and becomes a session. Decided 2026-09-19, before
+   sync was built
+6. Deletes propagate as `deleted_at` being set, never as row removal
+7. A purge job removes rows with `deleted_at` older than 30 days, on both ends. **Not built
    until Slice 8.** Until then nothing is ever removed for good, and Recently Deleted lists
    every deleted book rather than hiding those past 30 days: a row hidden but not purged is
    data the reader can no longer see and has not lost
-7. `last_sync_at` lives in MMKV, not SQLite, so a database reset forces a full resync.
+8. `last_sync_at` lives in MMKV, not SQLite, so a database reset forces a full resync.
    It stores a **server** timestamp, taken from the pull response, never a local clock read
 
 Row Level Security on Postgres: every table gets a `user_id` and a policy restricting all

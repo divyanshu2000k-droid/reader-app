@@ -12,6 +12,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import type { BookSummary, ReadSummary } from '../queries'
 import { isAudiobook, progressDisplay } from '@/domain/progressDisplay'
 import { formatDuration } from '@/lib/dates'
+import { actions } from '@/lib/strings'
 import { Button } from '@/ui/Button'
 import { ProgressBar } from '@/ui/ProgressBar'
 import { font, radius, rules, space, typeStyle } from '@/ui/theme'
@@ -22,9 +23,15 @@ interface Props {
   read: ReadSummary
   /** Opens the session logger for this book's current read. */
   onLog: () => void
+  /**
+   * Starts the reading timer (Slice 6). Absent for a read that is not in progress: timing a
+   * book you have finished is not a thing anyone does, and a control that means nothing is
+   * worse than no control.
+   */
+  onStartTimer?: (() => void) | undefined
 }
 
-export function ProgressCard({ book, read, onLog }: Props) {
+export function ProgressCard({ book, read, onLog, onStartTimer }: Props) {
   const c = useColors()
   const display = progressDisplay({
     ...read,
@@ -65,6 +72,9 @@ export function ProgressCard({ book, read, onLog }: Props) {
           No sessions yet. Log one for any day, including days that have already passed.
         </Text>
         <Button label={audio ? 'Log listening' : 'Log pages'} onPress={onLog} />
+        {onStartTimer ? (
+          <Button label={actions.startTimer} variant="secondary" onPress={onStartTimer} />
+        ) : null}
       </View>
     )
   }
@@ -116,6 +126,9 @@ export function ProgressCard({ book, read, onLog }: Props) {
           .join(' · ')}
       </Text>
       <Button label={audio ? 'Log listening' : 'Log pages'} onPress={onLog} />
+      {onStartTimer ? (
+        <Button label={actions.startTimer} variant="secondary" onPress={onStartTimer} />
+      ) : null}
     </View>
   )
 }

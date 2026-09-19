@@ -245,6 +245,33 @@ just disappears with nothing restored.
 
 ---
 
+**The timer, as built in Slice 6** (`features/timer`, route `session/timer?book=`):
+- **Start writes the `sessions` row before the ring draws**, `is_timed = 1` with no duration,
+  which is the schema's definition of "still running" and exactly what the launch recovery
+  gate looks for. A crash one second in loses nothing.
+- **The elapsed time is DERIVED from timestamps, never counted.** A session is a list of
+  segments; pausing closes one and resuming opens another, so paused time is not reading. A
+  counter incremented by a tick would under-count whenever Android suspends the JS thread —
+  which is whenever the screen is off, i.e. whenever someone is reading.
+- **The ring is a one-hour sweep that fills and then holds.** Not progress toward a goal: a
+  reading session has no target length, and inventing one would be the app telling the reader
+  how long to read.
+- **Finish routes to Session complete**, which already owns the end page, the streak and the
+  date. The timer knows the duration and does not know the page.
+- **The notification is what keeps the timer alive**, not a progress display: Android kills a
+  foreground service whose notification is gone. Silent, ongoing, carrying Pause and Finish,
+  and refreshed only on state changes — a per-second update is a per-second wakeup for a
+  number nobody is looking at.
+- **Permission priming** explains that before the system prompt, because Android's dialog can
+  only be asked once. "Not now" is offered as an equal, and the timer works without it.
+- **KNOWN DEFECT, 2026-09-18:** the runtime lives in the screen, so leaving it stops the
+  heartbeat, the notification refresh and the notification's buttons. See
+  `docs/10-AUDIT-2026-09-18.md`, finding 1. Not fixed at the time of writing.
+- **A book removed mid-timer:** the timer stops, clears its notification, and says the
+  session went to Recently Deleted with the book. Restoring the book restores both.
+
+---
+
 ## Journey F · Finishing a book
 
 Half star rating, optional private note, editable finish date defaulting to today. On save:
@@ -406,7 +433,10 @@ implying something is locked.
 This spec was written by walking eleven journeys, and eleven is not all of them. Things
 likely still missing, offered as prompts rather than a list to work through:
 
-- What happens when a book is deleted while its timer is running?
+- ~~What happens when a book is deleted while its timer is running?~~ **Answered
+  2026-09-19: the timer stops and says so.** The cascade takes the session with the book;
+  the timer notices through `db/changes.ts`, clears its notification, and tells the reader
+  the session went to Recently Deleted and comes back with the book. See `DECISIONS.md`.
 - What happens if the same book is added twice by different editions?
 - What if a session's `to_position` exceeds the book's page count, because the page count
   was wrong?

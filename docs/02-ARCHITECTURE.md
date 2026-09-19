@@ -51,6 +51,38 @@ Supporting reasons:
   unlimited.** Keep EAS for release builds only. This is a real advantage of Android only
 - Expo Router is file based, so navigation structure is legible rather than configured
 - Over the air updates let you ship JS fixes without a Play Store review cycle
+**`modules/reading-service`, a LOCAL Expo module, added 2026-09-19.** A real Kotlin
+`Service` plus a thin TypeScript wrapper, in `modules/` where `prebuild --clean` cannot wipe
+it. It is what actually keeps a reading session alive, and it owns the notification, because
+`startForeground` requires the service to supply its own.
+
+It exists because of the sharpest lesson in this slice: **a config plugin can only ever
+DECLARE.** `plugins/withReadingService.js` declared a `<service>` naming
+`expo.modules.notifications.service.NotificationForegroundService` — a class that does not
+exist in `expo-notifications` and appears nowhere in `node_modules` — above a comment saying
+"the class itself comes from the library". The manifest merged, the build succeeded, nothing
+started it, and on a real phone `dumpsys activity services` returned `(nothing)` while the
+process sat at `oom_score_adj` 900, first in line to be killed. The `<service>` element now
+lives in the module's own manifest, next to the class it names, so the two cannot drift apart
+without the module failing to compile.
+
+Writing native code was rejected for this in Slice 6 as "a native class to maintain, in a
+project whose owner does not maintain native classes". That was the wrong trade: the
+alternative turned out to be not having the feature at all, and not knowing it.
+
+**`expo-notifications`, installed in Slice 6 (2026-09-18).** Now used for exactly ONE thing:
+asking for the `POST_NOTIFICATIONS` permission. It does not post the timer notification and
+never supplied a foreground service. Three things about it cost a session each to find, and
+are kept here because they will bite again the day anything else sends a notification:
+- **Foreground notifications are suppressed** unless `setNotificationHandler` opts in. A timer
+  screen is by definition foregrounded, so without it nothing is ever shown and nothing logs.
+- **`channelId` lives on the TRIGGER, not the content.** `trigger: null` therefore lands on
+  Expo's fallback channel at importance 4; `trigger: { channelId }` is the channel-aware
+  immediate trigger.
+- **Installing it required `"overrides": { "react-dom": "19.2.3" }`.** The tree held a
+  `react-dom` one minor ahead of what SDK 57 pins, which is drift rather than an
+  incompatibility. `react-dom` never enters an Android bundle.
+
 - The specific native modules needed are all mature: `expo-sqlite`, `expo-notifications`,
   `expo-task-manager`, `expo-file-system`, `expo-document-picker`
 - The path to iOS in month twelve is open without a rewrite
@@ -83,9 +115,16 @@ Be honest about these rather than discovering them in month four:
 - **Widgets need native code.** React Native has no first class widget story. Use
   `react-native-android-widget`, which works but is a real integration. Budget several days
   and treat the widget as v1.1 if it fights you.
-- **The foreground service needs a config plugin.** `expo-notifications` alone will not keep
-  a timer alive reliably. You will write or adapt an Expo config plugin that declares the
-  foreground service in the manifest. This is the hardest technical item in Phase 1.
+- **The foreground service needs NATIVE CODE, not a config plugin.** This line used to say a
+  config plugin, and that advice cost a full slice: a plugin can add a `<service>` element,
+  and an element pointing at a class nobody ships does nothing, silently. `expo-notifications`
+  has no foreground-service API and no such class. The answer is a local Expo module
+  (`modules/reading-service`) — about 200 lines of Kotlin, autolinked, no third-party
+  dependency. Still the hardest technical item in Phase 1.
+- **Verify it with `dumpsys`, never with the notification.** An ongoing notification looks
+  identical whether or not a service is behind it. `adb shell dumpsys activity services <pkg>`
+  must name the service and say `isForeground=true`, and `/proc/<pid>/oom_score_adj` must be
+  near 0 rather than 900. `scripts/device/s6_foreground_service.py` asserts all three.
 - **You must use a development build, not Expo Go.** Expo Go cannot load custom native
   modules. Set up `npx expo prebuild` and EAS development builds on day one, not later.
 - **List performance needs care.** Importers arrive with 500 to 2000 books. Use FlashList
@@ -272,7 +311,7 @@ counts break progress and statistics silently, which is worse than an obvious er
 | Concern | Choice | Why |
 |---|---|---|
 | Navigation | Expo Router | File based, legible, deep linking free |
-| State | Zustand | Minimal, no boilerplate, assistant writes it well |
+| State | React state, plus module singletons where something must outlive a screen | **Zustand was removed on 2026-09-18, unused since Slice 0.** Six slices in, nothing has needed a global store: screens hold their own state, `db/changes.ts` signals writes, and `features/timer/timerService.ts` owns the one thing that must survive navigation. Same rule as MMKV (`DECISIONS.md`, 2026-09-03) — install a dependency in the slice that uses it, not the slice that anticipates it. Re-add it the day something needs it |
 | Server state | TanStack Query | Only for the two search APIs, not for local data |
 | Styling | StyleSheet plus a typed theme object | No extra runtime; theme file mirrors the design system sheet exactly. Every colour, spacing, radius and type size is lint-enforced to come from it |
 | Fonts | Plus Jakarta Sans, embedded at build time via the `expo-font` config plugin | Five weights linked as an Android XML font family, so one `fontFamily` plus a `fontWeight` resolves correctly. Runtime `useFonts()` would mean a blocked splash or a visible reflow against a sub-2s cold start. Applied only through `typeStyle()` in `theme.ts`. The family, package and files are named once in `src/ui/brand.json`, read by both `theme.ts` and `app.config.ts`; `brand-font.test.ts` fails if they diverge, and `native-fonts.test.ts` fails if `android/` or the APK lacks them |
@@ -282,7 +321,7 @@ counts break progress and statistics silently, which is worse than an obvious er
 | Secrets | `app.config.ts` for public keys, EAS Secrets for real ones | The Supabase service role key never appears in the app. See `06-CONVENTIONS.md` |
 | Crash reporting | Sentry (`@sentry/react-native`, pinned to the version Expo resolves) | 5000 errors a month free, and you need this on day one. A no-op until a DSN is configured |
 | Analytics | PostHog | 1M events a month free. Instrument second session rate first, it is the only early number that means anything |
-| Notifications | expo-notifications plus a custom foreground service plugin | The timer notification is a designed feature, see the States sheet |
+| Notifications | `modules/reading-service` (a local Expo module wrapping a Kotlin foreground service) posts it; expo-notifications only asks for the permission | The timer notification is a designed feature, see the States sheet. A config plugin cannot supply a service class, only declare one |
 | Widgets | react-native-android-widget | Only real option. Treat as v1.1 if it resists |
 | Dates | date-fns with explicit timezone handling | Bookly scrambles sessions across timezones. Store UTC, render local, always |
 | Date and time pickers | `@react-native-community/datetimepicker`, Android's own dialogs (Slice 3) | The session date is the most important control in the app, and the native dialogs are accessible and localised for free. A native module: adding it needs a native rebuild. Its config plugin only themes the dialog and is not used. See `DECISIONS.md`, 2026-09-13 |

@@ -227,6 +227,14 @@ export const launch = {
     /** Past the cap: nothing is pre-filled. */
     asked:
       'That is too long ago for us to guess when you stopped. How long did you actually read?',
+    /**
+     * The app stopped before the session did, so the suggestion is tighter than the maximum.
+     * Measured on a phone: with background usage restricted, Android killed the timer about
+     * 47 seconds into a five-minute session. Telling that reader "this is the most it could
+     * have been" would be false, and capping them at one minute would lose the other four.
+     */
+    stoppedEarly: (running: string) =>
+      `The timer was only running for ${running} — your phone stopped it. If you kept reading after that, put in how long you actually read.`,
     field: 'Minutes you read',
     invalid: {
       notWhole: 'Whole minutes only',

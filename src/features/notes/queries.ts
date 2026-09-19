@@ -15,9 +15,9 @@ import type { NoteContext, StoredNote } from './noteForm'
 import { getDb } from '@/db/client'
 import { books, metadataCache, notes, reads, sessions } from '@/db/schema'
 import {
-  clearDraft,
+  clearLocalRecord,
   restoreRow,
-  saveDraft,
+  saveLocalRecord,
   softDelete,
   updateRow,
   writeRow,
@@ -198,4 +198,7 @@ export async function readDraft(source: string, key: string): Promise<string | n
   return rows[0]?.payload ?? null
 }
 
-export { clearDraft, saveDraft }
+// Re-exported under the names this feature thinks in. The generic pair lives in
+// `db/write.ts`, where the timer is its other caller.
+export const saveDraft = saveLocalRecord
+export const clearDraft = clearLocalRecord
