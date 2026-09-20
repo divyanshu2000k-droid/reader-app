@@ -20,12 +20,15 @@
 import { FlashList } from '@shopify/flash-list'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
 
 import { BookRow } from './components/BookRow'
 import { STATUS_ORDER, StatusTabs } from './components/StatusTabs'
 import { useLibraryRows } from './hooks/useLibraryRows'
+import { filterByGenre, filterStillApplies, genresPresent } from './genreFilter'
 import { readTabRequest } from './tabRequest'
+import type { Genre } from '@/domain/genre'
+import { Chip } from '@/ui/Chip'
 import type { LibraryRow } from './queries'
 import type { ReadStatus } from '@/db/schema'
 import { empty, nav } from '@/lib/strings'
@@ -60,6 +63,20 @@ export function LibraryScreen() {
   if (request.key !== seenRequest) setSeenRequest(request.key)
   if (request.tab !== null) setStatus(request.tab)
   const { rows, libraryEmpty, error, reload } = useLibraryRows(status)
+
+  /**
+   * The genre cut, if the reader has chosen one.
+   *
+   * Reset when the TAB changes, because "Fantasy" on Reading and "Fantasy" on Finished are
+   * different questions and carrying the filter across silently answers the second one.
+   * Dropped automatically when the tab no longer holds that genre — a book is finished,
+   * removed or moved — because a filter pointing at nothing shows an empty list with no
+   * visible reason.
+   */
+  const [genre, setGenre] = useState<Genre | null>(null)
+  const chips = rows === null ? [] : genresPresent(rows)
+  const activeGenre = rows !== null && filterStillApplies(rows, genre) ? genre : null
+  const shown = rows === null ? null : filterByGenre(rows, activeGenre)
 
   const push = useCallback(
     (to: 'book' | 'log', bookId: string) =>
@@ -104,7 +121,40 @@ export function LibraryScreen() {
             </>
           }
         />
-        <StatusTabs value={status} onChange={setStatus} />
+        <StatusTabs
+          value={status}
+          onChange={(next) => {
+            setStatus(next)
+            setGenre(null)
+          }}
+        />
+        {/*
+         * The genre filter, owner-added 2026-09-14. Only shown when there is more than one
+         * genre to choose between: a single chip beside "All" is a control that cannot
+         * change anything, taking a row of a screen the reader opens constantly.
+         */}
+        {chips.length > 1 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.genres}
+          >
+            <Chip
+              label="All"
+              selected={activeGenre === null}
+              accessibilityLabel="All genres"
+              onPress={() => setGenre(null)}
+            />
+            {chips.map((option) => (
+              <Chip
+                key={option}
+                label={option}
+                selected={activeGenre === option}
+                onPress={() => setGenre(option)}
+              />
+            ))}
+          </ScrollView>
+        ) : null}
         {error ? (
           <View style={styles.error}>
             <InlineError error={error} onRetry={reload} />
@@ -124,8 +174,17 @@ export function LibraryScreen() {
           </View>
         }
       >
-        {rows && rows.length === 0 ? (
-          libraryEmpty ? (
+        {shown && shown.length === 0 ? (
+          activeGenre !== null ? (
+            // The tab has books; this genre has none of them. Saying "no books yet" here
+            // would be false, so it says what is actually true and offers the way back.
+            <EmptyState
+              title={`No ${activeGenre} books here`}
+              body={`Nothing on this shelf is filed under ${activeGenre}. Genres are guessed from each book’s details, and Edit details puts one right.`}
+              actionLabel="Show all"
+              onAction={() => setGenre(null)}
+            />
+          ) : libraryEmpty ? (
             <EmptyState
               title={empty.library.title}
               body={empty.library.body}
@@ -140,8 +199,8 @@ export function LibraryScreen() {
             // One list per tab. Without this, switching tabs kept the previous tab's scroll
             // offset: after scrolling Finished, Reading opened hundreds of rows down, and on
             // the phone the "first" row sat clipped under the chips.
-            key={status}
-            data={rows ?? EMPTY_ROWS}
+            key={`${status}:${activeGenre ?? 'all'}`}
+            data={shown ?? EMPTY_ROWS}
             renderItem={renderItem}
             keyExtractor={keyExtractor}
             contentContainerStyle={styles.listContent}
@@ -165,6 +224,7 @@ function RowGap() {
 const styles = StyleSheet.create({
   gap: { height: space.row },
   head: { paddingHorizontal: space.screen },
+  genres: { flexDirection: 'row', gap: space.labelGap, paddingHorizontal: space.screen },
   error: { paddingBottom: space.row },
   list: { paddingHorizontal: space.screen, gap: space.row, paddingTop: space.row },
   // The last row clears the tab bar by a section gap when scrolled to the end.

@@ -373,3 +373,156 @@ test('0002 applies to a POPULATED database, adds empty book details, and loses n
   )
   for (const c of BOOK_DETAILS) assert.ok(cols.includes(c), `books.${c} is missing`)
 })
+
+// ─── 0003, Slice 7 ───────────────────────────────────────────────────────────
+
+/**
+ * A v3 database holding the shape 0003's unique index forbids: TWO LIVE GOALS for one year.
+ *
+ * Nothing before 0003 prevented it, so real databases can hold it. That is the whole lesson
+ * of silent-pass item 5 — 0001 passed every check against an empty database and failed on the
+ * first constraint it added to a populated one, which would have stranded every existing
+ * reader on the old schema forever.
+ */
+function v3WithDuplicateGoals(): DatabaseSync {
+  const db = v2Database()
+  migrate(db, 2)
+  const rows: [string, number, number | null, number, number, number | null][] = [
+    // 2025: three live rows. The most recently UPDATED one must be the survivor, and it is
+    // deliberately not the newest by id or the first by creation.
+    ['gl-a', 2025, 12, 1_700_000_000_000, 1_700_000_000_000, null],
+    ['gl-b', 2025, 24, 1_700_000_001_000, 1_700_000_009_000, null],
+    ['gl-c', 2025, 36, 1_700_000_002_000, 1_700_000_005_000, null],
+    // 2026: one live row and one already deleted. Nothing to repair, and the deleted row
+    // must NOT block the live one — the index is partial for exactly this reason.
+    ['gl-d', 2026, 40, 1_700_000_003_000, 1_700_000_003_000, null],
+    ['gl-e', 2026, 10, 1_700_000_004_000, 1_700_000_004_000, 1_700_000_004_500],
+    // 2024: a single live row, untouched by any of this.
+    ['gl-f', 2024, 50, 1_700_000_005_000, 1_700_000_005_000, null],
+  ]
+  const insert = db.prepare(
+    'insert into goals (id, year, target_books, created_at, updated_at, deleted_at) values (?,?,?,?,?,?)',
+  )
+  for (const r of rows) insert.run(...r)
+  return db
+}
+
+/**
+ * Live goals as plain strings.
+ *
+ * Strings rather than the row objects `node:sqlite` returns: those have a null prototype, so
+ * `assert.deepEqual` rejects them against object literals and prints the two sides looking
+ * identical, which is a confusing five minutes for whoever meets it next.
+ */
+function liveGoals(db: DatabaseSync): string[] {
+  const rows = db
+    .prepare(
+      'select id, year, target_books from goals where deleted_at is null order by year, id',
+    )
+    .all() as { id: string; year: number; target_books: number | null }[]
+  return rows.map((r) => `${r.year} ${r.id} target=${r.target_books}`)
+}
+
+/**
+ * The control. If the fixture does not actually violate the constraint, the test below
+ * proves only that a no-op migration is a no-op — which is how a vacuous guard is born.
+ */
+test('the populated v3 fixture genuinely violates what 0003 adds', () => {
+  const db = v3WithDuplicateGoals()
+  assert.throws(
+    () =>
+      db.exec(
+        'CREATE UNIQUE INDEX idx_probe_goals_year ON goals (year) WHERE deleted_at IS NULL',
+      ),
+    /UNIQUE constraint failed/,
+    'the fixture no longer holds duplicate live goals, so 0003 is being tested against nothing',
+  )
+})
+
+test('0003 applies to a POPULATED database, keeps the newest goal, and deletes softly', () => {
+  const db = v3WithDuplicateGoals()
+
+  migrate(db, 3)
+
+  assert.deepEqual(
+    liveGoals(db),
+    [
+      '2024 gl-f target=50',
+      // gl-b, not gl-c (created later) and not gl-a (created first): the most recently
+      // UPDATED row is the last thing the reader actually asked for.
+      '2025 gl-b target=24',
+      '2026 gl-d target=40',
+    ],
+    'the wrong goal survived, or a year lost its goal entirely',
+  )
+
+  // Soft, never hard. A goal the reader once set is still something they did.
+  const total = db.prepare('select count(*) as n from goals').get() as { n: number }
+  assert.equal(total.n, 6, 'a row was removed instead of soft-deleted')
+
+  const repaired = db
+    .prepare('select id from goals where deleted_at is not null order by id')
+    .all() as { id: string }[]
+  assert.deepEqual(
+    repaired.map((r) => r.id),
+    ['gl-a', 'gl-c', 'gl-e'],
+  )
+})
+
+test('0003 enqueues every goal it touched, and nothing it did not', () => {
+  const db = v3WithDuplicateGoals()
+  db.exec('delete from sync_queue')
+
+  migrate(db, 3)
+
+  const queued = db
+    .prepare("select row_id from sync_queue where table_name = 'goals' order by row_id")
+    .all() as { row_id: string }[]
+  // All three 2025 rows were candidates and are enqueued together, BEFORE the repair erases
+  // which ones they were. The survivor is included on purpose: the server has to learn that
+  // it is now the only live goal for that year.
+  assert.deepEqual(
+    queued.map((q) => q.row_id),
+    ['gl-a', 'gl-b', 'gl-c'],
+  )
+})
+
+test('0003 adds books.genre, empty, and invents no genres', () => {
+  const db = v3WithDuplicateGoals()
+
+  migrate(db, 3)
+
+  const cols = (db.prepare('pragma table_info(books)').all() as { name: string }[]).map(
+    (c) => c.name,
+  )
+  assert.ok(cols.includes('genre'), 'books.genre is missing')
+  const filled = db
+    .prepare('select count(*) as n from books where genre is not null')
+    .get() as {
+    n: number
+  }
+  assert.equal(
+    filled.n,
+    0,
+    'the migration guessed a genre and wrote it into the reader’s column',
+  )
+})
+
+test('after 0003 a second live goal for the same year is impossible', () => {
+  const db = v3WithDuplicateGoals()
+  migrate(db, 3)
+  assert.throws(
+    () =>
+      db
+        .prepare(
+          'insert into goals (id, year, target_books, created_at, updated_at, deleted_at) values (?,?,?,?,?,?)',
+        )
+        .run('gl-new', 2025, 99, 1_800_000_000_000, 1_800_000_000_000, null),
+    /UNIQUE constraint failed/,
+  )
+  // ...but a goal for a year whose only goal is deleted is fine, which is what partial means.
+  db.prepare('update goals set deleted_at = 1 where id = ?').run('gl-b')
+  db.prepare(
+    'insert into goals (id, year, target_books, created_at, updated_at, deleted_at) values (?,?,?,?,?,?)',
+  ).run('gl-new', 2025, 99, 1_800_000_000_000, 1_800_000_000_000, null)
+})

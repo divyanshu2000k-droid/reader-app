@@ -336,6 +336,8 @@ export const size = {
   /** The daily pace chart's plot height, bars only. Its labels sit below it and grow. */
   paceChart: 120,
   /** The narrowest a pace bar is drawn: a day read but dwarfed by a big day stays visible. */
+  /** The genre breakdown's bar. Shorter than a pace bar: it is a length, not a height. */
+  genreBar: 10,
   paceBarMin: 3,
 } as const
 

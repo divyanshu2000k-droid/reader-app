@@ -515,6 +515,17 @@ and prose it must not flag. See `no-bypass.test.ts`, `contrast.test.ts`,
 `test-runner.test.ts` and `features/timer/__tests__/runtime-not-in-components.test.ts`. A
 guard without a control is not a guard.
 
+**Features never import from other features, by ANY spelling.** There has been an ESLint
+rule for this since Slice 0, restricting `@/features/*/*`. It does not catch a relative path,
+and on 2026-09-19 Slice 7 wrote `import { goalLabel } from '../settings/goalForm'` in
+`features/stats` and lint passed. That is a third cross-feature import in this codebase —
+two during the 2026-09-18 audit — and the rule caught none of them.
+`src/__tests__/feature-boundaries.test.ts` now RESOLVES every import to a real path and asks
+which feature it lands in, so it does not care how the path was written. A feature may reach
+its own files at any depth; shared business logic goes in `domain/`, shared SQL in `db/`
+beside `currentRead.ts` and `goals.ts`, generic utilities in `lib/`. The ESLint rule stays as
+the fast feedback; the test is the one that is true.
+
 **The timer's runtime lives in `timerService.ts` and in no component.** Nothing else in
 `features/timer` may own a `setInterval`, a `setTimeout`, an `AppState` listener or a
 notification-response listener. A screen or hook that owns one stops the moment the reader

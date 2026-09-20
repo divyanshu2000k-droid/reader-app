@@ -33,6 +33,10 @@ export interface LibraryRow {
   readonly coverUrl: string | null
   readonly coverLocalPath: string | null
   readonly coverColor: string | null
+  /** The reader's chosen genre, or null. With `categories`, drives the genre filter. */
+  readonly genre: string | null
+  /** The source's raw categories, for when the reader has chosen nothing. */
+  readonly categories: string | null
   readonly status: ReadStatus
   readonly readNumber: number
   readonly pageCount: number | null
@@ -92,6 +96,10 @@ function libraryRowSelect() {
       coverUrl: books.coverUrl,
       coverLocalPath: books.coverLocalPath,
       coverColor: books.coverColor,
+      // For the genre filter. Both columns, because the genre a book is filed under is the
+      // reader's choice OR our guess, and `effectiveGenre` needs both to decide which.
+      genre: books.genre,
+      categories: books.categories,
       status: reads.status,
       readNumber: reads.readNumber,
       pageCount: books.pageCount,

@@ -34,6 +34,7 @@ import type { AppError } from '@/lib/result'
 import { actions, confirm, status as statusCopy } from '@/lib/strings'
 import { BookCover } from '@/ui/BookCover'
 import { Button } from '@/ui/Button'
+import { GENRES, genreOf, parseCategories } from '@/domain/genre'
 import { Chip } from '@/ui/Chip'
 import { ConfirmSheet } from '@/ui/ConfirmSheet'
 import { EmptyState } from '@/ui/EmptyState'
@@ -150,6 +151,8 @@ function FormView({
   const guard = useUnsavedGuard(isFormDirty(form, baseline))
   const { ref: formRef, onLayout: measureForm, overlap: keyboardCover } = useKeyboardOverlap()
   const check = checkBookForm(form, localYearOf(now()))
+  /** What "Work it out" currently works out to, so the reader can see before choosing. */
+  const guessed = genreOf(parseCategories(book?.categories ?? null))
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'))
   const set = (patch: Partial<BookForm>) => {
     setForm((f) => ({ ...f, ...patch }))
@@ -322,6 +325,49 @@ function FormView({
           error={check.errors.description}
         />
 
+        {/*
+         * GENRE (Slice 7). The only place `books.genre` is ever written.
+         *
+         * "Work it out" is first and is the default, because the guess is right most of the
+         * time and a reader should not have to answer sixteen-way questions about every
+         * book they add. Choosing anything else pins it: `effectiveGenre` stops guessing
+         * for that book, and no later improvement to the mapping can undo the choice.
+         */}
+        <View style={styles.block}>
+          <Text
+            maxFontSizeMultiplier={rules.maxFontScale}
+            style={[typeStyle(font.label), { color: c.textMuted }]}
+          >
+            Genre · optional
+          </Text>
+          <View style={styles.swatches} accessibilityRole="radiogroup">
+            <Chip
+              label="Work it out"
+              selected={form.genre === null}
+              accessibilityLabel={`Work the genre out${
+                form.genre === null ? `, currently ${guessed}` : ''
+              }`}
+              onPress={() => set({ genre: null })}
+            />
+            {GENRES.map((option) => (
+              <Chip
+                key={option}
+                label={option}
+                selected={form.genre === option}
+                onPress={() => set({ genre: option })}
+              />
+            ))}
+          </View>
+          <Text
+            maxFontSizeMultiplier={rules.maxFontScale}
+            style={[typeStyle(font.secondary), { color: c.textMuted }]}
+          >
+            {form.genre === null
+              ? `Left to us, this one counts as ${guessed} on Stats.`
+              : 'Your choice, kept whatever the book’s details say.'}
+          </Text>
+        </View>
+
         <View style={styles.note}>
           <Icon name="check" size={iconSize.header} color={c.textFaint} />
           <Text
@@ -411,6 +457,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.card,
   },
+  block: { gap: space.labelGap },
   swatches: {
     flexDirection: 'row',
     flexWrap: 'wrap',

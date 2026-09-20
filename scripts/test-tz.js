@@ -24,6 +24,10 @@ const SUITES = [
   // Slice 5: which year a finish counts in, and the finish flow's date checks.
   'src/domain/__tests__/finishes.test.ts',
   'src/features/finish/__tests__/finishForm.test.ts',
+  // Slice 7: which YEAR every number on Stats belongs to. The December/January case is the
+  // whole point — a book finished at 11pm on 31 December in Chicago is 05:00 UTC on the 1st,
+  // and counting it in the wrong year moves it between two of the reader's own totals.
+  'src/features/stats/__tests__/yearSummary.test.ts',
 ]
 
 let failed = false

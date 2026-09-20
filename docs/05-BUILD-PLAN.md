@@ -490,6 +490,21 @@ button wired to nothing. `docs/device-checks/slice-6.md` has the numbers.
 **Done when:** a library with both print and audiobook sessions shows correct separate
 totals, and no audiobook inflates a page count.
 
+**Status, 2026-09-20: BUILT AND VERIFIED ON THE PHONE.** Device pass RUNTIME 38/38,
+`s7_stats.py` 8/8, `mutate_s7.py` 19/19 red, 572 node tests, 121 per timezone.
+- **Migration 0003 applied to the phone's POPULATED 28 MB `devcheck.db`** — `books.genre`
+  plus the `goals` unique index, with the duplicate repair that a constraint-adding migration
+  requires.
+- **The measurement that matters:** the heading said "15 books in 2026" and the genre bars
+  beneath it added to exactly 15. They come from one load of two tables so they cannot
+  disagree, and that is now checked rather than asserted in a comment.
+- **Two silent bugs, both found on the phone:** a chosen genre never reached `bookPatch`, and
+  a goal typed and then confirmed with Done was lost because it only saved on blur. Both
+  fixed with checks watched failing. CLAUDE.md items 27 and 28.
+- **Two mutations went green and both were the TEST**, not the code — the third time
+  (item 19). The word-boundary case used words that were not shelf words, and the `=` case
+  was already caught by the prefix list.
+
 ---
 
 ## Slice 8 · Account and sync

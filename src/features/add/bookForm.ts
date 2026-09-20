@@ -22,6 +22,8 @@ import type { PatchFor, RowFor } from '@/db/write'
 import { DESCRIPTION_MAX_LENGTH } from '@/domain/bookDetails'
 import { isValidIsbn10, toIsbn13 } from '@/domain/isbn'
 
+import { isGenre, type Genre } from '@/domain/genre'
+
 export type BookShape = 'print' | 'audio'
 
 /** Where a new book goes. DNF is not offered for a book just added. */
@@ -43,6 +45,13 @@ export interface BookForm {
   readonly coverColor: string | null
   /** The summary on book detail. Often filled from the source; always the reader's to change. */
   readonly description: string
+  /**
+   * The genre the reader chose, or null for "use our guess" (Slice 7).
+   *
+   * Null is a real value here, not an empty string: "" would be indistinguishable from a
+   * choice, and the difference is whether a better guess is allowed to apply later.
+   */
+  readonly genre: Genre | null
 }
 
 /** The book columns this form edits, as stored. */
@@ -57,6 +66,7 @@ export interface StoredBookFields {
   readonly isbn10: string | null
   readonly coverColor: string | null
   readonly description: string | null
+  readonly genre: string | null
 }
 
 export const EMPTY_FORM: BookForm = {
@@ -69,6 +79,7 @@ export const EMPTY_FORM: BookForm = {
   isbn: '',
   coverColor: null,
   description: '',
+  genre: null,
 }
 
 export function formFromBook(book: StoredBookFields): BookForm {
@@ -84,6 +95,9 @@ export function formFromBook(book: StoredBookFields): BookForm {
     isbn: book.isbn13 ?? book.isbn10 ?? '',
     coverColor: book.coverColor,
     description: book.description ?? '',
+    // A stored value we no longer recognise becomes null, so the reader is offered our guess
+    // rather than a chip that says something the app cannot explain.
+    genre: book.genre !== null && isGenre(book.genre) ? book.genre : null,
   }
 }
 
@@ -159,6 +173,7 @@ function fields(form: BookForm): StoredBookFields {
     isbn10: compact !== null && isValidIsbn10(compact) ? compact : null,
     coverColor: form.coverColor,
     description: text(form.description),
+    genre: form.genre,
   }
 }
 
@@ -205,6 +220,12 @@ export function bookPatch(original: StoredBookFields, form: BookForm): PatchFor<
   if (next.isbn10 !== original.isbn10) patch.isbn10 = next.isbn10
   if (next.coverColor !== original.coverColor) patch.coverColor = next.coverColor
   if (next.description !== original.description) patch.description = next.description
+  // Added 2026-09-19, and FORGOTTEN for a day: the genre reached the form, the picker, and
+  // `fields()`, and stopped here. `isFormDirty` loops over the form's keys so Save lit up,
+  // the screen closed, and nothing was written. A phone check caught it; no unit test did,
+  // because they only round-tripped `formFromBook`. That is the cost of a list that has to
+  // be extended by hand — the deliberate price of not casting, now with a test on it.
+  if (next.genre !== original.genre) patch.genre = next.genre
   return patch
 }
 

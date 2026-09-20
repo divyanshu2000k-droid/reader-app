@@ -167,6 +167,14 @@ export interface EditableBook extends StoredBookFields {
   readonly id: string
   readonly coverUrl: string | null
   readonly coverLocalPath: string | null
+  /**
+   * The source's raw categories, read-only here.
+   *
+   * The form never writes them — they are the SOURCE's data, and `books.genre` is the
+   * reader's. It is selected so the genre picker can show what "Work it out" currently
+   * works out to, which is the difference between an informed choice and a blind one.
+   */
+  readonly categories: string | null
 }
 
 /** A live book's editable fields, or null when it is not in the library. */
@@ -184,6 +192,8 @@ export async function getEditableBook(bookId: string): Promise<EditableBook | nu
       isbn10: books.isbn10,
       coverColor: books.coverColor,
       description: books.description,
+      genre: books.genre,
+      categories: books.categories,
       coverUrl: books.coverUrl,
       coverLocalPath: books.coverLocalPath,
     })

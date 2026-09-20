@@ -22,6 +22,13 @@
       "when": 1789408341306,
       "tag": "0002_ambitious_the_liberteens",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789829417122,
+      "tag": "0003_rapid_hellfire_club",
+      "breakpoints": true
     }
   ]
 }

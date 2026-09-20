@@ -33,6 +33,13 @@ interface Props {
   maxLength?: number
   /** Selects the whole value on focus, so a prefilled number is replaced by typing, not appended to. */
   selectTextOnFocus?: boolean
+  /**
+   * Called when the field loses focus.
+   *
+   * For settings that save themselves rather than sitting behind a Save button — a button
+   * the reader can walk away from without pressing is how a setting silently does not take.
+   */
+  onBlur?: () => void
   /** Inline error. Says what happened; the caller supplies what is still safe. */
   error?: string | undefined
   style?: StyleProp<ViewStyle>
@@ -42,6 +49,7 @@ export function Field({
   label,
   value,
   onChangeText,
+  onBlur,
   placeholder,
   keyboardType,
   autoFocus,
@@ -76,7 +84,12 @@ export function Field({
         selectTextOnFocus={selectTextOnFocus}
         maxFontSizeMultiplier={rules.maxFontScale}
         onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onBlur={() => {
+          // The focus ring AND the caller's. The field already owned `onBlur` for its own
+          // border; adding a second one silently replaced it and the ring stuck on.
+          setFocused(false)
+          onBlur?.()
+        }}
         style={[
           styles.input,
           typeStyle(font.input),

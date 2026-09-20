@@ -71,7 +71,8 @@ The work. Contains no progress and no dates, deliberately.
 | `source` | TEXT | `google` · `openlibrary` · `manual` · `import` |
 | `source_id` | TEXT | The upstream id, for refresh |
 | `description` | TEXT | Plain text, paragraphs separated by a blank line. Cleaned from the source's HTML or Markdown; reader editable. Added in 0002 |
-| `categories` | TEXT | The source's raw categories as a JSON array of strings. Not genres: Slice 7 maps them. Added in 0002 |
+| `categories` | TEXT | The source's raw categories as a JSON array of strings. Not genres: `domain/genre.ts` maps them. Added in 0002 |
+| `genre` | TEXT | The genre the READER chose, or NULL for "use our guess". One of `GENRES`. Added in 0003 |
 | `preview_url` | TEXT | Google's preview page, only when some pages can be read. "Read a sample". Added in 0002 |
 | `details_checked_at` | INTEGER | Unix ms when the three above were fetched from the source, or NULL if never. Each book is fetched once, so a description the reader cleared is not refetched. Added in 0002 |
 | `created_at` | INTEGER | Unix ms, UTC |
@@ -81,8 +82,14 @@ The work. Contains no progress and no dates, deliberately.
 Every metadata field is user editable. This is a product requirement, not a nicety.
 
 **Book details (Slice 5):** a fetch fills only empty details and always sets
-`details_checked_at` (`domain/bookDetails.ts`, `db/bookDetails.ts`). Genres are derived from
-`categories` in Slice 7, plus a genre the reader sets. See `DECISIONS.md`, 2026-09-14.
+`details_checked_at` (`domain/bookDetails.ts`, `db/bookDetails.ts`).
+
+**Genre (Slice 7):** `books.genre` is the reader's ANSWER; `books.categories` is the
+source's raw data; `domain/genre.ts` turns the second into a guess. **A guess is never
+written into `genre`.** Storing a derived value in the same column as a chosen one means no
+later build can improve the guess without overwriting somebody's correction, and nothing is
+left that can tell the two apart. `effectiveGenre(genre, categories)` combines them at read
+time and the reader always wins. See `DECISIONS.md`, 2026-09-14 and 2026-09-19.
 
 ### `reads`
 
@@ -227,6 +234,19 @@ in its lifecycle; shelves are the user's own organisation.
 | `year` | INTEGER | |
 | `target_books` | INTEGER | Nullable, goals are optional |
 | timestamps | INTEGER | |
+
+**One live goal per year, enforced by the database since 0003** (Slice 7):
+`idx_goals_year_live` is a UNIQUE index on `year` WHERE `deleted_at IS NULL`. Partial, like
+every other index here, so a reader who sets a goal, deletes it and sets another is not
+blocked by the row they threw away.
+
+Before 0003 two live rows for one year were representable, and Slice 7 is the slice that
+writes goals, so that was the last moment the constraint was free. **0003 repairs duplicates
+before creating the index** — it enqueues the affected rows first, keeps the most recently
+updated goal for each year and soft-deletes the rest. A constraint added to a populated
+database without a repair is silent-pass item 5, which already cost this project once: the
+app fails closed and stays on the old schema forever, retrying a doomed migration on every
+launch.
 
 Pages and hours are always tracked whether or not a goal exists. Never gate statistics
 behind setting a target.

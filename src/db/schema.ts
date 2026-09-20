@@ -87,9 +87,20 @@ export const books = sqliteTable(
     description: text('description'),
     /**
      * The source's own categories, raw, as a JSON array of strings ("Fiction / Fantasy /
-     * General", "genre:fantasy"). Not genres: Slice 7 maps these to a short genre list.
+     * General", "genre:fantasy"). Not genres: `domain/genre.ts` maps these to a short list.
      */
     categories: text('categories'),
+    /**
+     * The genre the READER chose, or null for "use our guess". One of `GENRES`.
+     *
+     * Deliberately separate from `categories`, and never written with a derived value. A
+     * guess stored in the same column as a choice cannot be improved later without
+     * overwriting someone's correction, and there would be no way left to tell the two
+     * apart. `effectiveGenre` combines them at read time; the reader always wins.
+     *
+     * Added in 0003, Slice 7.
+     */
+    genre: text('genre'),
     /**
      * Google's preview page, set only when Google says some pages can be read. "Read a sample"
      * opens it in the browser; Slice 11 reads it inside the app.
@@ -293,12 +304,35 @@ export const notes = sqliteTable(
 // Pages and hours are tracked whether or not a goal exists. Never gate statistics
 // behind setting a target.
 
-export const goals = sqliteTable('goals', {
-  id: text('id').primaryKey(),
-  year: integer('year').notNull(),
-  targetBooks: integer('target_books'),
-  ...syncColumns,
-})
+export const goals = sqliteTable(
+  'goals',
+  {
+    id: text('id').primaryKey(),
+    year: integer('year').notNull(),
+    targetBooks: integer('target_books'),
+    ...syncColumns,
+  },
+  (t) => [
+    /**
+     * ONE LIVE GOAL PER YEAR, enforced by the database rather than hoped for.
+     *
+     * Until 0003 two live rows for the same year were representable, and Slice 7 is the
+     * slice that writes goals — so this is the last moment it is free. Filed by the
+     * 2026-09-12 review.
+     *
+     * PARTIAL, on `deleted_at IS NULL`, like every other index here. Deletes are soft, so a
+     * reader who sets a goal, deletes it and sets another must not be blocked by the row
+     * they already threw away.
+     *
+     * A constraint added to a POPULATED database is the shape of silent-pass item 5: 0003
+     * repairs duplicates before creating this, and `migrations.test.ts` applies it to a
+     * fixture that genuinely violates it.
+     */
+    uniqueIndex('idx_goals_year_live')
+      .on(t.year)
+      .where(sql`deleted_at IS NULL`),
+  ],
+)
 
 // ─── SYNC QUEUE ──────────────────────────────────────────────────────────────
 // Local only. Never syncs. Autoincrement here is correct: it is local ordering, not an

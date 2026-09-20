@@ -630,6 +630,194 @@ formality.
 
 <!-- Add entries below, newest first -->
 
+## 2026-09-20 · Slice 7 on the phone: two silent bugs, and two tests that proved nothing
+**Found by** `scripts/device/s7_stats.py` and `mutate_s7.py`. Both bugs typechecked, linted,
+threw nothing, and were invisible to the unit tests.
+
+**1. THE GENRE NEVER REACHED THE DATABASE.** `bookPatch` is written field by field on purpose
+— a loop needs a cast, and a cast is where a wrong column or a wrong type slips through. The
+price is that a new field must be added by hand, and `genre` was added to `BookForm`, to the
+picker and to `fields()` and **not to the patch**. `isFormDirty` loops over the form's keys,
+so Save lit up, the screen closed, and nothing was written. The unit tests only round-tripped
+`formFromBook`, which is the half that worked.
+**Checked by** a test that iterates the form's own keys and asserts each one can produce a
+non-empty patch, so the NEXT forgotten field fails in node rather than on a device. Watched
+failing with the line removed: "changing genre produced an EMPTY patch".
+
+**2. A GOAL TYPED AND THEN CONFIRMED WAS LOST.** The field saved on blur, and tapping Done
+navigates away without blurring — Android does not promise a blur before an unmount, and both
+Done and the system Back gesture leave without one. Measured: type 12, tap Done, `goals` is
+still empty and the reader has no way to know.
+**Chose:** save on blur AND on teardown, both behind the same no-change guard so the ordinary
+path still writes exactly once. The latest value is held in a ref, updated in an effect —
+a cleanup closes over the render that created it, so reading state there would save whatever
+was typed several keystrokes earlier, and writing a ref during render is what
+`react-hooks/refs` forbids.
+**Over:** a Save button. A button the reader can walk away from without pressing is the same
+bug wearing a different hat, for a single optional number.
+
+**3. TWO MUTATIONS WENT GREEN, AND BOTH WERE THE TEST.** Third time (items 19, and Slice 5b).
+- **The word-boundary check.** The test used "The Warden" and "Bharti Mukherjee" — but
+  neither "war" nor "art" is a shelf word, so both return Other whether or not the boundary
+  check exists. Now "Lawrence Durrell" and "Moneyball", because **"law" and "money" ARE shelf
+  words** and sit inside ordinary subject headings.
+- **The `=` rule.** The test used `nyt:…fiction=2020-10-04`, which the noise-PREFIX list
+  discards before the `=` rule is ever reached. Now `subject:history=1999` and
+  `rating=fantasy`, which survive the prefix list and are caught only by the `=`.
+**The sweep is the only reason either was found.** A test that passes against the mutation is
+a test that was never going to fail.
+
+**Also found:** the device pass produced an EMPTY result file and looked like a hang. The
+cause was a missing `adb reverse tcp:8081 tcp:8081` — cleared by a reconnect — so the dev
+client showed "Unable to load script" and logged nothing at all. `devpass.sh` now sets it
+before every run.
+
+## 2026-09-19 · Slice 7's remaining shape: three numbers, a filter, and a goal that is optional
+**Stats loads two tables ONCE and derives everything from them.** Fetching per section would
+let the books figure and the genre chart under it be computed from two different notions of
+"finished in 2025" — which is how a screen says "12 books" above a chart totalling 11.
+
+**Books is a `reads` fact; pages and hours are session facts, and they disagree on purpose.**
+A book started in December and finished in January contributes its pages to December and
+itself to January. The caption says which is which rather than smoothing them together.
+
+**The pace chart is not year-scoped.** It stays the last fourteen days whatever year is
+selected, because "the last 14 days of 2019" is not a question anyone has. The year switcher
+governs the numbers that are about a year.
+
+**The genre filter lives on the Library and filters in TypeScript**, for the same reason the
+stats totals are counted there: the rule is `domain/genre.ts`, and a `WHERE` clause would be
+a second copy of it. Only genres actually present are offered, in the CANONICAL order rather
+than by count — a control that reorders itself as the library changes means reaching for
+Fantasy and hitting History. The filter is dropped when the tab no longer holds that genre,
+because a filter pointing at nothing shows an empty list with no visible reason.
+
+**A goal is optional and clearing it is not an error** (`03-DATA-MODEL`: never gate
+statistics behind a target). An empty field means "no goal" and SOFT-DELETES the row rather
+than writing a null target — a live row with no target occupies the one live slot the year is
+allowed and nothing knows how to draw it. `setGoal` updates the existing live row and inserts
+only when there is none: a blind insert works on a fresh install and throws the first time a
+reader changes their mind, which is the exact shape this codebase keeps meeting.
+**Books only, not pages or hours:** three targets would need three copies of the
+never-add-these-together rule and would show the reader three bars that disagree about
+whether they are on track. The bar clamps at 1 and the count beside it stays honest, so 30
+books against a goal of 12 is a full bar reading "30 of 12 · done".
+
+**`Field` gained an `onBlur`,** and it already had one internally for its focus ring. Adding
+a second silently replaced it and left the ring stuck on; they are merged.
+
+## 2026-09-19 · A third cross-feature import, and the guard that would not have caught it
+**Found by** writing one: `features/stats` importing `'../settings/goalForm'`. Lint passed.
+**Chose:** move the goal's rules to `domain/goal.ts` and its SQL to `db/goals.ts`, and add
+`src/__tests__/feature-boundaries.test.ts`, which resolves every import to a real path and
+asks which feature it lands in.
+**Over:** widening the ESLint pattern, which would protect one more spelling and not the
+next one.
+**Because:** the rule has existed since Slice 0 and has now missed three cross-feature
+imports — two in the 2026-09-18 audit and this one. It restricts `@/features/*/*`; a
+relative path is the same mistake written differently. **A guard that matches a spelling
+protects that spelling.** The new one is path-based, carries positive controls for BOTH
+spellings, and was watched failing with the violation reinstated while lint stayed green.
+**Revisit if:** never. The ESLint rule stays as fast feedback in the editor; the test is the
+one that is true.
+
+## 2026-09-19 · Slice 7 starts: genre is a GUESS and a CHOICE, kept in separate columns
+**Chose:** `books.categories` stays the source's raw data, `domain/genre.ts` derives a guess
+from it at read time, and `books.genre` (new in 0003) holds only what the READER chose.
+`effectiveGenre(chosen, categories)` combines them, and the reader always wins.
+**Over:** deriving a genre once at add time and writing it into a single `genre` column.
+**Because:** a guess stored in the same column as a choice can never be improved later
+without overwriting someone's correction, and nothing is left that can tell the two apart.
+The mapping WILL be improved — it was wrong twice within ten minutes of being written — and
+every improvement would otherwise have to choose between helping new books and trampling old
+corrections.
+**Revisit if:** the derivation ever becomes expensive enough to matter at list scale. It is a
+few string comparisons per book today.
+
+**The mapping is judgement, not a lookup, and the real data is why.** From the captures and
+the sandbox: `genre:fantasy`, `form:novel`, `Fiction / Fantasy / General`, `Social Science`,
+`Hindi fiction`, `Accounting`, `Dwellings`, `Labyrinths`, `Indonesia`, `Accessible book`,
+`nyt:combined-print-and-e-book-fiction=2020-10-04`. Three rules: specific beats general,
+noise is dropped rather than guessed at, and "Other" is an honest answer.
+
+**Two bugs in it, found by the tests within minutes of writing it, both worth keeping:**
+- **`nyt:…-fiction=2020-10-04` contains the word "fiction".** A naive substring match files
+  every former bestseller — cookbooks included — under Fiction. Anything holding `=` or a
+  catalogue prefix is now discarded before matching.
+- **"Social Science" was filed under Science & nature**, because it contains the whole word
+  "science". Anthropology is not astronomy, and a reader who opens the breakdown and finds
+  their sociology under Science & nature has been told something false about their own
+  library. A `Society & politics` shelf now sits BEFORE `Science & nature`, and the order of
+  that list is load-bearing.
+
+**Sixteen genres, held under 16 by a test**, so growing the list is a decision about whether
+the chart still reads rather than a line someone adds in passing.
+
+## 2026-09-19 · Migration 0003: the goals constraint, with its repair
+**Chose:** add `idx_goals_year_live` (UNIQUE on `year` WHERE `deleted_at IS NULL`) and repair
+duplicates in the same migration — enqueue the affected rows first, keep the most recently
+updated goal per year, soft-delete the rest.
+**Over:** shipping drizzle-kit's generated SQL, which was the `ALTER TABLE` and the bare
+`CREATE UNIQUE INDEX` and nothing else.
+**Because:** nothing before 0003 prevented two live goals for one year, so real databases
+hold that shape. Against one, the bare index fails with `UNIQUE constraint failed:
+goals.year`, and a failed migration is not a safe no-op — the app fails closed and stays on
+the old schema FOREVER, retrying on every launch. That is silent-pass item 5, and 0001 has
+already done it once.
+**The survivor is the most recently UPDATED row**, with `id` breaking ties so the result is
+deterministic rather than scan-order. The rest are SOFT-deleted: a goal a reader once set is
+still something they did, and a migration is the last place to start hard-deleting rows.
+**Checked by** four tests in `migrations.test.ts` against a populated v3 fixture that
+genuinely violates the constraint — including a control that asserts the fixture violates it,
+so the test cannot degrade into proving a no-op is a no-op. Watched failing with the repair
+stripped out: `UNIQUE constraint failed: goals.year`, 4 of 10 red.
+**Revisit if:** never for the constraint. Slice 7 is the last moment it is free.
+
+## 2026-09-19 · THE DEBT SWEEP HAPPENS AFTER SLICE 7, and here is exactly what is in it
+**Chose:** carry every outstanding item below into a single sweep after Slice 7, and build
+Stats next. Owner's call.
+**Over:** clearing them before starting Slice 7, and letting them drift indefinitely.
+**Because:** none of them blocks Slice 7 — Stats reads sessions and books and touches none of
+this — and batching them is one context load instead of seven. The risk of batching is that
+the list rots, so it is written down here in full rather than remembered.
+
+**THE LIST. Nothing else gets added to it silently; anything new goes on the end, dated.**
+
+**From Slice 6, 2026-09-19:**
+1. **Not validated on Xiaomi, Samsung or OnePlus.** The Nothing Phone 2a is near-stock AOSP
+   and is the FLOOR for the background-kill risk, not the test of it. This is the single
+   highest-risk open item in Phase 1 and the input to the two-week-cut decision. Needs beta
+   testers and other people's hardware, not code.
+2. **The app never TELLS a reader that their phone is killing the timer.** With background
+   usage restricted, Android kills the foreground service (measured: 67 s). The aftermath is
+   handled honestly — the sheet says how long the session existed and lets them record what
+   they read — but a reader on an aggressive OEM could lose session after session and simply
+   conclude the app is broken. **Not a bug; the cheapest insurance against the reviews the
+   two-week cut exists to avoid.** Decide before launch.
+3. **A real overnight has never been left.** `s6_overnight.py` proves the mechanism at a
+   4-minute scale and the native heartbeat now carries it. Costs nothing but a night.
+4. **`configChanges` omits `fontScale` and `density`,** so changing the system text size
+   restarts the app and a running timer meets the recovery sheet. App-wide, true since Slice
+   0. Belongs to Slice 11's font pass.
+5. **The notification is collapsed by default,** so Pause needs an expand first. Ordinary for
+   a LOW-importance channel and a deliberate trade; worth one look before launch.
+6. **The ring past an hour has never been seen by eye.** Held by `timerState.test.ts` only.
+7. **Item 7 measured over 20 minutes, not an hour.** 0.034 mAh of CPU in deep doze; the rate
+   is so low that an hour would not change the conclusion.
+
+**Older, still open:**
+8. **The Google Books API key was pasted into a chat transcript** (Slice 5). Rotate it. Small,
+   real, and the oldest item here.
+9. **Open Library covers at `-L`** — the owner's decision from 2026-09-15, never answered.
+10. **The Fabric SIGSEGV** (`pullTransaction`): 0 in 220 measured launches on 2026-09-12,
+    seen twice on 2026-09-10. Watch, do not close.
+11. **Release build is 112 MB** against a `< 15 MB` budget. Filed against Slice 11.
+12. **Bulk writes are slow** — a 500-session book deletes in 701 ms, restores in 1188 ms in a
+    debug build. Filed against Slice 9, before import.
+
+**Revisit if:** anything on this list turns out to block Slice 7 after all, or a beta tester
+reports the timer dying on an OEM phone — which would promote items 1 and 2 above everything.
+
 ## 2026-09-19 · FILED, not fixed: changing the system font size restarts the app
 **Found by** the item 6 script, which changed `font_scale` with a timer running and reported
 "NO CLOCK ON SCREEN" three times. The message was true and the diagnosis was not: the app had

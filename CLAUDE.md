@@ -204,6 +204,19 @@ The four, as evidence:
    loose.** The app is the authority on how long it was running; the reader is the authority
    on how long they read.
 
+27. **The genre reached every layer except the one that writes.** `bookPatch` is field by
+   field on purpose (a loop needs a cast). `genre` was added to the form, the picker and
+   `fields()` and not to the patch, so the reader chose a genre, `isFormDirty` lit up Save,
+   the screen closed, and nothing was written. The unit tests round-tripped `formFromBook`,
+   which is the half that worked. **A hand-maintained list needs a test that iterates the
+   source of truth**, which is now the form's own keys.
+
+28. **A setting that saves on blur is lost when the reader confirms.** The yearly goal wrote
+   on `onBlur`, and tapping Done unmounts the screen without blurring — Android promises no
+   blur before an unmount, and the system Back gesture does not give one either. Type 12, tap
+   Done, and `goals` stayed empty with nothing to tell the reader. It now saves on blur AND
+   on teardown, from a ref, because a cleanup closes over the render that created it.
+
 Add another if the theme counts: `font.family` was declared from the first commit and
 applied by nothing, so the entire app rendered in the wrong typeface without a single
 error anywhere.
@@ -432,6 +445,56 @@ neither.
 Build locally for day to day work. EAS is for release builds only.
 
 ## Current state
+
+> ### ⚠ THE DEBT SWEEP IS AFTER SLICE 7, AND IT IS OWED
+>
+> **Owner's decision, 2026-09-19: build Stats next, then clear twelve outstanding items in
+> one sweep.** The full list, with reasoning, is in `DECISIONS.md` under "THE DEBT SWEEP
+> HAPPENS AFTER SLICE 7". Nothing on it blocks Slice 7.
+>
+> **Do not let this list rot, and do not let it grow silently.** Anything new goes on the end
+> of it, dated. The two that matter most are not code:
+> 1. **The timer has never run on a Xiaomi, Samsung or OnePlus.** This phone is the FLOOR for
+>    the background-kill risk, not the test of it, and this is the input to the two-week cut.
+> 2. **The app never tells a reader their phone is killing the timer.** Measured: with
+>    background usage restricted, Android kills the service in 67 seconds. The aftermath is
+>    honest; the silence is not.
+>
+> Cheapest wins on the list: leave a timer running overnight (costs a night), and rotate the
+> Google Books API key that was pasted into a chat transcript in Slice 5.
+
+
+**Slice 7, Stats, is BUILT AND VERIFIED ON THE PHONE**, 2026-09-20.
+- **What it does:** three separate numbers (books, pages, hours, never combined), a year
+  switcher, the daily pace chart from Slice 3, a genre breakdown, a genre FILTER on the
+  Library, a genre picker in Edit details, and the yearly goal set in Settings.
+- **Migration 0003** — `books.genre` and `idx_goals_year_live` (UNIQUE on `year` WHERE
+  `deleted_at IS NULL`), with the duplicate repair a constraint-adding migration requires.
+  **Applied to the phone's POPULATED 28 MB `devcheck.db`.** Four node tests against a
+  populated fixture that genuinely violates the constraint, watched failing without the
+  repair: `UNIQUE constraint failed: goals.year`.
+- **Genre is a GUESS and a CHOICE in separate columns.** `categories` is the source's raw
+  data, `domain/genre.ts` derives a guess, `books.genre` holds only what the reader chose,
+  and `effectiveGenre` combines them at read time. A guess written into the choice column
+  could never be improved later without trampling a correction — and the mapping was wrong
+  twice in its first ten minutes, so it will be improved.
+- **The measurement that matters:** "15 books in 2026" above bars adding to exactly 15. One
+  load of two tables, so the number and the chart cannot disagree.
+- **Held automatically:** **572 node tests**, 121 per timezone, **19/19 Slice 7 mutations
+  red**, device pass **RUNTIME 38/38 · COMPILE-TIME 1/1**, `s7_stats.py` 8/8. `reader.db`
+  md5 `1623cf85…` and wal `6ab7bff2…` identical before and after.
+- **Two silent bugs, both found on the phone** (items 27 and 28): a chosen genre never
+  reached `bookPatch`, and a goal typed then confirmed with Done was lost because it saved
+  only on blur.
+- **Two mutations went green and both were the TEST** — the third time this has happened.
+  The sweep is the only reason either was found.
+- **A new guard:** `feature-boundaries.test.ts` resolves every import to a real path and asks
+  which feature it lands in. The ESLint rule only ever restricted `@/features/*/*` and has
+  now missed three relative cross-feature imports, one of them written this slice.
+- **`14c` failed once and passed on re-run.** Transient, as documented; the phone was online.
+- **A missing `adb reverse` made the device pass log NOTHING** and look like a hang.
+  `devpass.sh` now sets it every run.
+
 
 **Slice 6, the timer, is BUILT AND VERIFIED ON A REAL PHONE** (Nothing Phone 2a, Android 16),
 2026-09-19. Results and numbers: `docs/device-checks/slice-6.md`.

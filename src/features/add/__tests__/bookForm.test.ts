@@ -66,6 +66,9 @@ describe('what is written', () => {
       id: 'b1',
       source: 'manual',
       sourceId: null,
+      // A book added by hand has no source categories to guess from and no choice yet, so
+      // it starts as Other and the reader can say otherwise in the same form.
+      genre: null,
       coverUrl: null,
       coverLocalPath: null,
       title: 'Letters to a Young Poet',
@@ -110,6 +113,7 @@ describe('editing', () => {
     totalMinutes: null,
     publisher: 'Bloomsbury',
     publishedYear: 2020,
+    genre: null,
     isbn13: '9781635575637',
     isbn10: null,
     coverColor: null,
@@ -161,5 +165,112 @@ describe('editing', () => {
   test('trailing spaces alone do not make the form dirty', () => {
     const f = formFromBook(stored)
     assert.equal(isFormDirty({ ...f, title: 'Piranesi ' }, f), false)
+  })
+})
+
+/**
+ * THE READER'S GENRE (Slice 7).
+ *
+ * `books.genre` holds a CHOICE; `books.categories` holds the source's raw data, and
+ * `domain/genre.ts` turns that into a guess. The distinction is the point: null means "use
+ * our guess and keep improving it", and a value means "leave this alone".
+ */
+describe('genre', () => {
+  const base: StoredBookFields = {
+    title: 'Piranesi',
+    author: 'Susanna Clarke',
+    pageCount: 272,
+    totalMinutes: null,
+    publisher: null,
+    publishedYear: null,
+    isbn13: null,
+    isbn10: null,
+    coverColor: null,
+    description: null,
+    genre: null,
+  }
+
+  test('a book with no chosen genre offers none, rather than an empty string', () => {
+    // "" and null would look identical in a picker and mean opposite things: one is a
+    // choice the reader made, the other is permission to keep guessing.
+    assert.equal(formFromBook(base).genre, null)
+  })
+
+  test('a chosen genre round-trips', () => {
+    assert.equal(formFromBook({ ...base, genre: 'Poetry' }).genre, 'Poetry')
+  })
+
+  test('a genre this build does not recognise falls back to no choice', () => {
+    // A row from an older build, or one synced from a newer one. Showing a chip the app
+    // cannot explain is worse than showing our own guess.
+    assert.equal(formFromBook({ ...base, genre: 'Steampunk' }).genre, null)
+    assert.equal(formFromBook({ ...base, genre: '' }).genre, null)
+  })
+})
+
+/**
+ * EVERY EDITABLE FIELD REACHES THE PATCH.
+ *
+ * `bookPatch` is written field by field on purpose — a loop needs a cast, and a cast is
+ * where a wrong column or a wrong type slips through. The price is that a new field has to
+ * be added by hand, and on 2026-09-19 `genre` was added to the form, the picker and
+ * `fields()` and not to the patch. `isFormDirty` loops over keys, so Save lit up, the screen
+ * closed, and nothing was written. Found on a phone.
+ *
+ * This iterates the form's own keys, so the NEXT field that is forgotten fails here rather
+ * than on a device.
+ */
+describe('nothing editable is dropped on the way to the patch', () => {
+  const stored: StoredBookFields = {
+    title: 'Piranesi',
+    author: 'Susanna Clarke',
+    pageCount: 272,
+    totalMinutes: null,
+    publisher: 'Bloomsbury',
+    publishedYear: 2020,
+    isbn13: null,
+    isbn10: null,
+    coverColor: null,
+    description: 'A house of statues.',
+    genre: null,
+  }
+
+  test('a changed genre is in the patch', () => {
+    const form = { ...formFromBook(stored), genre: 'Poetry' as const }
+    assert.deepEqual(bookPatch(stored, form), { genre: 'Poetry' })
+  })
+
+  test('clearing a chosen genre writes null, not nothing', () => {
+    // Back to "Work it out". Omitting it from the patch would silently keep the old choice.
+    const chosen: StoredBookFields = { ...stored, genre: 'Poetry' }
+    const form = { ...formFromBook(chosen), genre: null }
+    assert.deepEqual(bookPatch(chosen, form), { genre: null })
+  })
+
+  test('every field on the form can change the patch', () => {
+    // The guard for the next forgotten field. Each key is altered in turn and must produce
+    // a non-empty patch; a field the patch does not know about produces {}.
+    const baseline = formFromBook(stored)
+    const changes: Partial<Record<keyof BookForm, unknown>> = {
+      title: 'Changed',
+      author: 'Someone Else',
+      shape: 'audio',
+      length: '999',
+      publisher: 'Another',
+      year: '1999',
+      isbn: '9781635575637',
+      coverColor: '#123456',
+      description: 'Different.',
+      genre: 'Poetry',
+    }
+    for (const key of Object.keys(baseline) as (keyof BookForm)[]) {
+      assert.ok(key in changes, `${key} is not covered by this test`)
+      const form = { ...baseline, [key]: changes[key] } as BookForm
+      const patch = bookPatch(stored, form)
+      assert.ok(
+        Object.keys(patch).length > 0,
+        `changing ${key} produced an EMPTY patch — bookPatch does not know about it`,
+      )
+    }
   })
 })

@@ -422,9 +422,40 @@ Settings holds the yearly goal, theme with a system option, one notification tog
 import, export, recently deleted, and account. Nothing else.
 
 Stats shows three separate numbers, a daily pace chart, and a genre breakdown, with a year
-switcher. Genres come from book categories captured since Slice 5 (see `05-BUILD-PLAN.md`). **Slice 3 ships the pace chart alone**: the last 14 days by `local_day`, pages or
-time as separate charts, a bar for every day. Slice 7 adds the rest. All free. The empty state explains that charts need a few sessions rather than
+switcher. All free. The empty state explains that charts need a few sessions rather than
 implying something is locked.
+
+**Built in Slice 7, and the contract is:**
+- **Three numbers, never combined:** books, pages, hours, side by side with no total
+  anywhere. `domain/stats.ts` makes adding them impossible in the type system; the screen
+  honours the same rule visually.
+- **Books is a `reads` fact; pages and hours are session facts, and they disagree on
+  purpose.** A book started in December and finished in January contributes its pages to
+  December and itself to January. The caption says which is which rather than smoothing them.
+- **Sessions and finished reads are loaded ONCE** and everything derives from them, so the
+  books figure and the genre bars under it cannot be computed from two different notions of
+  "finished in 2025".
+- **The year switcher offers every year with a session OR a finish**, plus the current year
+  always, newest first. The GOAL shown is the selected year's, not this year's.
+- **The pace chart is not year-scoped.** Always the last 14 days, whatever year is selected,
+  and its heading says so.
+- **The genre breakdown counts books finished in the selected year**, commonest first, with
+  genres that have no books left out entirely. It says genres are guessed and points at Edit
+  details, because they are and the reader can correct them.
+- **The goal** is set in Settings, is optional, and clearing it is not an error. The bar
+  clamps at full and the count beside it stays honest: 30 books against a goal of 12 reads
+  "30 of 12 books · done".
+
+**Slice 3 shipped the pace chart alone**: the last 14 days by `local_day`, pages or time as
+separate charts, a bar for every day.
+
+**The Library gained a genre filter** (owner-added 2026-09-14): chips above the list offering
+only the genres present on that shelf, in the canonical order, dropped automatically when the
+shelf no longer holds that genre. Filtering is in TypeScript, not SQL, because the genre rule
+is `domain/genre.ts` and a `WHERE` clause would be a second copy of it.
+
+**Edit details gained a genre picker**, the only place `books.genre` is written. "Work it
+out" is the default and says what it currently works out to.
 
 ---
 
